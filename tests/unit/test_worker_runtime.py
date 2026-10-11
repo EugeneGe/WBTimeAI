@@ -1,7 +1,13 @@
 """Worker 启动与消费单测（W1 / T2-02；设计 §2.9 / ``I-P2-13``）。
 
-覆盖：处理器注册表（四类任务）/ dispatch 未知处理器不崩 / 消费循环
+覆盖：处理器注册表（**六类**任务）/ dispatch 未知处理器不崩 / 消费循环
 （``dequeue → dispatch → ack``，注入桩处理器）/ ``--help`` 干跑。
+
+🔴 **陈测试预修（R2 / T2-58 · 承 R-R1R5-10 D 系列）**：R-R1R5-10 grep 预判「无硬编
+   HANDLERS 长度断言」**未命中本文件**（本文件实为硬编集合断言）。T2-58 注册
+   `project.clone` / `remote.agent_run`（`HANDLERS` 4 → 6）后，旧断言「四类」变红。
+   按纪律**同批**预修：断言更新为**六类集合**（**加性收紧、零放宽**；仍为「精确集合 +
+   各键常量」双断言，不弱化任何既有口径）。
 """
 
 from __future__ import annotations
@@ -16,27 +22,34 @@ from astra_worker.tasks import (
     HANDLERS,
     KNOWLEDGE_INDEX_KEY,
     MAINTENANCE_CLEANUP_KEY,
+    PROJECT_CLONE_KEY,
+    REMOTE_AGENT_RUN_KEY,
     WORKFLOW_RUN_KEY,
     make_message,
 )
 
 
-def test_handlers_registry_has_four_task_types() -> None:
-    """处理器注册表登记四类任务。
+def test_handlers_registry_has_six_task_types() -> None:
+    """处理器注册表登记**六类**任务（T2-48 四类 + T2-58 两远程处理器）。
 
-    🔴 W9 / T2-48 新增 ``maintenance.cleanup``（保留清理）处理器后为**四类**
-    （原断言硬编三类；此处随实现补全——实现正确、旧断言过时，按 QA 路由自修）。
+    🔴 W9 / T2-48 新增 ``maintenance.cleanup``（保留清理）→ 四类；**R2 / T2-58** 新增
+    ``project.clone`` / ``remote.agent_run`` → **六类**（C-6 单写者链头；实现正确、旧断言过时，
+    按纪律同批预修）。
     """
     assert set(HANDLERS) == {
         "agent.run",
         "workflow.run",
         "knowledge.index",
         "maintenance.cleanup",
+        "project.clone",
+        "remote.agent_run",
     }
     assert AGENT_RUN_KEY == "agent.run"
     assert WORKFLOW_RUN_KEY == "workflow.run"
     assert KNOWLEDGE_INDEX_KEY == "knowledge.index"
     assert MAINTENANCE_CLEANUP_KEY == "maintenance.cleanup"
+    assert PROJECT_CLONE_KEY == "project.clone"
+    assert REMOTE_AGENT_RUN_KEY == "remote.agent_run"
 
 
 class _FakeProviders:

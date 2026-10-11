@@ -1,13 +1,18 @@
-"""Worker 任务处理器（W1 / T2-02；设计 §2.9 / §2.16）。
+"""Worker 任务处理器（W1 / T2-02；R2 / T2-58 增远程处理器；设计 §2.9 / §2.16）。
 
-注册三类任务处理器（**只做接线**，重型逻辑归后续波次）：
+注册任务处理器（**只做接线**，重型逻辑归后续波次）：
 
 - ``agent.run`` → Application ``ExecuteAgent``（``tasks/agent_run.py``）；
 - ``workflow.run`` → Workflow 引擎（**接线占位**，实现归 **T2-24**）；
-- ``knowledge.index`` → Knowledge 索引（**接线占位**，实现归 **T2-31**）。
+- ``knowledge.index`` → Knowledge 索引（**接线占位**，实现归 **T2-31**）；
+- ``maintenance.cleanup`` → 保留清理（``tasks/maintenance_cleanup.py``）；
+- ``project.clone`` → Project Clone / Fetch（**R2 / T2-58**；``tasks/project_clone.py``）；
+- ``remote.agent_run`` → 独立 Attempt Sandbox 内运行版本并保存结果引用（**R2 / T2-58**；
+  ``tasks/remote_agent_run.py``；完整执行接线归 **T2-59**，C-6）。
 
 🔴 ``HANDLERS`` 为处理器注册表（``handler_key → Callable[[message, ctx], dict]``）；
    ``main.run_worker`` 依此 dispatch（``dequeue → dispatch → ack``）。
+🔴 **单写者链 = T2-58 → T2-59**（C-6）：T2-58 注册两 handler（4 → 6）；T2-59 追加远程执行接线。
 """
 
 from __future__ import annotations
@@ -23,6 +28,10 @@ from .knowledge_index import HANDLER_KEY as KNOWLEDGE_INDEX_KEY
 from .knowledge_index import handle_knowledge_index
 from .maintenance_cleanup import HANDLER_KEY as MAINTENANCE_CLEANUP_KEY
 from .maintenance_cleanup import handle_maintenance_cleanup
+from .project_clone import HANDLER_KEY as PROJECT_CLONE_KEY
+from .project_clone import handle_project_clone
+from .remote_agent_run import HANDLER_KEY as REMOTE_AGENT_RUN_KEY
+from .remote_agent_run import handle_remote_agent_run
 from .workflow_run import HANDLER_KEY as WORKFLOW_RUN_KEY
 from .workflow_run import handle_workflow_run
 
@@ -34,6 +43,8 @@ __all__ = [
     "WORKFLOW_RUN_KEY",
     "KNOWLEDGE_INDEX_KEY",
     "MAINTENANCE_CLEANUP_KEY",
+    "PROJECT_CLONE_KEY",
+    "REMOTE_AGENT_RUN_KEY",
 ]
 
 #: 处理器签名：``(message, ctx) -> result dict``。
@@ -45,6 +56,8 @@ HANDLERS: dict[str, Handler] = {
     WORKFLOW_RUN_KEY: handle_workflow_run,
     KNOWLEDGE_INDEX_KEY: handle_knowledge_index,
     MAINTENANCE_CLEANUP_KEY: handle_maintenance_cleanup,
+    PROJECT_CLONE_KEY: handle_project_clone,
+    REMOTE_AGENT_RUN_KEY: handle_remote_agent_run,
 }
 
 

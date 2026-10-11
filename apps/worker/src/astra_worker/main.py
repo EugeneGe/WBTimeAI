@@ -32,7 +32,8 @@ USAGE = (
     "  astra-worker            以当前配置（ASTRA_*）启动并消费队列\n"
     "  astra-worker --help     显示本帮助\n"
     "\n"
-    "消费的任务类型：agent.run / workflow.run / knowledge.index\n"
+    "消费的任务类型：agent.run / workflow.run / knowledge.index / maintenance.cleanup / "
+    "project.clone / remote.agent_run\n"
     "装配与分流：仅经 astra_config.providers.build_providers（不判断 ASTRA_MODE）。\n"
 )
 

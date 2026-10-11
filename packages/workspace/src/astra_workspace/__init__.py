@@ -12,7 +12,7 @@ W7（T2-37）新增（能力包自含布局，R1）：``Project`` / ``WorkspaceE
 
 from __future__ import annotations
 
-from .application import CloneResult, ProjectService, TaskDispatcher
+from .application import AttemptCheckoutResult, CloneResult, ProjectService, TaskDispatcher
 from .domain import (
     Project,
     ProjectRepository,
@@ -20,9 +20,13 @@ from .domain import (
     WorkspaceEnvironmentRepository,
 )
 from .environment import EnvironmentService
+from .environment_snapshot import (
+    compute_environment_digest,
+    environment_digest_for,
+)
 from .factory import WorkspaceServices, build_workspace_services
 from .files import FileService
-from .git import GitService
+from .git import AttemptCheckout, GitService
 from .mappers import workspace_to_domain, workspace_to_orm
 from .paths import ManagedWorkspacePaths, is_safe_path_segment, resolve_workspace_root
 from .project_storage import ProjectStorage
@@ -60,4 +64,9 @@ __all__ = [
     "ProjectStorage",
     "resolve_workspace_root",
     "is_safe_path_segment",
+    # R2 / T2-58：Attempt 独立副本供给 + 环境快照摘要
+    "AttemptCheckout",
+    "AttemptCheckoutResult",
+    "compute_environment_digest",
+    "environment_digest_for",
 ]

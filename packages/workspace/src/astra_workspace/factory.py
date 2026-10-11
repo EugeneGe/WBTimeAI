@@ -19,6 +19,7 @@ from .application import ProjectService, TaskDispatcher
 from .environment import CredentialResolver, EnvironmentService, SecretResolver
 from .files import FileService
 from .git import GitService
+from .project_storage import ProjectStorage
 from .services import WorkspaceService
 
 if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期
@@ -55,6 +56,7 @@ def build_workspace_services(
     credential_resolver: CredentialResolver | None = None,
     secret_provider: SecretResolver | None = None,
     task_dispatcher: TaskDispatcher | None = None,
+    project_storage: ProjectStorage | None = None,
 ) -> WorkspaceServices:
     """依会话工厂（+ 可选注入）构建工作区子域服务集合。
 
@@ -65,6 +67,7 @@ def build_workspace_services(
         credential_resolver: 注入的凭证解密器（可空）。
         secret_provider: 注入的机密读取器（可空）。
         task_dispatcher: 注入的克隆任务派发器（可空）。
+        project_storage: 注入的受管工作区目录管理器（Attempt 独立副本；可空；T2-58 加性）。
 
     Returns:
         :class:`WorkspaceServices`。
@@ -73,7 +76,11 @@ def build_workspace_services(
     return WorkspaceServices(
         workspaces=WorkspaceService(session_factory),
         projects=ProjectService(
-            session_factory, git, sandbox=sandbox, task_dispatcher=task_dispatcher
+            session_factory,
+            git,
+            storage=project_storage,
+            sandbox=sandbox,
+            task_dispatcher=task_dispatcher,
         ),
         files=FileService(storage) if storage is not None else None,
         environment=EnvironmentService(

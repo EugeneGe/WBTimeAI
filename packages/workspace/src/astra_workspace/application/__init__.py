@@ -7,6 +7,11 @@
 
 from __future__ import annotations
 
-from .project_service import CloneResult, ProjectService, TaskDispatcher
+from .project_service import (
+    AttemptCheckoutResult,
+    CloneResult,
+    ProjectService,
+    TaskDispatcher,
+)
 
-__all__ = ["ProjectService", "CloneResult", "TaskDispatcher"]
+__all__ = ["ProjectService", "CloneResult", "AttemptCheckoutResult", "TaskDispatcher"]
