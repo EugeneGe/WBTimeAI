@@ -24,6 +24,8 @@ from .factory import WorkspaceServices, build_workspace_services
 from .files import FileService
 from .git import GitService
 from .mappers import workspace_to_domain, workspace_to_orm
+from .paths import ManagedWorkspacePaths, is_safe_path_segment, resolve_workspace_root
+from .project_storage import ProjectStorage
 from .repositories import (
     SqlProjectRepository,
     SqlWorkspaceEnvironmentRepository,
@@ -53,4 +55,9 @@ __all__ = [
     "ProjectService",
     "CloneResult",
     "TaskDispatcher",
+    # R1 / T2-55：受管工作区路径（UUID 派生 + containment）与生命周期
+    "ManagedWorkspacePaths",
+    "ProjectStorage",
+    "resolve_workspace_root",
+    "is_safe_path_segment",
 ]

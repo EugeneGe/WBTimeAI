@@ -70,6 +70,7 @@ from .defaults import (
     DEFAULT_SKILL_WORKSPACE_DIRS,
     DEFAULT_SSE_HEARTBEAT_SECONDS,
     DEFAULT_VECTOR_SEARCH,
+    DEFAULT_WORKSPACE_ROOT,
 )
 
 __all__ = [
@@ -292,6 +293,12 @@ class Settings(BaseSettings):
 
     # -- 本地数据目录（T0-15；仅字符串默认，解析/建目录在能力包中） --------
     data_dir: str = DEFAULT_DATA_DIR
+
+    # -- 服务器工作区根目录（T2-55；server 档 Project / Attempt 宿主根） ----
+    # ``ASTRA_WORKSPACE_ROOT``：Linux 默认 ``/var/lib/astra-ai/workspaces``。
+    # 🔴 Project / Attempt 路径由服务端 UUID 派生；**禁止** API DTO 覆写本字段，
+    #    客户端只接触不透明 ``checkout_ref``（不含宿主绝对路径）。
+    workspace_root: str = DEFAULT_WORKSPACE_ROOT
 
     # -- Feature Flag（T0-21 / 决策 D7） -----------------------------------
     # ENV ``ASTRA_FEATURE_FLAGS``（JSON）或 config.yaml ``feature_flags``。

@@ -33,6 +33,11 @@ DEFAULT_CONFIG_FILE_NAME = "config.yaml"
 #: 注意：仅作字符串默认值，路径解析（expanduser）与目录创建在能力包中进行。
 DEFAULT_DATA_DIR = "~/.astra-ai"
 
+#: 服务器工作区根目录（T2-55；server 档 Project / Attempt 宿主根）。
+#: 🔴 Linux 部署默认（由 Astra 服务账号拥有）；允许管理员覆写，**不可**由 API 客户端指定。
+#: Project / Attempt 路径由服务端 UUID 派生（``projects/<id>/repo``、``executions/<id>/...``）。
+DEFAULT_WORKSPACE_ROOT = "/var/lib/astra-ai/workspaces"
+
 # -- 安全默认值（T0-12） -----------------------------------------------------
 
 #: JWT 签名算法。
@@ -233,6 +238,7 @@ __all__ = [
     "DEFAULT_DATABASE_URL",
     "DEFAULT_CONFIG_FILE_NAME",
     "DEFAULT_DATA_DIR",
+    "DEFAULT_WORKSPACE_ROOT",
     "DEFAULT_JWT_ALGORITHM",
     "DEFAULT_ACCESS_TOKEN_TTL_SECONDS",
     "DEFAULT_REFRESH_TOKEN_TTL_SECONDS",
