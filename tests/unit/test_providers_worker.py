@@ -1,7 +1,7 @@
-"""``Providers.worker_executor`` 装配单测（W1 / T2-02；设计 §2.9 / R-23；C-01 / D4）。
+"""``Providers.worker_executor`` 装配单测（W1 / T2-02；设计 §2.9 / R-23；C-01 / D4；T2-54）。
 
-覆盖：local ⇒ ``InProcessBackgroundExecutor``；server（无 Redis）⇒ 占位回落
-``UnsupportedBackgroundExecutor``（非静默）。
+覆盖：local ⇒ ``InProcessBackgroundExecutor``；server（无 Redis）⇒ Community 基础档
+``InProcessBackgroundExecutor`` + ``InProcessTaskQueue``（**真实 Provider，非占位**）。
 """
 
 from __future__ import annotations
@@ -43,13 +43,16 @@ def test_local_worker_executor_is_inprocess(tmp_path: Path) -> None:
             providers.database.engine.dispose()
 
 
-def test_server_worker_executor_falls_back_without_redis(
+def test_server_worker_executor_is_inprocess_without_redis(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """server 模式（无 Redis）⇒ 执行体占位回落（非静默）。"""
+    """server 模式（无 Redis）⇒ Community 基础档：进程内队列 + 进程内执行体（**非占位**）。
+
+    T2-54：server 模式不得因模式本身装配成 ``UnsupportedXxx``。
+    """
     import astra_config.providers as providers_module
     from astra_config.providers import DatabaseProvider
-    from astra_task import UnsupportedBackgroundExecutor, UnsupportedTaskQueue
+    from astra_task import InProcessBackgroundExecutor, InProcessTaskQueue
 
     monkeypatch.setattr(
         providers_module, "validate_mode_database_consistency", lambda settings: None
@@ -66,5 +69,5 @@ def test_server_worker_executor_falls_back_without_redis(
         data_dir=str(tmp_path / "astra-data"),
     )
     providers = build_providers(settings)
-    assert isinstance(providers.worker_executor, UnsupportedBackgroundExecutor)
-    assert isinstance(providers.task_queue, UnsupportedTaskQueue)
+    assert isinstance(providers.worker_executor, InProcessBackgroundExecutor)
+    assert isinstance(providers.task_queue, InProcessTaskQueue)

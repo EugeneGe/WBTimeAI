@@ -74,6 +74,7 @@ def _collect_checks() -> list[CheckResult]:
         doctor_checks.check_docker(settings),
         doctor_checks.check_provider(settings),
         doctor_checks.check_worker(settings),
+        doctor_checks.check_capabilities(settings),
     ]
     return [
         CheckResult(name=name, status=status, detail=detail) for name, status, detail in outcomes

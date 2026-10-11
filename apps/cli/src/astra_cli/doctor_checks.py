@@ -36,6 +36,7 @@ __all__ = [
     "check_docker",
     "check_provider",
     "check_worker",
+    "check_capabilities",
 ]
 
 #: 自检状态。
@@ -254,3 +255,128 @@ def check_worker(settings: Settings | None) -> CheckOutcome:
         "ok",
         f"queue=redis; executor=worker_process; url={_mask_redis_url(redis_url)}",
     )
+
+
+def _describe_capabilities(providers: object, settings: Settings | None) -> tuple[list[str], str]:
+    """把装配完成的 Provider 容器归类为可读能力描述（T2-54）。
+
+    仅做**事实陈述**（不判断 mode）；同时识别**显式的 ``UnsupportedXxx`` 占位**——
+    server 模式**不得**装配成占位（设计 §2.8.1 / T2-54）。
+
+    Args:
+        providers: :class:`astra_config.providers.Providers` 实例。
+        settings: 生效配置（读 DB dialect）。
+
+    Returns:
+        ``(unsupported, detail)``——``unsupported`` 为检测到的占位槽名列表；
+        ``detail`` 为面向人的能力描述串。
+    """
+    from astra_event import UnsupportedEventBus
+    from astra_storage import UnsupportedStorage
+    from astra_task import (
+        UnsupportedBackgroundExecutor,
+        UnsupportedScheduler,
+        UnsupportedTaskQueue,
+    )
+
+    unsupported: list[str] = []
+    parts: list[str] = []
+
+    url = getattr(settings, "database_url", "") or ""
+    dialect = url.split(":", 1)[0].split("+", 1)[0] or "?"
+    parts.append(f"db={dialect}")
+
+    storage = getattr(providers, "storage", None)
+    if isinstance(storage, UnsupportedStorage):
+        unsupported.append("storage")
+        parts.append("storage=unsupported")
+    else:
+        parts.append(f"storage={type(storage).__name__ if storage is not None else 'none'}")
+
+    event_bus = getattr(providers, "event_bus", None)
+    if isinstance(event_bus, UnsupportedEventBus):
+        unsupported.append("event_bus")
+        parts.append("event_bus=unsupported")
+    else:
+        parts.append(f"event_bus={type(event_bus).__name__ if event_bus is not None else 'none'}")
+
+    task_queue = getattr(providers, "task_queue", None)
+    if isinstance(task_queue, UnsupportedTaskQueue):
+        unsupported.append("task_queue")
+        parts.append("queue=unsupported")
+    else:
+        parts.append(f"queue={type(task_queue).__name__ if task_queue is not None else 'none'}")
+
+    scheduler = getattr(providers, "scheduler", None)
+    if isinstance(scheduler, UnsupportedScheduler):
+        unsupported.append("scheduler")
+        parts.append("scheduler=unsupported")
+    else:
+        parts.append(f"scheduler={type(scheduler).__name__ if scheduler is not None else 'none'}")
+
+    worker = getattr(providers, "worker_executor", None)
+    if isinstance(worker, UnsupportedBackgroundExecutor):
+        unsupported.append("worker_executor")
+        parts.append("worker=unsupported")
+    else:
+        parts.append(f"worker={type(worker).__name__ if worker is not None else 'none'}")
+
+    sandbox = getattr(providers, "sandbox", None)
+    sandbox_kind = getattr(sandbox, "kind", None)
+    parts.append(f"sandbox={sandbox_kind or (type(sandbox).__name__ if sandbox else 'none')}")
+
+    return unsupported, "; ".join(parts)
+
+
+def check_capabilities(settings: Settings | None) -> CheckOutcome:
+    """检查 9：Server Provider 能力闭环（T2-54；设计 §2.8.1）。
+
+    以**实际装配**为准（复用 ``build_providers``），报告 SQLite/PostgreSQL（DB）、
+    Storage、Queue、Scheduler、Worker、Sandbox 六项能力，并**显式检出**任何
+    ``UnsupportedXxx`` 占位——server 模式**不得**因模式本身装配成占位（延迟到首次请求
+    才失败）。检测到占位 → ``fail``（明确配置 / capability 错误）。
+
+    🔴 本项**只装配 + 检视**，不触发任何 Task 执行；详情**不含**任何凭证明文。装配成功
+    后立即释放数据库引擎（不泄漏连接）。
+
+    Args:
+        settings: 生效配置。
+
+    Returns:
+        ``("capabilities", status, detail)``。
+    """
+    if settings is None:
+        return ("capabilities", "skip", "配置未加载，跳过")
+    try:
+        from astra_config.providers import build_providers
+    except Exception as exc:  # noqa: BLE001 - doctor 需捕获所有异常并汇报
+        return ("capabilities", "fail", f"astra_config 不可用：{type(exc).__name__}: {exc}")
+
+    try:
+        providers = build_providers(settings)
+    except Exception as exc:  # noqa: BLE001 - 装配失败即 capability 错误（明确报错）
+        return (
+            "capabilities",
+            "fail",
+            f"Provider 装配失败：{type(exc).__name__}: {exc}",
+        )
+
+    try:
+        unsupported, detail = _describe_capabilities(providers, settings)
+    finally:
+        database = getattr(providers, "database", None)
+        engine = getattr(database, "engine", None)
+        dispose = getattr(engine, "dispose", None)
+        if callable(dispose):
+            try:
+                dispose()
+            except Exception:  # noqa: BLE001 - 释放失败不影响自检结论
+                pass
+
+    if unsupported:
+        return (
+            "capabilities",
+            "fail",
+            f"检测到 Unsupported 占位（server 不应装配为占位）：{', '.join(unsupported)}；{detail}",
+        )
+    return ("capabilities", "ok", detail)

@@ -11,12 +11,17 @@ Phase 1（T1-03）扩展装配位：``model_providers`` / ``model_router`` / ``t
 ``sandbox`` / ``runtime``（**占位可空**：对应能力包由 W3–W5 落地，**函数级延迟导入**，
 未就位时为 ``None``，装配位保留）。
 
-设计取舍（避免静默降级）：
+设计取舍（避免静默降级 / T2-54 Server Provider 闭环）：
 - ``mode=local``：SQLite + **真实**进程内能力（LocalFileStorage / LocalEventBus /
   InProcessTaskQueue / LocalScheduler）；
-- ``mode=server``：PostgreSQL + 外部中间件；尚未实现的能力装配为**占位对象**
-  （首次调用抛 ``NotImplementedYetError``），并打印结构化 ``WARNING``——
-  应用**仍可启动**（行为降级而非模块缺失，对齐验收 #14）。
+- ``mode=server``：**两档真实 Provider 闭环**（不再是 ``UnsupportedXxx`` 占位）：
+  - **Community 基础档**（未配置 ``ASTRA_REDIS_URL``）：PostgreSQL（或部署档 DB）+
+    LocalFileStorage + LocalEventBus + InProcessTaskQueue + InProcessBackgroundExecutor
+    + LocalScheduler + LocalProcessSandbox —— 可运行闭环；
+  - **Compose / Team 档**（配置 ``ASTRA_REDIS_URL`` 且 ``astra-task[redis]`` 就位）：
+    PostgreSQL + RedisTaskQueue + WorkerProcessExecutor + DockerSandbox；
+  - **缺少可选依赖**（如显式配置 Redis 但缺 ``astra-task[redis]``）→ **装配期**抛
+    ``DomainError(CONFIGURATION_ERROR)``（**明确配置错误**，**不**延迟到首次请求才失败）。
 - ``model_registry``（含 stub）与 ``secrets``（EnvSecretProvider）**两模式一致**，
   均为 Phase 0 真实交付物，非占位。
 - ``providers.py`` 对能力包一律**函数级延迟导入**，避免 ``config ↔ 能力包``
@@ -220,12 +225,13 @@ def build_providers(settings: Settings) -> Providers:
         scheduler = _build_local_scheduler(settings)
         worker_executor = _build_inprocess_background_executor(settings)
     elif mode == "server":
-        storage = _build_unsupported_storage(settings)
-        event_bus = _build_unsupported_event_bus(settings)
+        # T2-54：server 两档**真实** Provider 闭环（不再装配 UnsupportedXxx 占位）。
+        storage = _build_server_storage(settings)
+        event_bus = _build_server_event_bus(settings)
         task_queue, queue_is_redis = _build_server_task_queue(settings)
-        scheduler = _build_unsupported_scheduler(settings)
-        worker_executor = _build_worker_process_executor(settings, task_queue, queue_is_redis)
-        _warn_placeholders(settings, task_queue_is_placeholder=not queue_is_redis)
+        scheduler = _build_server_scheduler(settings)
+        worker_executor = _build_server_worker_executor(settings, task_queue, queue_is_redis)
+        _report_server_tier(settings, queue_is_redis)
     else:  # pragma: no cover - Literal 约束下不可达，保留防御
         raise DomainError(
             f"Unsupported ASTRA_MODE: {mode!r}",
@@ -448,39 +454,90 @@ def _build_local_scheduler(settings: Settings) -> Any:
     return create_local_scheduler()
 
 
-# -- server 模式：Redis 优先 + 占位回落（W1 / T2-02；非静默） ---------------
+# -- server 模式：两档真实装配（T2-54：Community 基础档 / Compose·Team 档） ------
+
+
+def _build_server_storage(settings: Settings) -> Any:
+    """server 基础档：**本地持久**文件存储（LocalFileStorage）。
+
+    设计 §2.8.1：``ASTRA_MODE=server`` **不得**因模式本身把 ``storage`` 装配成
+    ``UnsupportedStorage``。基础档以**本地持久存储**完成可运行闭环；S3/MinIO 属
+    **未交付的增强**（后续波次），本增量**不**以占位对象冒充，而是直接使用本地实现。
+    """
+    return _build_local_storage(settings)
+
+
+def _build_server_event_bus(settings: Settings) -> Any:
+    """server 基础档：进程内事件总线（LocalEventBus）。
+
+    设计 §2.8.1：server 模式**不得**把 ``event_bus`` 装配成 ``UnsupportedEventBus``；
+    Redis Stream 事件总线属**未交付的增强**，本增量使用进程内事件总线完成闭环。
+    """
+    return _build_local_event_bus(settings)
+
+
+def _build_server_scheduler(settings: Settings) -> Any:
+    """server 基础档：本地调度器（LocalScheduler）。
+
+    设计 §2.8.1：server 模式**不得**把 ``scheduler`` 装配成 ``UnsupportedScheduler``；
+    分布式调度属**未交付的增强**，本增量使用本地调度器完成闭环。
+    """
+    return _build_local_scheduler(settings)
 
 
 def _build_server_task_queue(settings: Settings) -> tuple[Any, bool]:
-    """构建 server 任务队列：**Redis 优先、占位回落**（W1 裁定 §3.2）。
+    """构建 server 任务队列（Community 基础档 ↔ Compose·Team 档）。
 
-    当且仅当「``redis_url`` 已配置 **且** ``astra-task[redis]`` 可导入」时构建
-    :class:`~astra_task.queue.redis.RedisTaskQueue`；否则回落既有
-    :class:`~astra_task.placeholder.UnsupportedTaskQueue`——回落由
-    :func:`_warn_placeholders` 以结构化 ``WARNING`` **非静默** 报告。
+    分档规则（T2-54 / 设计 §2.8.1）：
+
+    - **未配置** ``ASTRA_REDIS_URL`` → Community 基础档：``InProcessTaskQueue``
+      （**真实**进程内队列，可运行闭环；**非** ``UnsupportedTaskQueue`` 占位）；
+    - **已配置** ``ASTRA_REDIS_URL`` 且 ``astra-task[redis]`` 就位 → Compose·Team 档：
+      :class:`~astra_task.queue.redis.RedisTaskQueue`；
+    - **已配置** ``ASTRA_REDIS_URL`` 但缺少可选依赖（``astra-task[redis]`` /
+      ``redis`` 客户端）→ **装配期**抛 ``DomainError(CONFIGURATION_ERROR)``
+      （**明确配置错误**，**不**装配占位后延迟到首次请求才失败）。
 
     Args:
         settings: 生效配置。
 
     Returns:
         ``(task_queue, queue_is_redis)``。
+
+    Raises:
+        DomainError: 显式配置 Redis 但缺少可选依赖（``CONFIGURATION_ERROR``）。
     """
-    redis_url = getattr(settings, "redis_url", "")
+    redis_url = getattr(settings, "redis_url", "") or ""
     if not redis_url:
-        return _build_unsupported_task_queue(settings), False
+        # Community 基础档：进程内队列（真实实现，非占位）。
+        return _build_inprocess_task_queue(settings), False
     try:
         from astra_task.queue.redis import RedisTaskQueue, redis_available
-    except ImportError:  # pragma: no cover - astra_task 缺失（装配不可达）
-        return _build_unsupported_task_queue(settings), False
+    except ImportError as exc:  # pragma: no cover - astra_task 缺失（装配不可达）
+        raise DomainError(
+            "已配置 ASTRA_REDIS_URL 但未安装 astra-task[redis]（redis + arq）；"
+            "请执行 `uv sync --extra redis`，或清空 ASTRA_REDIS_URL 以使用进程内队列"
+            "（Community 基础档）。",
+            code=ErrorCode.CONFIGURATION_ERROR,
+            data={"field": "redis_url", "extra": "redis"},
+        ) from exc
     if not redis_available():
-        return _build_unsupported_task_queue(settings), False
+        raise DomainError(
+            "已配置 ASTRA_REDIS_URL 但 Redis 客户端不可用（缺少 redis 依赖）；"
+            "请安装 `astra-task[redis]`，或清空 ASTRA_REDIS_URL 以使用进程内队列。",
+            code=ErrorCode.CONFIGURATION_ERROR,
+            data={"field": "redis_url", "extra": "redis"},
+        )
     return RedisTaskQueue(redis_url=redis_url), True
 
 
-def _build_worker_process_executor(
-    settings: Settings, task_queue: Any, queue_is_redis: bool
-) -> Any:
-    """构建 server 后台执行体：Redis 就绪 → ``WorkerProcessExecutor``，否则占位回落。
+def _build_server_worker_executor(settings: Settings, task_queue: Any, queue_is_redis: bool) -> Any:
+    """构建 server 后台执行体（与队列分档一致，**均为真实实现**）。
+
+    - Compose·Team 档（Redis 队列就位）→ :class:`WorkerProcessExecutor`（独立 Worker 进程消费）；
+    - Community 基础档 → :class:`InProcessBackgroundExecutor`（线程池 + 任务状态机）。
+
+    🔴 两档均**不**回落 ``UnsupportedBackgroundExecutor`` 占位（T2-54 闭环要求）。
 
     Args:
         settings: 生效配置。
@@ -488,70 +545,73 @@ def _build_worker_process_executor(
         queue_is_redis: ``task_queue`` 是否为 Redis 实现。
 
     Returns:
-        执行体（:class:`WorkerProcessExecutor` 或 :class:`UnsupportedBackgroundExecutor`）。
+        :class:`WorkerProcessExecutor` 或 :class:`InProcessBackgroundExecutor`。
     """
-    from astra_task import UnsupportedBackgroundExecutor, WorkerProcessExecutor
+    from astra_task import InProcessBackgroundExecutor, WorkerProcessExecutor
 
     if queue_is_redis:
         return WorkerProcessExecutor(task_queue=task_queue)
-    return UnsupportedBackgroundExecutor(feature="Worker 进程执行体", available_in="Team")
+    return InProcessBackgroundExecutor()
 
 
-# -- server 模式：占位（非静默；首次调用抛 NotImplementedYetError） ---------
+def _report_server_tier(settings: Settings, queue_is_redis: bool) -> None:
+    """以结构化日志报告 server 档位（**非静默**：显式声明实际装配的档位）。
+
+    Args:
+        settings: 生效配置。
+        queue_is_redis: ``task_queue`` 是否为 Redis 实现（True → Compose·Team 档）。
+    """
+    _logger.info(
+        "provider.server_tier",
+        extra={
+            "event": "provider.server_tier",
+            "mode": settings.mode,
+            "tier": "compose" if queue_is_redis else "community",
+            "queue": "redis" if queue_is_redis else "inprocess",
+            "worker_executor": "worker_process" if queue_is_redis else "inprocess",
+        },
+    )
+
+
+# -- 占位工厂（保留：显式构造 / 陈测试引用；build_providers 不再使用） ---------
 
 
 def _build_unsupported_storage(settings: Settings) -> Any:
-    """server 占位：S3/MinIO 存储。"""
+    """显式构造 server 存储占位（S3/MinIO）。
+
+    🔴 ``build_providers`` **不再**在 server 模式装配本占位（T2-54 闭环）；本工厂保留供
+    **显式构造**与既有陈测试引用（如 ``test_config_mode_branch``）。
+    """
     from astra_storage import UnsupportedStorage
 
     return UnsupportedStorage(feature="S3/MinIO 存储", available_in="Team")
 
 
 def _build_unsupported_event_bus(settings: Settings) -> Any:
-    """server 占位：Redis Stream 事件总线。"""
+    """显式构造 server 事件总线占位（Redis Stream）。
+
+    🔴 ``build_providers`` **不再**装配本占位（T2-54）；保留供显式构造 / 陈测试引用。
+    """
     from astra_event import UnsupportedEventBus
 
     return UnsupportedEventBus(feature="Redis Stream 事件总线", available_in="Team")
 
 
 def _build_unsupported_task_queue(settings: Settings) -> Any:
-    """server 占位：Redis 任务队列。"""
+    """显式构造 server 任务队列占位（Redis 队列）。
+
+    🔴 ``build_providers`` **不再**装配本占位（T2-54）；保留供显式构造 / 陈测试引用。
+    """
     from astra_task import UnsupportedTaskQueue
 
     return UnsupportedTaskQueue(feature="Redis 任务队列", available_in="Team")
 
 
 def _build_unsupported_scheduler(settings: Settings) -> Any:
-    """server 占位：分布式调度器。"""
+    """显式构造 server 调度器占位（分布式调度）。
+
+    🔴 ``build_providers`` **不再**装配本占位（T2-54）；保留供显式构造 / 陈测试引用。
+    """
     from astra_task import UnsupportedScheduler
 
     return UnsupportedScheduler(feature="分布式调度器", available_in="Team")
-
-
-def _warn_placeholders(settings: Settings, *, task_queue_is_placeholder: bool = True) -> None:
-    """对 server 模式下的占位能力打印结构化 WARNING（不静默降级）。
-
-    Args:
-        settings: 生效配置。
-        task_queue_is_placeholder: ``task_queue`` 是否为占位实现（Redis 就绪时
-            **不**误报占位）。``worker_executor`` 与 ``task_queue`` 同步回落，
-            其占位一并由 ``task_queue`` 告警体现。
-    """
-    placeholders = [
-        ("storage", "S3/MinIO 存储", "Team"),
-        ("event_bus", "Redis Stream 事件总线", "Team"),
-    ]
-    if task_queue_is_placeholder:
-        placeholders.append(("task_queue", "Redis 任务队列", "Team"))
-    placeholders.append(("scheduler", "分布式调度器", "Team"))
-    for capability, target, phase in placeholders:
-        _logger.warning(
-            "provider.placeholder",
-            extra={
-                "event": "provider.placeholder",
-                "mode": settings.mode,
-                "capability": capability,
-                "implementation": target,
-                "available_in": phase,
-            },
-        )

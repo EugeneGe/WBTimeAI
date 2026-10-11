@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # Astra AI · 标准 / 开发模式（docker compose）
 #
-# 服务：api（uv 镜像）+ web（node 镜像跑 pnpm dev）+ postgres + redis
+# 服务：api（uv 镜像）+ web（node 镜像跑 pnpm dev）+ worker + postgres + redis
 # 语义：ASTRA_MODE=server（PostgreSQL + 外部中间件），与设计 §2.13 对齐。
 #
 #   docker compose up --build
@@ -9,6 +9,10 @@
 #
 # ⚠️ Phase 0：`web` 以 **node 镜像跑开发态**（`pnpm dev`），**非生产镜像**；
 #    生产静态托管 / Nginx 属后续阶段（不在 W4 范围）。
+#
+# T2-54（R1）：新增 DB / Workspace / Storage **持久卷** + worker 健康检查；
+#    server 档由 build_providers 装配真实 Provider（不再 UnsupportedXxx 占位）。
+# T2-56（R1）：在 T2-54 基座上追加**隔离网络** + **Egress Proxy** 服务（见文件末）。
 # ---------------------------------------------------------------------------
 name: astra-ai
 
@@ -27,13 +31,31 @@ services:
       ASTRA_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
       # Feature Flag 配置覆盖（最高优先级）；空 {} = 全部按注册表默认（全开）。
       ASTRA_FEATURE_FLAGS: '{}'
+      # 服务器持久目录与 Storage 根（T2-55：服务端 UUID 派生；不接受客户端覆写）。
+      ASTRA_DATA_DIR: /data
+      ASTRA_WORKSPACE_ROOT: /var/lib/astra-ai/workspaces
     ports:
       - "8080:8080"
+    volumes:
+      # Storage / secrets 根（持久化，跨容器重建保留）。
+      - astra-data:/data
+      # Project / Attempt 工作区根（持久化）。
+      - workspace-data:/var/lib/astra-ai/workspaces
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+    # 健康检查：复用 Compose 档 api 的 /health 端点。
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health').status == 200 else 1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   web:
     image: node:22-alpine
@@ -69,11 +91,27 @@ services:
       ASTRA_REDIS_URL: redis://redis:6379/0
       ASTRA_SECRET_KEY: ${ASTRA_SECRET_KEY:-change-me-to-a-random-secret-at-least-32-bytes}
       ASTRA_FEATURE_FLAGS: '{}'
+      ASTRA_DATA_DIR: /data
+      ASTRA_WORKSPACE_ROOT: /var/lib/astra-ai/workspaces
+      # Compose 档：容器级隔离 Sandbox（Worker 作为 Sandbox Runtime 管理方）。
+      ASTRA_SANDBOX_PROVIDER: docker
+    volumes:
+      - astra-data:/data
+      - workspace-data:/var/lib/astra-ai/workspaces
+      # 🔴 Worker / 控制面拥有宿主 root 等价权限（设计 §2.8.1 信任级别）：
+      #    仅用于 Worker 创建 / 管理 Sandbox 容器；**绝不**把该 socket 挂进 Agent Sandbox。
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+    healthcheck:
+      # 存活探针：Worker 进程可导入即视为健康（不触发任何任务执行）。
+      test: ["CMD-SHELL", "python -c \"import astra_worker\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   postgres:
     image: postgres:16-alpine
@@ -102,3 +140,6 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  # T2-54：Workspace（Project / Attempt）与 Storage 持久卷（跨容器重建保留）。
+  workspace-data:
+  astra-data:
