@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 from .defaults import (
@@ -49,6 +49,12 @@ from .defaults import (
     DEFAULT_PORT,
     DEFAULT_REDIS_URL,
     DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+    DEFAULT_REMOTE_MAX_ARTIFACT_BYTES,
+    DEFAULT_REMOTE_MAX_ARTIFACT_COUNT,
+    DEFAULT_REMOTE_MAX_CONCURRENT_EXECUTIONS,
+    DEFAULT_REMOTE_MAX_DISK_BYTES,
+    DEFAULT_REMOTE_MAX_DURATION_SECONDS,
+    DEFAULT_REMOTE_MAX_PENDING_PER_USER,
     DEFAULT_RETENTION_AGENT_EVENT_DAYS,
     DEFAULT_RETENTION_AUDIT_LOG_DAYS,
     DEFAULT_RETENTION_BATCH_SIZE,
@@ -74,6 +80,12 @@ from .defaults import (
     DEFAULT_SSE_HEARTBEAT_SECONDS,
     DEFAULT_VECTOR_SEARCH,
     DEFAULT_WORKSPACE_ROOT,
+    HARD_MAX_ARTIFACT_BYTES,
+    HARD_MAX_ARTIFACT_COUNT,
+    HARD_MAX_CONCURRENT_EXECUTIONS,
+    HARD_MAX_DISK_BYTES,
+    HARD_MAX_DURATION_SECONDS,
+    HARD_MAX_PENDING_PER_USER,
 )
 
 __all__ = [
@@ -86,6 +98,7 @@ __all__ = [
     "CapabilitySettings",
     "MemorySettings",
     "RetentionSettings",
+    "RemoteExecutionSettings",
 ]
 
 
@@ -250,6 +263,61 @@ class RetentionSettings(BaseModel):
     paused: bool = DEFAULT_RETENTION_PAUSED
 
 
+class RemoteExecutionSettings(BaseModel):
+    """远程执行资源限额（R3 · T2-59；设计 §2.9.1 / §2.18；N9 / N10）。
+
+    环境变量前缀 ``ASTRA_REMOTE_EXECUTION__*``（嵌套分隔符 ``__``，如
+    ``ASTRA_REMOTE_EXECUTION__MAX_CONCURRENT_EXECUTIONS=4``）。
+
+    默认可**收紧**（调小），但存在**硬上限**（默认值 / 硬上限见 :mod:`astra_config.defaults`）——
+    超过硬上限即**显式报错**（构造期校验，防误配放大资源风险，RK-8 / A-13）。字段一律 ``> 0``。
+
+    Attributes:
+        max_concurrent_executions: Workspace 并发执行上限（默认 2；硬上限 32）。
+        max_pending_per_user: 单用户待处理任务上限（默认 4；硬上限 64）。
+        max_duration_seconds: 单次执行时长上限（秒；默认 8h；硬上限 24h）。
+        max_disk_bytes: 单次执行磁盘占用上限（默认 8 GiB；硬上限 64 GiB）。
+        max_artifact_bytes: 单次执行 Artifact 累计字节上限（默认 4 GiB；硬上限 16 GiB）。
+        max_artifact_count: 单次执行 Artifact 数量上限（默认 200；硬上限 1000）。
+    """
+
+    max_concurrent_executions: int = DEFAULT_REMOTE_MAX_CONCURRENT_EXECUTIONS
+    max_pending_per_user: int = DEFAULT_REMOTE_MAX_PENDING_PER_USER
+    max_duration_seconds: int = DEFAULT_REMOTE_MAX_DURATION_SECONDS
+    max_disk_bytes: int = DEFAULT_REMOTE_MAX_DISK_BYTES
+    max_artifact_bytes: int = DEFAULT_REMOTE_MAX_ARTIFACT_BYTES
+    max_artifact_count: int = DEFAULT_REMOTE_MAX_ARTIFACT_COUNT
+
+    @model_validator(mode="after")
+    def _enforce_hard_ceilings(self) -> RemoteExecutionSettings:
+        """硬上限 + 正数校验（超限 / 非正即抛 ``ValueError`` → 构造期显式报错）。
+
+        Returns:
+            校验通过的自身（pydantic v2 ``mode="after"`` 语义）。
+
+        Raises:
+            ValueError: 任一字段 ``<= 0`` 或超过对应硬上限。
+        """
+        ceilings: dict[str, int] = {
+            "max_concurrent_executions": HARD_MAX_CONCURRENT_EXECUTIONS,
+            "max_pending_per_user": HARD_MAX_PENDING_PER_USER,
+            "max_duration_seconds": HARD_MAX_DURATION_SECONDS,
+            "max_disk_bytes": HARD_MAX_DISK_BYTES,
+            "max_artifact_bytes": HARD_MAX_ARTIFACT_BYTES,
+            "max_artifact_count": HARD_MAX_ARTIFACT_COUNT,
+        }
+        for name, ceiling in ceilings.items():
+            value = getattr(self, name)
+            if value <= 0:
+                raise ValueError(f"remote_execution.{name} 必须为正数，实际 {value}")
+            if value > ceiling:
+                raise ValueError(
+                    f"remote_execution.{name}={value} 超过硬上限 {ceiling}"
+                    "（部署只可收紧，不可越过硬上限）"
+                )
+        return self
+
+
 class Settings(BaseSettings):
     """平台统一配置。
 
@@ -373,6 +441,11 @@ class Settings(BaseSettings):
     # -- 数据保留与清理（W9 · T2-48；设计 §2.19 / 裁定 R8） -----------------
     # ``ASTRA_RETENTION__*``（嵌套）：保留天数 / 批大小 / 保护名单 / 暂停。
     retention: RetentionSettings = Field(default_factory=RetentionSettings)
+
+    # -- 远程执行限额（R3 · T2-59；设计 §2.9.1 / §2.18） --------------------
+    # ``ASTRA_REMOTE_EXECUTION__*``（嵌套）：并发 / 待处理 / 时长 / 磁盘 / Artifact 上限；
+    # 部署可**收紧**，超过**硬上限**即报错。
+    remote_execution: RemoteExecutionSettings = Field(default_factory=RemoteExecutionSettings)
 
     @classmethod
     def settings_customise_sources(  # noqa: PLR0913 - 由 pydantic-settings 约定

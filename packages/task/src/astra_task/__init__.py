@@ -23,7 +23,13 @@ from .agents import (
     UNLOCKED_AGENT_TYPES,
     ScheduledAgentUnlocker,
 )
-from .execution_record import ExecutionRecorder, TaskExecutionRecord
+from .execution_record import (
+    DEFAULT_HEARTBEAT_SECONDS,
+    DEFAULT_LEASE_SECONDS,
+    EXECUTION_STATUS_WORKER_INTERRUPTED,
+    ExecutionRecorder,
+    TaskExecutionRecord,
+)
 from .executor import (
     BackgroundExecutor,
     InProcessBackgroundExecutor,
@@ -114,6 +120,10 @@ __all__ = [
     "SchedulerTick",
     "TaskExecutionRecord",
     "ExecutionRecorder",
+    # -- R3 / T2-59：Claim / heartbeat / lease / interrupted（执行态常量） --------
+    "EXECUTION_STATUS_WORKER_INTERRUPTED",
+    "DEFAULT_HEARTBEAT_SECONDS",
+    "DEFAULT_LEASE_SECONDS",
     "SCHEDULED_AGENT",
     "EVENT_AGENT",
     "AGENT_TYPE_TO_TRIGGER",

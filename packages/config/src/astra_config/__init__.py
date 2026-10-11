@@ -34,6 +34,7 @@ from .settings import (
     EgressSettings,
     MemorySettings,
     ObservabilitySettings,
+    RemoteExecutionSettings,
     RetentionSettings,
     Settings,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "CapabilitySettings",
     "MemorySettings",
     "RetentionSettings",
+    "RemoteExecutionSettings",
     "get_settings",
     "reset_settings_cache",
     "load_yaml_config",

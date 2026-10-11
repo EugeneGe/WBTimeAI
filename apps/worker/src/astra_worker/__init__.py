@@ -16,6 +16,10 @@ __all__ = ["HandlerContext", "__version__"]
 
 __version__ = "0.4.0"
 
+# 注：租约 / 恢复接线（``LeaseManager`` / ``ClaimOutcome`` / ``RecoveryReport``）落
+# ``astra_worker.recovery`` 子模块（**不**在包门面再导出，避免包导入期拉入 ``sqlalchemy``
+# 异常类型；需要时 ``from astra_worker.recovery import LeaseManager``）。
+
 
 @dataclass
 class HandlerContext:

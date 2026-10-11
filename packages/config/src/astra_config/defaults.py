@@ -229,6 +229,49 @@ DEFAULT_RETENTION_REMOTE_LOG_DAYS: int | None = None
 DEFAULT_RETENTION_PAUSED = False
 
 
+# -- 远程执行限额（R3 / T2-59；设计 §2.9.1 / §2.18；N9 / N10） -----------------
+#
+# 默认（部署可**收紧**=只能调小，且有**硬上限**）：Workspace 并发 2 / 用户待处理 4 /
+# 单次 8 小时；另有磁盘与 Artifact 字节 / 数量上限。**硬上限**为部署**不可逾越**的天花板
+# （settings 层显式校验，超限即报错），防误配放大资源风险（RK-8 / A-13）。
+
+#: Workspace 默认并发执行数（设计 §2.9.1：默认 2）。
+DEFAULT_REMOTE_MAX_CONCURRENT_EXECUTIONS = 2
+
+#: 单用户默认待处理（``PENDING`` + 在跑）任务上限（设计 §2.9.1：默认 4）。
+DEFAULT_REMOTE_MAX_PENDING_PER_USER = 4
+
+#: 单次远程执行默认时长上限（秒；设计 §2.9.1：默认 8 小时）。
+DEFAULT_REMOTE_MAX_DURATION_SECONDS = 8 * 3600
+
+#: 单次远程执行默认磁盘占用上限（字节；默认 8 GiB）。
+DEFAULT_REMOTE_MAX_DISK_BYTES = 8 * 1024**3
+
+#: 单次远程执行默认 Artifact 累计字节上限（默认 4 GiB）。
+DEFAULT_REMOTE_MAX_ARTIFACT_BYTES = 4 * 1024**3
+
+#: 单次远程执行默认 Artifact 数量上限（默认 200）。
+DEFAULT_REMOTE_MAX_ARTIFACT_COUNT = 200
+
+#: **硬上限**：Workspace 并发执行数（部署不可逾越，settings 超限即报错）。
+HARD_MAX_CONCURRENT_EXECUTIONS = 32
+
+#: **硬上限**：单用户待处理任务数（部署不可逾越）。
+HARD_MAX_PENDING_PER_USER = 64
+
+#: **硬上限**：单次执行时长（秒；24 小时；部署不可逾越）。
+HARD_MAX_DURATION_SECONDS = 24 * 3600
+
+#: **硬上限**：单次执行磁盘占用（字节；64 GiB；部署不可逾越）。
+HARD_MAX_DISK_BYTES = 64 * 1024**3
+
+#: **硬上限**：单次执行 Artifact 累计字节（16 GiB；部署不可逾越）。
+HARD_MAX_ARTIFACT_BYTES = 16 * 1024**3
+
+#: **硬上限**：单次执行 Artifact 数量（1000；部署不可逾越）。
+HARD_MAX_ARTIFACT_COUNT = 1000
+
+
 # -- Feature Flag（T0-21 / 决策 D7） -----------------------------------------
 
 #: Feature Flag 配置覆盖默认值；空 = 全部按注册表默认（全开）。
@@ -307,4 +350,17 @@ __all__ = [
     "DEFAULT_RETENTION_REMOTE_ARTIFACT_DAYS",
     "DEFAULT_RETENTION_REMOTE_LOG_DAYS",
     "DEFAULT_RETENTION_PAUSED",
+    # 远程执行限额（R3 / T2-59）
+    "DEFAULT_REMOTE_MAX_CONCURRENT_EXECUTIONS",
+    "DEFAULT_REMOTE_MAX_PENDING_PER_USER",
+    "DEFAULT_REMOTE_MAX_DURATION_SECONDS",
+    "DEFAULT_REMOTE_MAX_DISK_BYTES",
+    "DEFAULT_REMOTE_MAX_ARTIFACT_BYTES",
+    "DEFAULT_REMOTE_MAX_ARTIFACT_COUNT",
+    "HARD_MAX_CONCURRENT_EXECUTIONS",
+    "HARD_MAX_PENDING_PER_USER",
+    "HARD_MAX_DURATION_SECONDS",
+    "HARD_MAX_DISK_BYTES",
+    "HARD_MAX_ARTIFACT_BYTES",
+    "HARD_MAX_ARTIFACT_COUNT",
 ]
