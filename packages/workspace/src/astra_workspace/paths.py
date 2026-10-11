@@ -146,13 +146,15 @@ class ManagedWorkspacePaths:
 
     def execution_dir(self, execution_id: str) -> Path:
         """``<root>/executions/<execution_id>``。"""
-        return self._root / WORKSPACE_EXECUTIONS_DIRNAME / self._segment(
-            "execution_id", execution_id
+        return (
+            self._root / WORKSPACE_EXECUTIONS_DIRNAME / self._segment("execution_id", execution_id)
         )
 
     def attempt_dir(self, execution_id: str, attempt: int) -> Path:
         """``<root>/executions/<execution_id>/attempt-<n>``（独立工作副本）。"""
-        return self.execution_dir(execution_id) / f"{WORKSPACE_ATTEMPT_DIR_PREFIX}{self._attempt(attempt)}"
+        return self.execution_dir(execution_id) / (
+            f"{WORKSPACE_ATTEMPT_DIR_PREFIX}{self._attempt(attempt)}"
+        )
 
     # -- containment（唯一裁决点） -----------------------------------------
 
@@ -224,7 +226,7 @@ class ManagedWorkspacePaths:
             形如 ``wr_<base64url>`` 的不透明句柄（服务端可还原）。
         """
         self._segment("execution_id", execution_id)
-        raw = f"{execution_id}:{self._attempt(attempt)}".encode("utf-8")
+        raw = f"{execution_id}:{self._attempt(attempt)}".encode()
         token = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
         return f"{WORKSPACE_CHECKOUT_REF_PREFIX}{token}"
 

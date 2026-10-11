@@ -154,7 +154,7 @@ class ControlledEgressProxy:
 
             def __init__(self, address: tuple[str, int]) -> None:
                 super().__init__(address, _ProxyRequestHandler)
-                self.proxy = proxy  # type: ignore[attr-defined]
+                self.proxy = proxy
 
         return _Server((self._host, self._port))
 
@@ -272,7 +272,9 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(description="Astra AI 受控 Egress Proxy（T2-56）")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址（默认 0.0.0.0）")
-    parser.add_argument("--port", type=int, default=PROXY_DEFAULT_PORT, help="监听端口（默认 8888）")
+    parser.add_argument(
+        "--port", type=int, default=PROXY_DEFAULT_PORT, help="监听端口（默认 8888）"
+    )
     args = parser.parse_args(argv)
 
     from astra_config import get_settings

@@ -56,7 +56,8 @@ class SandboxNetworkConfig:
     Attributes:
         profile: 档位（``offline`` / ``allowlisted``）。
         egress_network: ALLOWLISTED 时接入的内部网络名。
-        egress_proxy_url: 受控 Egress Proxy 地址（``http://host:port``；ALLOWLISTED 时必填才有意义）。
+        egress_proxy_url: 受控 Egress Proxy 地址
+            （``http://host:port``；ALLOWLISTED 时必填才有意义）。
         proxy_port: 代理端口（用于构造默认 URL / 文档）。
     """
 
@@ -116,9 +117,8 @@ def network_config_from_settings(settings: Any) -> SandboxNetworkConfig:
     if profile not in NETWORK_PROFILES:
         profile = NETWORK_PROFILE_OFFLINE
     network = str(
-        getattr(settings, "sandbox_egress_network", DEFAULT_EGRESS_NETWORK) or DEFAULT_EGRESS_NETWORK
+        getattr(settings, "sandbox_egress_network", DEFAULT_EGRESS_NETWORK)
+        or DEFAULT_EGRESS_NETWORK
     )
     proxy_url = str(getattr(settings, "sandbox_egress_proxy_url", "") or "")
-    return SandboxNetworkConfig(
-        profile=profile, egress_network=network, egress_proxy_url=proxy_url
-    )
+    return SandboxNetworkConfig(profile=profile, egress_network=network, egress_proxy_url=proxy_url)

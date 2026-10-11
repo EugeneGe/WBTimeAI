@@ -127,12 +127,16 @@ def test_server_assembly_without_psycopg(
 
     # 装配时输出 1 条结构化档位 INFO（tier=community），且**无**占位 WARNING。
     tier_records = [
-        record for record in caplog.records if getattr(record, "event", None) == "provider.server_tier"
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "provider.server_tier"
     ]
     assert len(tier_records) == 1
     assert getattr(tier_records[0], "tier", None) == "community"
     placeholder_warnings = [
-        record for record in caplog.records if getattr(record, "event", None) == "provider.placeholder"
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "provider.placeholder"
     ]
     assert placeholder_warnings == []
 

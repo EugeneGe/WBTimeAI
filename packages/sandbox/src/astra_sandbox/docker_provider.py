@@ -42,7 +42,8 @@ class DockerSandboxProvider:
 
     T2-56：新增**网络档位**（``network_profile``）与**受控 Egress Proxy** 注入——默认
     ``offline``（``network=none``）；``allowlisted`` 时接入**内部**网络（无外部路由）+ 注入
-    代理环境变量。**不改** Phase 1 ``SandboxProvider`` Protocol（``create_session``/``exec`` 签名零改）。
+    代理环境变量。**不改** Phase 1 ``SandboxProvider`` Protocol
+    （``create_session``/``exec`` 签名零改）。
     """
 
     def __init__(

@@ -16,8 +16,8 @@
    （``password`` / ``secret`` / ``token`` / ``api_key`` / ``private_key``）经 ``logger.*`` /
    ``print`` 输出的调用点（f-string / 格式化 / 直接实参均覆盖）。
 4. **出网判定唯一源（egress single-source）** —— 全仓**仅**规范原语（``astra_domain.ports.egress``）
-   / 唯一入口（``astra_security.egress``）/ Phase 1 薄委托（``astra_tool.security``）**定义**出网判定
-   符号；其它位置定义即「另建白名单判定源」违规（R1 / T2-56 · L-6）。
+   / 唯一入口（``astra_security.egress``）/ Phase 1 薄委托（``astra_tool.security``）**定义**
+   出网判定符号；其它位置定义即「另建白名单判定源」违规（R1 / T2-56 · L-6）。
 
 用法::
 

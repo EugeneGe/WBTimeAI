@@ -169,9 +169,10 @@ def test_scan_detects_second_egress_source(tmp_path: Path) -> None:
 
     findings = module.scan_egress_single_source(tmp_path)
     detected = {(item.rule, item.path.replace("\\", "/")) for item in findings}
-    assert ("egress.single_decision_source", "pkg/src/astra_pkg/rogue_egress.py") in detected, (
-        f"未检出另建判定源：{sorted(detected)}"
-    )
+    assert (
+        "egress.single_decision_source",
+        "pkg/src/astra_pkg/rogue_egress.py",
+    ) in detected, f"未检出另建判定源：{sorted(detected)}"
 
 
 def test_scan_allows_canonical_egress_definitions() -> None:
