@@ -1,8 +1,13 @@
-"""迁移 ``0008–0017`` **全量双向 roundtrip**（W10 / T2-53；``I-P2-20``）。
+"""迁移 ``0008–0018`` **全量双向 roundtrip**（W10 / T2-53；R2 / T2-57 扩波段；``I-P2-20``）。
 
-**目的**：单一测试覆盖整段 Phase 2 迁移带（``0008_phase2_skill`` … ``0017_phase2_evaluation``）
-的**一次性双向**（``upgrade head → downgrade 0007 → upgrade head``）与跨迁移不变量——补既有
-逐迁移测试（``test_0008.py`` … ``test_0017.py`` 各只覆盖自身迁移带）的**聚合缺口**。
+**目的**：单一测试覆盖整段 Phase 2 迁移带（``0008_phase2_skill`` …
+``0018_phase2_remote_workspace``）的**一次性双向**（``upgrade head → downgrade 0007 →
+upgrade head``）与跨迁移不变量——补既有逐迁移测试（``test_0008.py`` … ``test_0018.py``
+各只覆盖自身迁移带）的**聚合缺口**。
+
+🔴 **R2 / T2-57 扩波段（R-R1R5-10 D-2，加性收紧零放宽）**：``_EXPECTED_HEAD`` 前移至
+   ``0018_phase2_remote_workspace``；``_PHASE2_TABLES_BY_REV`` 增补 ``"0018": set()``
+   （``0018`` 仅加列 / 建索引，**不新建表**）。
 
 覆盖（对齐 T2-53 预研缺口 G-1~G-8）：
 
@@ -42,9 +47,11 @@ _REV_0015 = "0015_phase2_workspace_task"
 _REV_0016 = "0016_phase2_organization_scope"
 
 #: 本波段唯一 head（若后续新增迁移，须同步扩本文件波段）。
-_EXPECTED_HEAD = "0017_phase2_evaluation"
+#: 🔴 ``0018_phase2_remote_workspace``（R2 / T2-57）加入后波段终点前移——R-R1R5-10 D-2 预修。
+_EXPECTED_HEAD = "0018_phase2_remote_workspace"
 
 #: 逐迁移**新建表**（G-2 聚合口径；``0016`` 不新建表）。
+#: 🔴 ``0018`` **不新建表**（仅对 ``task_execution`` 加性加列 + 建索引）→ 空集。
 _PHASE2_TABLES_BY_REV: dict[str, set[str]] = {
     "0008": {"skill", "skill_version", "skill_resource", "agent_skill"},
     "0009": {"mcp_server", "mcp_tool", "mcp_permission"},
@@ -62,6 +69,7 @@ _PHASE2_TABLES_BY_REV: dict[str, set[str]] = {
     "0014": {"memory", "memory_relation"},
     "0015": {"project", "workspace_environment", "task_execution", "schedule"},
     "0017": {"evaluation_dataset", "evaluation_case", "evaluation_run", "evaluation_result"},
+    "0018": set(),
 }
 
 #: 全波段新建表 union（G-2 聚合断言集合）。

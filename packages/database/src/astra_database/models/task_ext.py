@@ -1,4 +1,4 @@
-"""TaskExecution / Schedule ORM 表（设计 §2.9 / §2.15；W7 / T2-37）。
+"""TaskExecution / Schedule ORM 表（设计 §2.9 / §2.15；W7 / T2-37；R2 / T2-57）。
 
 - :class:`TaskExecution`：任务每次 **attempt** 的执行记录（``task`` 1:N ``task_execution``）；
   唯一键 ``(task_id, attempt)``（``uq_task_execution_task_attempt``，§2.9.1 冻结契约）。
@@ -10,9 +10,11 @@
 🔴 **``astra_task`` 零 ORM（R2）**：任务执行记录 / 调度的 **ORM + SQL 一律落
    ``astra_database``**（本模块 + ``repositories/task_execution_repository.py`` /
    ``schedule_repository.py``）；``packages/task`` 经**注入 Protocol** 使用。
-🔴 ``task_execution`` **仅建基础列**（§3.3）；``0018`` 预留列（``project_id`` / ``checkout_ref``
-   / ``base_commit`` / ``result_commit`` / ``environment_digest`` / ``artifact_refs`` /
-   ``heartbeat_at`` / ``lease_expires_at``）**本波不建**。
+🔴 ``0018``（**R2 / T2-57**）为 ``task_execution`` **加性**新增 8 个**可空**远端执行列
+   （``project_id`` / ``checkout_ref`` / ``base_commit`` / ``result_commit`` /
+   ``environment_digest`` / ``artifact_refs`` / ``heartbeat_at`` / ``lease_expires_at``）
+   ——本 ORM 声明与迁移 ``0018_phase2_remote_workspace`` DDL **严格对齐**（``alembic check``
+   零漂移，裁定 R-R1R5-08.1）。**历史行无需假回填**（全部可空）。
 """
 
 from __future__ import annotations
@@ -21,7 +23,17 @@ from datetime import datetime
 from typing import Any
 
 from astra_core import generate_id
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..base import Base, TimestampMixin
@@ -42,11 +54,27 @@ class TaskExecution(Base):
         finished_at: 结束时间（可空）。
         duration_ms: 持续毫秒（可空）。
         error: 错误信息（可空）。
+        project_id: 归属 Project（可空；仅 Project 代码任务有值；FK ``project.id`` RESTRICT）。
+        checkout_ref: 不透明 Attempt checkout 句柄（可空；**不含宿主绝对路径**）。
+        base_commit: Attempt 起始提交（Git OID，可空）。
+        result_commit: Attempt 结果提交（Git OID，可空）。
+        environment_digest: 环境摘要（SHA-256，可空；**不含 Secret**）。
+        artifact_refs: 产物 / Diff / 报告 / 日志的 Storage 引用（JSON，可空）。
+        heartbeat_at: Worker 心跳时刻（可空）。
+        lease_expires_at: Worker Claim 租约截止时刻（可空）。
     """
 
     __tablename__ = "task_execution"
     __table_args__ = (
         UniqueConstraint("task_id", "attempt", name="uq_task_execution_task_attempt"),
+        Index("ix_task_execution_project_started", "project_id", "started_at"),
+        Index(
+            "uq_task_execution_checkout_ref",
+            "checkout_ref",
+            unique=True,
+            sqlite_where=text("checkout_ref IS NOT NULL"),
+            postgresql_where=text("checkout_ref IS NOT NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(GUID(), primary_key=True, default=generate_id)
@@ -58,6 +86,21 @@ class TaskExecution(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     error: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # -- 0018 远端执行加性可空列（严格对齐迁移 ``0018_phase2_remote_workspace``） ----
+    project_id: Mapped[str | None] = mapped_column(
+        GUID(),
+        ForeignKey("project.id", name="fk_task_execution_project_id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    checkout_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    base_commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    result_commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    environment_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    artifact_refs: Mapped[dict[str, Any] | None] = mapped_column(JSONType(), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class Schedule(Base, TimestampMixin):

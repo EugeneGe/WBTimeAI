@@ -3,7 +3,13 @@
 🔴 落在 ``astra_database``（ORM 允许位置，R2）；``packages/task`` 保持零 ORM。
 领域实体 :class:`astra_task.TaskExecutionRecord`（零 ORM）。
 
-对应 ORM 表：``task_execution``（随迁移 ``0015`` 落地）；唯一键 ``(task_id, attempt)``。
+对应 ORM 表：``task_execution``（随迁移 ``0015`` 落地；``0018`` 加性扩展）；唯一键
+``(task_id, attempt)``（``uq_task_execution_task_attempt``）。
+
+🔴 **R2 / T2-57（C-5）加性扩展**：领域实体的 8 个远端执行字段（``project_id`` /
+   ``checkout_ref`` / ``base_commit`` / ``result_commit`` / ``environment_digest`` /
+   ``artifact_refs`` / ``heartbeat_at`` / ``lease_expires_at``）随 ``0018`` 一并映射；
+   行为语义（Claim / heartbeat / lease）由 T2-59 追加。
 """
 
 from __future__ import annotations
@@ -30,7 +36,10 @@ def _utc(value: datetime | None) -> datetime | None:
 
 
 def execution_to_domain(row: OrmTaskExecution) -> TaskExecutionRecord:
-    """ORM ``task_execution`` 行 → 领域 ``TaskExecutionRecord``（时间戳归一化为 UTC 感知）。"""
+    """ORM ``task_execution`` 行 → 领域 ``TaskExecutionRecord``（时间戳归一化为 UTC 感知）。
+
+    含 ``0018``（R2 / T2-57）**加性**新增的 8 个远端执行字段（历史行可为 ``None``）。
+    """
     return TaskExecutionRecord(
         id=row.id,
         task_id=row.task_id,
@@ -41,11 +50,19 @@ def execution_to_domain(row: OrmTaskExecution) -> TaskExecutionRecord:
         finished_at=_utc(row.finished_at),
         duration_ms=row.duration_ms,
         error=row.error,
+        project_id=row.project_id,
+        checkout_ref=row.checkout_ref,
+        base_commit=row.base_commit,
+        result_commit=row.result_commit,
+        environment_digest=row.environment_digest,
+        artifact_refs=row.artifact_refs,
+        heartbeat_at=_utc(row.heartbeat_at),
+        lease_expires_at=_utc(row.lease_expires_at),
     )
 
 
 def execution_to_orm(entity: TaskExecutionRecord) -> OrmTaskExecution:
-    """领域 ``TaskExecutionRecord`` → ORM 行。"""
+    """领域 ``TaskExecutionRecord`` → ORM 行（含 ``0018`` 加性字段）。"""
     return OrmTaskExecution(
         id=entity.id,
         task_id=entity.task_id,
@@ -56,6 +73,14 @@ def execution_to_orm(entity: TaskExecutionRecord) -> OrmTaskExecution:
         finished_at=entity.finished_at,
         duration_ms=entity.duration_ms,
         error=entity.error,
+        project_id=entity.project_id,
+        checkout_ref=entity.checkout_ref,
+        base_commit=entity.base_commit,
+        result_commit=entity.result_commit,
+        environment_digest=entity.environment_digest,
+        artifact_refs=entity.artifact_refs,
+        heartbeat_at=entity.heartbeat_at,
+        lease_expires_at=entity.lease_expires_at,
     )
 
 
@@ -104,6 +129,15 @@ class SqlTaskExecutionRepository:
             row.finished_at = entity.finished_at
             row.duration_ms = entity.duration_ms
             row.error = entity.error
+            # -- 0018 加性字段映射（R2 / T2-57） ---------------------------------
+            row.project_id = entity.project_id
+            row.checkout_ref = entity.checkout_ref
+            row.base_commit = entity.base_commit
+            row.result_commit = entity.result_commit
+            row.environment_digest = entity.environment_digest
+            row.artifact_refs = entity.artifact_refs
+            row.heartbeat_at = entity.heartbeat_at
+            row.lease_expires_at = entity.lease_expires_at
             session.flush()
             return execution_to_domain(row)
 

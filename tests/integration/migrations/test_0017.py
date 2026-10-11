@@ -2,11 +2,13 @@
 
 覆盖（W9 开工前架构裁定 §3 / §9；验收 ``I-P2-20``）：
 
-- **单 head**：``0017`` 的 ``down_revision == 0016``，且为唯一 head；
+- **单 head**：``0017`` 的 ``down_revision == 0016``，且位于迁移链**唯一 head 的祖先链**上
+  （``0018`` 加入后 head 前移至 ``0018``，R-R1R5-10 D-1 预修：**加性收紧、零放宽**）；
 - **双向（SQLite）**：``upgrade 0016`` → ``upgrade 0017``（断言四表 + 唯一键
   ``(dataset_id, case_key)`` / ``idempotency_key`` / ``(evaluation_run_id, case_id)`` + FK +
   组织 / 工作区索引）→ ``downgrade 0016``（断言四表已删、既有表**未动**）→ ``upgrade 0017``；
-- **零漂移**：``0017`` 后 ORM ``Base.metadata`` 与 DB schema 零漂移（替代 PG 权威面）；
+- **零漂移**：``0017`` 四表结构断言 + **head 处** ORM ``Base.metadata`` 与 DB schema 零漂移
+  （``0018`` 加入后 head 前移；中间版本断言会误判漂移，替代 PG 权威面）；
 - **负向对照**：同 ``(dataset_id, case_key)`` 二插 → ``IntegrityError``（防假绿）；
 - **组织范围（R3）**：``evaluation_dataset`` / ``evaluation_run`` 直接列
   ``organization_id``（+ 索引）；``evaluation_case`` / ``evaluation_result`` **无**组织列；
@@ -29,6 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 _REV_0016 = "0016_phase2_organization_scope"
 _REV_0017 = "0017_phase2_evaluation"
+_REV_0018 = "0018_phase2_remote_workspace"
 
 #: 本迁移自有四表。
 EVAL_TABLES: tuple[str, ...] = (
@@ -165,17 +168,33 @@ def _insert_case(engine: Engine, case_id: str, case_key: str) -> None:
 
 
 def test_migration_0017_single_head() -> None:
-    """``0017`` 的 ``down_revision == 0016``，且迁移脚本为唯一 head。"""
+    """``0017`` 的 ``down_revision == 0016``，且位于迁移链**唯一 head 的祖先链**上。
+
+    🔴 ``0018_phase2_remote_workspace``（R2 / T2-57）加入后波段 head 前移——本断言
+    （R-R1R5-10 D-1 预修）改为「**单 head** + ``0017`` 在祖先链 + 相邻下行关系」，
+    **加性收紧、零放宽**（不再硬编 ``0017`` 为 head）。
+    """
     from alembic.script import ScriptDirectory
 
     scripts = ScriptDirectory.from_config(_alembic_config())
-    assert scripts.get_heads() == [_REV_0017], scripts.get_heads()
-    revision = scripts.get_revision(_REV_0017)
-    assert revision.down_revision == _REV_0016
+    heads = scripts.get_heads()
+    assert len(heads) == 1, f"迁移链应为单 head：{heads}"
+    head = heads[0]
+    ancestors = {revision.revision for revision in scripts.walk_revisions(head=head, base="base")}
+    assert _REV_0017 in ancestors, ancestors
+    assert scripts.get_revision(_REV_0017).down_revision == _REV_0016
+    # ``0017`` 的直接后继（波段终点 = ``0018``）下行关系锁定。
+    assert scripts.get_revision(_REV_0018).down_revision == _REV_0017
 
 
 def test_migration_0017_bidirectional_and_constraints_sqlite() -> None:
-    """0016 → upgrade 0017（四表 + 唯一键 + FK + 索引 + 零漂移）→ downgrade 0016 → 再 upgrade。"""
+    """0016 → upgrade 0017（四表 + 唯一键 + FK + 索引）→ 上移 head 零漂移 →
+    downgrade 0016 → 再 upgrade head。
+
+    🔴 **R-R1R5-10 同步（0018 加入后 head 前移）**：零漂移断言**仅在 head 处有效**
+    （ORM 元数据 = head，含 ``0018`` 加性列；中间版本断言会误判漂移）——本用例将结构性
+    断言留在 ``0017``，零漂移断言上移至 ``head``（**加性收紧、零放宽**）。
+    """
     from alembic import command
     from astra_config.loader import reset_settings_cache
 
@@ -230,13 +249,21 @@ def test_migration_0017_bidirectional_and_constraints_sqlite() -> None:
             )
             assert "evaluation_dataset" in _fk_referred_tables(engine, "evaluation_dataset")
 
-            _assert_no_drift(engine)
-
             # 负向对照：同 (dataset_id, case_key) 二插 → IntegrityError。
             _seed_dataset(engine)
             _insert_case(engine, _CASE_A, "duplicate-key")
             with pytest.raises(IntegrityError):
                 _insert_case(engine, _CASE_B, "duplicate-key")
+        finally:
+            engine.dispose()
+
+        # 零漂移：上移 head（``0018``）后断言（仅 head 处 ORM 元数据与 DB 一致）。
+        command.upgrade(config, "head")
+        engine = sa.create_engine(url)
+        try:
+            for table in EVAL_TABLES:
+                assert table in _table_names(engine), table
+            _assert_no_drift(engine)
         finally:
             engine.dispose()
 
@@ -252,8 +279,8 @@ def test_migration_0017_bidirectional_and_constraints_sqlite() -> None:
         finally:
             engine.dispose()
 
-        # 再 upgrade 0017：幂等 + 零漂移。
-        command.upgrade(config, _REV_0017)
+        # 再 upgrade head：幂等 + 零漂移。
+        command.upgrade(config, "head")
         engine = sa.create_engine(url)
         try:
             tables = _table_names(engine)
@@ -354,7 +381,11 @@ def test_migration_0017_no_drop_extension_vector_and_explicit_dialect() -> None:
 
 @pytest.mark.skipif(_PG_URL is None and not _REQUIRE_PG, reason="未配置 ASTRA_TEST_PG_URL")
 def test_migration_0017_postgres() -> None:
-    """PostgreSQL（权威方言）：upgrade 0017 → 零漂移 → downgrade 0016 → upgrade 0017。"""
+    """PostgreSQL（权威方言）：upgrade head → 零漂移 → downgrade 0016 → upgrade head。
+
+    🔴 **R-R1R5-10 同步**：零漂移断言仅在 **head**（``0018``）处有效（ORM 元数据含 ``0018``
+    加性列）；故 PG 链路亦上移至 ``head`` 断言。
+    """
     assert _PG_URL is not None
     url = _PG_URL
     os.environ["ASTRA_MODE"] = "local"
@@ -377,7 +408,7 @@ def test_migration_0017_postgres() -> None:
             engine.dispose()
 
         try:
-            command.upgrade(config, _REV_0017)
+            command.upgrade(config, "head")
             engine = sa.create_engine(url)
             try:
                 for table in EVAL_TABLES:
@@ -394,7 +425,7 @@ def test_migration_0017_postgres() -> None:
             finally:
                 engine.dispose()
 
-            command.upgrade(config, _REV_0017)
+            command.upgrade(config, "head")
             engine = sa.create_engine(url)
             try:
                 _assert_no_drift(engine)

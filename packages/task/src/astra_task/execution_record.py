@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from astra_common.time import utcnow
 from astra_core import generate_id
@@ -26,7 +26,7 @@ __all__ = ["TaskExecutionRecord", "ExecutionRecorder"]
 
 @dataclass
 class TaskExecutionRecord:
-    """``task_execution`` 一行（零 ORM；映射 ORM ``task_execution``，§3.3）。
+    """``task_execution`` 一行（零 ORM；映射 ORM ``task_execution``，§3.3 + §2.15.5）。
 
     Attributes:
         id: 执行记录标识（UUIDv7）。
@@ -38,6 +38,18 @@ class TaskExecutionRecord:
         finished_at: 结束时间（可空）。
         duration_ms: 持续毫秒（可空）。
         error: 错误信息（可空）。
+        project_id: 归属 Project（可空；仅 Project 代码任务有值；``0018`` 加性列）。
+        checkout_ref: 不透明 Attempt checkout 句柄（可空；**不含宿主绝对路径**；``0018``）。
+        base_commit: Attempt 起始提交（Git OID，可空；``0018``）。
+        result_commit: Attempt 结果提交（Git OID，可空；``0018``）。
+        environment_digest: 环境摘要（SHA-256，可空；**不含 Secret**；``0018``）。
+        artifact_refs: 产物 / Diff / 报告 / 日志的 Storage 引用（JSON，可空；``0018``）。
+        heartbeat_at: Worker 心跳时刻（可空；``0018``）。
+        lease_expires_at: Worker Claim 租约截止时刻（可空；``0018``）。
+
+    🔴 **加性（R2 / T2-57，C-5）**：8 个远端执行字段默认 ``None``（历史记录合法）；
+       行为语义（Claim / heartbeat / lease / interrupted）由 **T2-59** 在本模块追加，
+       本任务**只**落字段映射（零 ORM，硬门禁保持）。
     """
 
     task_id: str = ""
@@ -49,6 +61,15 @@ class TaskExecutionRecord:
     duration_ms: int | None = None
     error: str | None = None
     id: str = field(default_factory=generate_id)
+    # -- 0018 远端执行加性字段（默认 None；历史记录合法） ------------------------
+    project_id: str | None = None
+    checkout_ref: str | None = None
+    base_commit: str | None = None
+    result_commit: str | None = None
+    environment_digest: str | None = None
+    artifact_refs: dict[str, Any] | None = None
+    heartbeat_at: datetime | None = None
+    lease_expires_at: datetime | None = None
 
 
 class ExecutionRecorder:
