@@ -1075,9 +1075,7 @@ class _ResourcePermissionCheckerAdapter(RuntimePermissionChecker):
         """暴露底层单一判定链实现（供装配 / 断言）。"""
         return self._resource_checker
 
-    def check(
-        self, ctx: Any, tool: Any, action: str
-    ):  # noqa: ANN201 - 与 RuntimePermissionChecker 同形
+    def check(self, ctx: Any, tool: Any, action: str):  # noqa: ANN201 - 与 RuntimePermissionChecker 同形
         """委托单一判定链（① resource_permission → ② scope 只收窄 → ③ 默认拒绝 → ④ PEP/PDP）。"""
         return self._resource_checker.check(ctx, tool, action)
 
@@ -1426,7 +1424,7 @@ class _EvaluationRunLauncher:
         """
         conversation = self._conversations.create_conversation(
             tenant_id=tenant_id,
-            workspace_id=workspace_id or "",
+            workspace_id=workspace_id,
             agent_id=agent_id,
             user_id=user_id or "",
             title="evaluation",

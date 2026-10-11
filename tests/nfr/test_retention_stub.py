@@ -95,12 +95,17 @@ def _selected_tool(client: Any, headers: dict[str, str]) -> str:
     return "shell"
 
 
-def _run_once(client: Any, headers: dict[str, str], agent_id: str, message: str) -> tuple[str, str]:
-    """跑一次 Run（JSON 模式），返回 ``(run_id, conversation_id)``。"""
+def _run_once(
+    client: Any, headers: dict[str, str], agent_id: str, workspace_id: str, message: str
+) -> tuple[str, str]:
+    """跑一次 Run（JSON 模式），返回 ``(run_id, conversation_id)``。
+
+    F-4 / Erratum ``R-R1R5-E1``：新建会话须带显式 ``workspace_id``。
+    """
     response = client.post(
         f"/api/v1/agents/{agent_id}/run",
         headers={**headers, "Accept": "application/json"},
-        json={"message": message},
+        json={"message": message, "workspace_id": workspace_id},
     )
     assert response.status_code == 200, response.text
     data = response.json()["data"]
@@ -131,7 +136,7 @@ def _complete_run(client: Any, headers: dict[str, str]) -> tuple[str, str]:
         json={"tool_id": tool_id, "action": "EXECUTE", "effect": "ALLOW", "agent_id": agent_id},
     )
     assert granted.status_code == 201, granted.text
-    return _run_once(client, headers, agent_id, "run nfr")
+    return _run_once(client, headers, agent_id, workspace_id, "run nfr")
 
 
 # -- 用例 1：全量落库 ---------------------------------------------------------

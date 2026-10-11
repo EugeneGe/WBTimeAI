@@ -92,6 +92,20 @@ def auth_headers(client: object) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture()
+def workspace_id(client: object, auth_headers: dict[str, str]) -> str:
+    """创建一个工作区并返回其 id。
+
+    F-4 / Erratum ``R-R1R5-E1``：**新建会话**（``POST /agents/{id}/run`` 无 ``conversation_id``、
+    ``POST /conversations``）的 ``workspace_id`` **必填**；既有用例经此 fixture 提供显式工作区。
+    """
+    created = client.post(  # type: ignore[attr-defined]
+        "/api/v1/workspaces", headers=auth_headers, json={"name": "ws-f4"}
+    )
+    assert created.status_code == 201, created.text
+    return created.json()["data"]["id"]
+
+
 def _forge_access_token(
     session_factory: object, *, tenant_slug: str, username: str
 ) -> dict[str, str]:

@@ -107,12 +107,17 @@ def _grant_shell(client: Any, headers: dict[str, str], *, agent_id: str) -> str:
     return tool_id
 
 
-def _run(client: Any, headers: dict[str, str], agent_id: str, *, message: str) -> str:
-    """以 JSON 模式运行一次 Agent，返回 ``run_id``。"""
+def _run(
+    client: Any, headers: dict[str, str], agent_id: str, *, workspace_id: str, message: str
+) -> str:
+    """以 JSON 模式运行一次 Agent，返回 ``run_id``。
+
+    F-4 / Erratum ``R-R1R5-E1``：**新建会话**须带显式 ``workspace_id``（否则 422）。
+    """
     response = client.post(
         f"/api/v1/agents/{agent_id}/run",
         headers={**headers, "Accept": "application/json"},
-        json={"message": message},
+        json={"message": message, "workspace_id": workspace_id},
     )
     assert response.status_code == 200, response.text
     return response.json()["data"]["run_id"]
@@ -140,7 +145,7 @@ def test_authorized_agent_run_allows_tool_via_real_api(
     )
     _grant_shell(client, auth_headers, agent_id=agent_id)
 
-    run_id = _run(client, auth_headers, agent_id, message="run shell")
+    run_id = _run(client, auth_headers, agent_id, workspace_id=workspace_id, message="run shell")
 
     tool_calls = _tool_calls(client, run_id)
     assert len(tool_calls) == 1, [tool_call.status for tool_call in tool_calls]
@@ -166,7 +171,7 @@ def test_unauthorized_agent_run_denies_tool_via_real_api(
     )
     # 有意不授权。
 
-    run_id = _run(client, auth_headers, agent_id, message="run shell")
+    run_id = _run(client, auth_headers, agent_id, workspace_id=workspace_id, message="run shell")
 
     tool_calls = _tool_calls(client, run_id)
     assert len(tool_calls) == 1, [tool_call.status for tool_call in tool_calls]
@@ -206,9 +211,9 @@ def test_per_run_checkers_are_isolated(client: Any, auth_headers: dict[str, str]
     singleton_checker = runtime.execution_manager._tool_executor._checker  # noqa: SLF001 - 隔离探针
 
     # 交替驱动：A → B → A（若单例缓存 per-agent 规则，B 将串到 A 的 ALLOW）。
-    run_a1 = _run(client, auth_headers, agent_a, message="a1")
-    run_b1 = _run(client, auth_headers, agent_b, message="b1")
-    run_a2 = _run(client, auth_headers, agent_a, message="a2")
+    run_a1 = _run(client, auth_headers, agent_a, workspace_id=workspace_id, message="a1")
+    run_b1 = _run(client, auth_headers, agent_b, workspace_id=workspace_id, message="b1")
+    run_a2 = _run(client, auth_headers, agent_a, workspace_id=workspace_id, message="a2")
 
     assert _tool_calls(client, run_a1)[0].status == "SUCCESS"
     assert _tool_calls(client, run_b1)[0].status == "DENIED"

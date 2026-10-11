@@ -37,7 +37,9 @@ describe("useChatStream", () => {
   });
 
   it("经 msw SSE 流增量拼接 message.delta（含终态 agent.completed）", async () => {
-    const { result } = renderHook(() => useChatStream({ agentId: "a1", retryDelayMs: 0 }));
+    const { result } = renderHook(() =>
+      useChatStream({ agentId: "a1", workspaceId: "ws-1", retryDelayMs: 0 }),
+    );
 
     await act(async () => {
       await result.current.sendMessage("你好");
@@ -92,7 +94,7 @@ describe("useChatStream", () => {
     );
 
     const { result } = renderHook(() =>
-      useChatStream({ agentId: "a1", retryDelayMs: 0, maxRetries: 2 }),
+      useChatStream({ agentId: "a1", workspaceId: "ws-1", retryDelayMs: 0, maxRetries: 2 }),
     );
 
     await act(async () => {
@@ -133,7 +135,7 @@ describe("useChatStream", () => {
     );
 
     const { result } = renderHook(() =>
-      useChatStream({ agentId: "a1", retryDelayMs: 0, onCompleted, onError }),
+      useChatStream({ agentId: "a1", workspaceId: "ws-1", retryDelayMs: 0, onCompleted, onError }),
     );
 
     await act(async () => {
@@ -143,6 +145,31 @@ describe("useChatStream", () => {
     expect(onError).toHaveBeenCalledWith("boom");
     expect(onCompleted).not.toHaveBeenCalled();
     expect(useChatStore.getState().error).toBe("boom");
+    expect(useChatStore.getState().streaming).toBe(false);
+  });
+
+  it("新建会话缺 workspaceId → 引导选择工作区（F-4：不发请求、不静默 null）", async () => {
+    const onError = vi.fn();
+    let requested = false;
+    server.use(
+      http.post("/api/v1/agents/:agentId/run", () => {
+        requested = true;
+        return sseResponse([
+          sseFrame({ id: 1, event: "agent.started", data: { run_id: "run-x", agent_id: "a1" } }),
+          sseFrame({ id: 2, event: "agent.completed", data: { run_id: "run-x" } }),
+        ]);
+      }),
+    );
+
+    const { result } = renderHook(() => useChatStream({ agentId: "a1", retryDelayMs: 0, onError }));
+
+    await act(async () => {
+      await result.current.sendMessage("hi");
+    });
+
+    expect(requested).toBe(false);
+    expect(onError).toHaveBeenCalledWith("请先选择工作区（新建会话须归属工作区）");
+    expect(useChatStore.getState().error).toBe("请先选择工作区（新建会话须归属工作区）");
     expect(useChatStore.getState().streaming).toBe(false);
   });
 });

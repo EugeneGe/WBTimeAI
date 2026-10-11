@@ -130,8 +130,13 @@ def _register_and_login(base_url: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _provision_agent(base_url: str, headers: dict[str, str], model_config: dict[str, Any]) -> str:
-    """创建 Workspace + 发布 Agent（绑定 ``shell`` 工具），返回 ``agent_id``。"""
+def _provision_agent(
+    base_url: str, headers: dict[str, str], model_config: dict[str, Any]
+) -> tuple[str, str]:
+    """创建 Workspace + 发布 Agent（绑定 ``shell`` 工具），返回 ``(agent_id, workspace_id)``。
+
+    F-4 / Erratum ``R-R1R5-E1``：``/agents/{id}/run`` **新建会话**须带显式 ``workspace_id``。
+    """
     import httpx
 
     with httpx.Client(timeout=30.0) as client:
@@ -162,10 +167,12 @@ def _provision_agent(base_url: str, headers: dict[str, str], model_config: dict[
             },
         )
         assert published.status_code == 201, published.text
-    return agent_id
+    return agent_id, workspace_id
 
 
-def _first_frame_ms(base_url: str, headers: dict[str, str], agent_id: str, *, tag: int) -> float:
+def _first_frame_ms(
+    base_url: str, headers: dict[str, str], agent_id: str, *, workspace_id: str, tag: int
+) -> float:
     """发起一次 SSE 运行，返回「请求发出 → 首个数据帧」耗时（毫秒）。"""
     import httpx
 
@@ -175,7 +182,7 @@ def _first_frame_ms(base_url: str, headers: dict[str, str], agent_id: str, *, ta
             "POST",
             f"{base_url}/api/v1/agents/{agent_id}/run",
             headers={**headers, "Accept": "text/event-stream"},
-            json={"message": f"perf {tag}"},
+            json={"message": f"perf {tag}", "workspace_id": workspace_id},
         ) as response:
             assert response.status_code == 200
             for line in response.iter_lines():
@@ -200,13 +207,13 @@ def test_fifty_concurrent_sse_first_frame_p95(isolated_settings_env: Path) -> No
             app.state.services, ["ok"], sandbox=FakeSandboxProvider()
         )
         headers = _register_and_login(base_url)
-        agent_id = _provision_agent(base_url, headers, doubles.model_config)
+        agent_id, workspace_id = _provision_agent(base_url, headers, doubles.model_config)
 
         barrier = threading.Barrier(SSE_CONCURRENCY)
 
         def one(tag: int) -> float:
             barrier.wait()
-            return _first_frame_ms(base_url, headers, agent_id, tag=tag)
+            return _first_frame_ms(base_url, headers, agent_id, workspace_id=workspace_id, tag=tag)
 
         with ThreadPoolExecutor(max_workers=SSE_CONCURRENCY) as pool:
             futures = [pool.submit(one, i) for i in range(SSE_CONCURRENCY)]

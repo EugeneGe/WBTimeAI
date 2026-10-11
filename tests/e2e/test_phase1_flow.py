@@ -203,11 +203,15 @@ def _run_sse(
     headers: dict[str, str],
     agent_id: str,
     *,
+    workspace_id: str,
     message: str,
     conversation_id: str | None = None,
 ) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
-    """以 SSE 运行一次 Agent，返回 ``(run_id, raw_frames, normalized_frames)``。"""
-    payload: dict[str, Any] = {"message": message}
+    """以 SSE 运行一次 Agent，返回 ``(run_id, raw_frames, normalized_frames)``。
+
+    F-4 / Erratum ``R-R1R5-E1``：**新建会话**须带显式 ``workspace_id``。
+    """
+    payload: dict[str, Any] = {"message": message, "workspace_id": workspace_id}
     if conversation_id is not None:
         payload["conversation_id"] = conversation_id
     with client.stream(
@@ -253,7 +257,7 @@ def test_phase1_full_chain_sse_matches_golden(client: Any, auth_headers: dict[st
     _grant_tool_permission(client, auth_headers, agent_id=agent_id, tool_name=tool_name)
 
     run_id, _raw_frames, normalized = _run_sse(
-        client, auth_headers, agent_id, message="请用 shell 打印 hello"
+        client, auth_headers, agent_id, workspace_id=workspace_id, message="请用 shell 打印 hello"
     )
 
     # 1) SSE 帧序列（通道 + 关键 payload + seq 顺序）逐帧 == golden。
@@ -295,7 +299,11 @@ def test_phase1_full_chain_sse_is_deterministic(client: Any, auth_headers: dict[
         )
         _grant_tool_permission(client, auth_headers, agent_id=agent_id)
         _run_id, _raw, normalized = _run_sse(
-            client, auth_headers, agent_id, message="请用 shell 打印 hello"
+            client,
+            auth_headers,
+            agent_id,
+            workspace_id=workspace_id,
+            message="请用 shell 打印 hello",
         )
         return normalized
 
@@ -321,7 +329,7 @@ def test_phase1_twenty_turns_do_not_crash(client: Any, auth_headers: dict[str, s
 
     conversation_id: str | None = None
     for turn in range(1, 21):
-        body = {"message": f"turn {turn}"}
+        body = {"message": f"turn {turn}", "workspace_id": workspace_id}
         if conversation_id is not None:
             body["conversation_id"] = conversation_id
         response = client.post(
@@ -366,7 +374,7 @@ def test_phase1_100kb_tool_output_truncated_and_persisted(
     response = client.post(
         f"/api/v1/agents/{agent_id}/run",
         headers={**auth_headers, "Accept": "application/json"},
-        json={"message": "echo big"},
+        json={"message": "echo big", "workspace_id": workspace_id},
     )
     assert response.status_code == 200, response.text
     data = response.json()["data"]
@@ -426,7 +434,7 @@ def test_phase1_tool_call_denied_without_permission(
     # 🔴 有意**不**调用 ``_grant_tool_permission`` —— 未授权。
 
     run_id, _raw_frames, _normalized = _run_sse(
-        client, auth_headers, agent_id, message="未授权调用 shell"
+        client, auth_headers, agent_id, workspace_id=workspace_id, message="未授权调用 shell"
     )
 
     # tool_call 落库为 DENIED（deny-by-default 在真实路径生效）。

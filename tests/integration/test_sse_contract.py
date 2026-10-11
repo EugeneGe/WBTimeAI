@@ -106,7 +106,9 @@ def _create_agent_with_stub_version(client: Any, headers: dict[str, str]) -> str
     return agent_id
 
 
-def test_run_agent_streams_sse_frames(client: Any, auth_headers: dict[str, str]) -> None:
+def test_run_agent_streams_sse_frames(
+    client: Any, auth_headers: dict[str, str], workspace_id: str
+) -> None:
     """``Accept: text/event-stream`` → SSE 帧序列 + 反缓冲头（端到端）。"""
     agent_id = _create_agent_with_stub_version(client, auth_headers)
     headers = {**auth_headers, "Accept": "text/event-stream"}
@@ -115,7 +117,7 @@ def test_run_agent_streams_sse_frames(client: Any, auth_headers: dict[str, str])
         "POST",
         f"/api/v1/agents/{agent_id}/run",
         headers=headers,
-        json={"message": "hello world"},
+        json={"message": "hello world", "workspace_id": workspace_id},
     ) as response:
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/event-stream")
@@ -157,7 +159,9 @@ def test_run_agent_streams_sse_frames(client: Any, auth_headers: dict[str, str])
     assert ids == list(range(1, len(ids) + 1)), f"SSE id 应与真实 seq 逐帧一致：{ids}"
 
 
-def test_run_agent_json_degrade(client: Any, auth_headers: dict[str, str]) -> None:
+def test_run_agent_json_degrade(
+    client: Any, auth_headers: dict[str, str], workspace_id: str
+) -> None:
     """显式 ``Accept: application/json`` → 统一响应壳 + 终态 Run（不 406）。"""
     agent_id = _create_agent_with_stub_version(client, auth_headers)
     headers = {**auth_headers, "Accept": "application/json"}
@@ -165,7 +169,7 @@ def test_run_agent_json_degrade(client: Any, auth_headers: dict[str, str]) -> No
     response = client.post(
         f"/api/v1/agents/{agent_id}/run",
         headers=headers,
-        json={"message": "hello"},
+        json={"message": "hello", "workspace_id": workspace_id},
     )
     assert response.status_code == 200, response.text
     assert response.headers["content-type"].startswith("application/json")
@@ -175,25 +179,29 @@ def test_run_agent_json_degrade(client: Any, auth_headers: dict[str, str]) -> No
     assert body["data"]["status"] in {"SUCCESS", "FAILED", "CANCELLED", "RUNNING"}
 
 
-def test_run_agent_unknown_accept_does_not_406(client: Any, auth_headers: dict[str, str]) -> None:
+def test_run_agent_unknown_accept_does_not_406(
+    client: Any, auth_headers: dict[str, str], workspace_id: str
+) -> None:
     """任意 ``Accept``（非 SSE 且非显式排除）→ 仍返回 200（不 406）。"""
     agent_id = _create_agent_with_stub_version(client, auth_headers)
     headers = {**auth_headers, "Accept": "text/html"}
     response = client.post(
         f"/api/v1/agents/{agent_id}/run",
         headers=headers,
-        json={"message": "hi"},
+        json={"message": "hi", "workspace_id": workspace_id},
     )
     assert response.status_code == 200, response.text
 
 
-def test_list_run_events_json_replay(client: Any, auth_headers: dict[str, str]) -> None:
+def test_list_run_events_json_replay(
+    client: Any, auth_headers: dict[str, str], workspace_id: str
+) -> None:
     """``GET /runs/{id}/events``（JSON）回放持久化事件（``seq`` 升序）。"""
     agent_id = _create_agent_with_stub_version(client, auth_headers)
     run = client.post(
         f"/api/v1/agents/{agent_id}/run",
         headers={**auth_headers, "Accept": "application/json"},
-        json={"message": "hello"},
+        json={"message": "hello", "workspace_id": workspace_id},
     ).json()["data"]["run_id"]
 
     events = client.get(

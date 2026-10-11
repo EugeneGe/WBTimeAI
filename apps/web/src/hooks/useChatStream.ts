@@ -260,6 +260,18 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
         return;
       }
 
+      const effectiveConversationId =
+        conversationId ?? useChatStore.getState().activeConversationId;
+      // F-4 / Erratum R-R1R5-E1：**新建会话**（无 conversation_id）须带**显式** workspace_id；
+      // 缺省时**引导**用户选择 / 创建工作区，**禁**服务端静默选择、也**不**静默发送 null
+      // （否则服务端 422）。**续聊**（有 conversation_id）可省略。
+      if (!effectiveConversationId && !workspaceId) {
+        const errorMessage = "请先选择工作区（新建会话须归属工作区）";
+        useChatStore.getState().failRun(errorMessage);
+        onError?.(errorMessage);
+        return;
+      }
+
       // 中断上一次在途流（同一会话顺序执行）。
       abortRef.current?.abort();
 
@@ -272,7 +284,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
       const idempotencyKey = chatService.generateIdempotencyKey();
       const request: RunAgentRequest = {
         message,
-        conversation_id: conversationId ?? useChatStore.getState().activeConversationId,
+        conversation_id: effectiveConversationId,
         workspace_id: workspaceId,
       };
 

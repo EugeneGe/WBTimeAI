@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from astra_core import DomainError, ErrorCode
 from astra_domain import AgentEvent, Conversation, Message
 
 from ..repositories import (
@@ -36,13 +37,28 @@ class ConversationService:
         self,
         *,
         tenant_id: str,
-        workspace_id: str,
+        workspace_id: str | None,
         agent_id: str,
         user_id: str,
         title: str,
         status: str = "ACTIVE",
     ) -> Conversation:
-        """创建会话。"""
+        """创建会话。
+
+        🔴 **唯一守卫点**（F-4 / Erratum ``R-R1R5-E1`` / 台账 ``P2-110``）：
+        ``conversation.workspace_id`` 自 ``0006`` 起为 **NOT NULL + FK**，域**从不允许**
+        无工作区会话——**不得**把缺失 ``workspace_id`` 静默 coercion 为 ``""``
+        （PG 权威 uuid 会 500；SQLite ``CHAR(36)`` 曾掩盖）。
+
+        Raises:
+            DomainError: ``workspace_id`` 缺失 / 空（``VALIDATION_ERROR`` → HTTP 422）。
+        """
+        if not workspace_id:
+            raise DomainError(
+                "workspace_id 为必填（新建会话须归属工作区）",
+                code=ErrorCode.VALIDATION_ERROR,
+                data={"field": "workspace_id"},
+            )
         return self._conversations.add(
             Conversation(
                 tenant_id=tenant_id,

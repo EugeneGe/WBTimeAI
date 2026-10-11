@@ -258,9 +258,14 @@ def run_agent(
         # 幂等命中：直接复用首次响应（**不**重复建会话 / 不重复执行）。
         return _respond(request, services, reuse, start_execution=False)
 
-    conversation_id = payload.conversation_id or _create_conversation(
-        services, user, agent_id, payload
-    )
+    if payload.conversation_id:
+        # 续聊：不新建会话；可省略 workspace_id（自既有会话派生，F-4 / R-R1R5-E1）。
+        conversation_id = payload.conversation_id
+        workspace_id = _continuation_workspace_id(services, payload)
+    else:
+        # 新建会话：缺 workspace_id → create_conversation 守卫抛 422（不再 PG 500）。
+        conversation_id = _create_conversation(services, user, agent_id, payload)
+        workspace_id = payload.workspace_id
     created = CreateAgentTaskHandler(services.agent_run).handle(
         CreateAgentTaskCommand(
             tenant_id=tenant_id,
@@ -268,7 +273,7 @@ def run_agent(
             conversation_id=conversation_id,
             user_id=user.id,
             user_message=payload.message,
-            workspace_id=payload.workspace_id,
+            workspace_id=workspace_id,
             run_mode=payload.run_mode,
             idempotency_key=key,
             request_fingerprint=fingerprint,
@@ -359,12 +364,35 @@ def _create_conversation(
     agent_id: str,
     payload: RunRequest,
 ) -> str:
-    """未提供 ``conversation_id`` 时就地创建会话并返回其标识。"""
+    """未提供 ``conversation_id`` 时就地创建会话并返回其标识。
+
+    🔴 **不**静默 coercion 缺失 ``workspace_id``（F-4 / Erratum ``R-R1R5-E1``）：直接透传请求值，
+    由 :meth:`ConversationService.create_conversation` **唯一守卫**——缺失 / 空 → ``422``
+    ``VALIDATION_ERROR``（PG 权威面不再 500）。
+    """
     conversation = services.conversation.create_conversation(
         tenant_id=_tenant_id(user),
-        workspace_id=payload.workspace_id or "",
+        workspace_id=payload.workspace_id,
         agent_id=agent_id,
         user_id=user.id,
         title=(payload.message or "New conversation")[:120],
     )
     return conversation.id
+
+
+def _continuation_workspace_id(services: AppServices, payload: RunRequest) -> str | None:
+    """续聊分支派生 ``workspace_id``（F-4 / Erratum ``R-R1R5-E1``）。
+
+    续聊（携带 ``conversation_id``）**不**新建会话，故可省略 ``workspace_id``：请求缺省时
+    自**既有会话**派生；请求显式给出时以请求为准。
+    """
+    if payload.workspace_id:
+        return payload.workspace_id
+    conversation_id = payload.conversation_id
+    if not conversation_id:
+        return None
+    conversation = services.conversation.get_conversation(conversation_id)
+    if conversation is None:
+        return None
+    derived = getattr(conversation, "workspace_id", None)
+    return str(derived) if derived else None
