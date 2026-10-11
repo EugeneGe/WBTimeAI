@@ -1,0 +1,30 @@
+[project]
+name = "astra-runtime"
+version = "0.4.0"
+description = "Astra AI Runtime 执行内核（抽象包 · 零 ORM：ReAct 循环 / 上下文 / 执行策略 / 预留位）"
+requires-python = ">=3.12"
+dependencies = [
+    "astra-common",
+    "astra-core",
+    "astra-domain",
+    "astra-event",
+    "astra-model",
+    "astra-tool",
+    "astra-sandbox",
+]
+
+[tool.uv.sources]
+astra-common = { workspace = true }
+astra-core = { workspace = true }
+astra-domain = { workspace = true }
+astra-event = { workspace = true }
+astra-model = { workspace = true }
+astra-tool = { workspace = true }
+astra-sandbox = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astra_runtime"]

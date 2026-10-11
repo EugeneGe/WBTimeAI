@@ -1,0 +1,6 @@
+# Document 020
+
+AstraAI platform guide number 020.
+
+This document explains the topic of tenant in detail.
+It belongs to the AstraAI platform knowledge corpus.

@@ -1,0 +1,6 @@
+# Document 016
+
+AstraAI platform guide number 016.
+
+This document explains the topic of memory in detail.
+It belongs to the AstraAI platform knowledge corpus.

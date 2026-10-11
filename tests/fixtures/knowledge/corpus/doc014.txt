@@ -1,0 +1,6 @@
+# Document 014
+
+AstraAI platform guide number 014.
+
+This document explains the topic of skill in detail.
+It belongs to the AstraAI platform knowledge corpus.

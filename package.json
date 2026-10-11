@@ -1,0 +1,33 @@
+{
+  "name": "astra-ai",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Astra AI 前端工作区根（pnpm workspace，仅聚合 apps/web；与根 pyproject.toml 的 uv workspace 并存互不污染）",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @astra/web dev",
+    "build": "pnpm --filter @astra/web build",
+    "typecheck": "pnpm --filter @astra/web typecheck",
+    "preview": "pnpm --filter @astra/web preview",
+    "lint": "pnpm --filter @astra/web run lint",
+    "format": "pnpm --filter @astra/web run format",
+    "format:check": "pnpm --filter @astra/web run format:check",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10"
+  },
+  "lint-staged": {
+    "apps/web/**/*.{ts,tsx,js,jsx}": [
+      "pnpm --filter @astra/web exec eslint --fix",
+      "pnpm --filter @astra/web exec prettier --write"
+    ],
+    "apps/web/**/*.{json,css,md}": [
+      "pnpm --filter @astra/web exec prettier --write"
+    ]
+  }
+}

@@ -1,0 +1,294 @@
+"""领域层常量（默认身份引导所需）。
+
+集中定义 Tenant-ready 引导涉及的固定标识，避免散落魔法字符串。
+"""
+
+from __future__ import annotations
+
+#: 默认租户 slug（Community 默认唯一租户，用户无感）。
+DEFAULT_TENANT_SLUG = "default"
+
+#: 默认租户显示名。
+DEFAULT_TENANT_NAME = "Default"
+
+#: 默认组织 slug（Phase 0 体验极简：默认组织自动建立）。
+DEFAULT_ORG_SLUG = "default"
+
+#: 默认组织显示名。
+DEFAULT_ORG_NAME = "Default"
+
+#: 系统内置管理员角色名。
+SYSTEM_ROLE_ADMIN = "admin"
+
+#: 管理员通配权限码（Community 默认 ``admin = *``）。
+ADMIN_PERMISSION = "*"
+
+#: 成员关系默认状态。
+MEMBERSHIP_STATUS_ACTIVE = "active"
+
+# -- Workspace（设计 §2.9） --------------------------------------------------
+
+#: 个人工作区类型。
+WORKSPACE_TYPE_PERSONAL = "personal"
+
+#: 团队工作区类型。
+WORKSPACE_TYPE_TEAM = "team"
+
+# -- Agent（设计 §2.4） ------------------------------------------------------
+
+#: Agent 类型。
+AGENT_TYPE_PRIMARY = "PRIMARY"
+AGENT_TYPE_SUB_AGENT = "SUB_AGENT"
+AGENT_TYPE_WORKFLOW_AGENT = "WORKFLOW_AGENT"
+AGENT_TYPE_SCHEDULED_AGENT = "SCHEDULED_AGENT"
+AGENT_TYPE_EVENT_AGENT = "EVENT_AGENT"
+
+#: Agent 生命周期状态。
+AGENT_STATUS_DRAFT = "DRAFT"
+AGENT_STATUS_ACTIVE = "ACTIVE"
+AGENT_STATUS_ARCHIVED = "ARCHIVED"
+
+#: AgentVersion 状态。
+AGENT_VERSION_STATUS_DRAFT = "DRAFT"
+AGENT_VERSION_STATUS_PUBLISHED = "PUBLISHED"
+AGENT_VERSION_STATUS_DEPRECATED = "DEPRECATED"
+
+# -- Runtime 默认值（设计 §2.7.1 / §2.7.2） ---------------------------------
+
+#: 默认 ReAct 最大迭代次数。
+DEFAULT_MAX_ITERATIONS = 10
+#: 默认工具选择策略（``auto`` / ``none`` / ``required``）。
+DEFAULT_TOOL_CHOICE = "auto"
+#: 默认允许流式输出。
+DEFAULT_ALLOW_STREAM = True
+#: 默认可用输入 token 预算。
+DEFAULT_MAX_INPUT_TOKENS = 120000
+#: 默认输出保留 token。
+DEFAULT_RESERVE_OUTPUT_TOKENS = 4096
+#: 默认溢出策略（首批仅 ``TRUNCATE_OLDEST``）。
+DEFAULT_OVERFLOW_STRATEGY = "TRUNCATE_OLDEST"
+#: 默认单次工具输出最大字符数（超出截断）。
+DEFAULT_TOOL_OUTPUT_MAX_CHARS = 8000
+#: 默认单次模型调用超时（毫秒）。
+DEFAULT_MODEL_TIMEOUT_MS = 120000
+#: 默认单次工具调用超时（毫秒）。
+DEFAULT_TOOL_TIMEOUT_MS = 60000
+#: 默认 Run 级总超时（毫秒）。
+DEFAULT_RUN_TIMEOUT_MS = 900000
+#: 默认同一调用最大重试次数。
+DEFAULT_MAX_RETRY = 2
+#: 默认可重试错误集合。
+DEFAULT_RETRY_ON: tuple[str, ...] = ("429", "5xx", "timeout")
+#: 默认最大并行工具数。
+DEFAULT_MAX_PARALLEL_TOOLS = 4
+#: 默认同一 Conversation 最大活跃 Run 数。
+DEFAULT_MAX_RUNS_PER_CONVERSATION = 1
+#: 默认 Workflow ``PARALLEL`` 分支并发上限（W4 裁定 §6.1 R5-b / §9-b；
+#: 语义＝**Workflow 分支并发**，≠ 单 Run 内 tool 并发的 ``max_parallel_tools``）。
+DEFAULT_MAX_PARALLEL = 4
+
+# -- Run（设计 §2.6 / 修订 R-04 / R-11） ------------------------------------
+
+#: Run 模式（断连语义参数化）。
+RUN_MODE_INLINE = "INLINE"
+RUN_MODE_QUEUED = "QUEUED"
+#: Run 状态。
+RUN_STATUS_PENDING = "PENDING"
+RUN_STATUS_RUNNING = "RUNNING"
+RUN_STATUS_SUCCESS = "SUCCESS"
+RUN_STATUS_FAILED = "FAILED"
+RUN_STATUS_CANCELLED = "CANCELLED"
+#: Run 触发来源。
+RUN_TRIGGER_USER = "user"
+RUN_TRIGGER_SCHEDULE = "schedule"
+RUN_TRIGGER_EVENT = "event"
+#: 成本状态（无匹配价目不得记作 0）。
+COST_STATUS_PRICED = "PRICED"
+COST_STATUS_UNPRICED = "UNPRICED"
+
+# -- Message（设计 §2.6） ----------------------------------------------------
+
+#: 消息角色。
+MESSAGE_ROLE_SYSTEM = "system"
+MESSAGE_ROLE_USER = "user"
+MESSAGE_ROLE_ASSISTANT = "assistant"
+MESSAGE_ROLE_TOOL = "tool"
+
+# -- Tool（设计 §2.5） -------------------------------------------------------
+
+#: 工具调用状态。
+TOOL_CALL_STATUS_PENDING = "PENDING"
+TOOL_CALL_STATUS_RUNNING = "RUNNING"
+TOOL_CALL_STATUS_SUCCESS = "SUCCESS"
+TOOL_CALL_STATUS_FAILED = "FAILED"
+TOOL_CALL_STATUS_DENIED = "DENIED"
+#: 工具动作（资源 ``TOOL`` × 动作）。
+TOOL_ACTION_EXECUTE = "EXECUTE"
+TOOL_ACTION_READ = "READ"
+TOOL_ACTION_WRITE = "WRITE"
+#: 权限效果（``APPROVAL`` 为 Phase 3 预留位）。
+TOOL_EFFECT_ALLOW = "ALLOW"
+TOOL_EFFECT_DENY = "DENY"
+TOOL_EFFECT_APPROVAL = "APPROVAL"
+#: 工具来源。
+TOOL_SOURCE_BUILTIN = "builtin"
+TOOL_SOURCE_PLUGIN = "plugin"
+#: 工具类型（修订 R-22；Phase 1 恒为 ``builtin``）。
+TOOL_TYPE_BUILTIN = "builtin"
+TOOL_TYPE_MCP = "mcp"
+TOOL_TYPE_CONNECTOR = "connector"
+TOOL_TYPE_SKILL_SCRIPT = "skill_script"
+#: 首批内置工具名（设计 §2.5.2）。
+TOOL_NAME_FILESYSTEM = "filesystem"
+TOOL_NAME_SHELL = "shell"
+TOOL_NAME_GIT = "git"
+TOOL_NAME_HTTP = "http"
+TOOL_NAME_PYTHON = "python"
+#: 首批内置工具名集合（顺序稳定）。
+BUILTIN_TOOL_NAMES: tuple[str, ...] = (
+    TOOL_NAME_FILESYSTEM,
+    TOOL_NAME_SHELL,
+    TOOL_NAME_GIT,
+    TOOL_NAME_HTTP,
+    TOOL_NAME_PYTHON,
+)
+
+# -- Sandbox（设计 §2.11 / 修订 R-05） --------------------------------------
+
+#: 沙箱提供方。
+SANDBOX_PROVIDER_DOCKER = "docker"
+SANDBOX_PROVIDER_LOCAL_PROCESS = "local_process"
+#: 沙箱会话状态。
+SANDBOX_SESSION_STATUS_CREATED = "CREATED"
+SANDBOX_SESSION_STATUS_RUNNING = "RUNNING"
+SANDBOX_SESSION_STATUS_STOPPED = "STOPPED"
+SANDBOX_SESSION_STATUS_FAILED = "FAILED"
+
+# -- Model（设计 §2.3 / §2.15.1） -------------------------------------------
+
+#: 模型提供方状态。
+MODEL_PROVIDER_STATUS_ACTIVE = "ACTIVE"
+MODEL_PROVIDER_STATUS_DISABLED = "DISABLED"
+#: 模型类型。
+MODEL_TYPE_CHAT = "CHAT"
+MODEL_TYPE_REASONING = "REASONING"
+MODEL_TYPE_EMBEDDING = "EMBEDDING"
+MODEL_TYPE_VISION = "VISION"
+MODEL_TYPE_IMAGE = "IMAGE"
+MODEL_TYPE_AUDIO = "AUDIO"
+MODEL_TYPE_VIDEO = "VIDEO"
+#: 模型状态。
+MODEL_STATUS_ACTIVE = "ACTIVE"
+MODEL_STATUS_DISABLED = "DISABLED"
+
+# -- Audit（设计 §2.18） -----------------------------------------------------
+
+#: 审计结果。
+AUDIT_OUTCOME_SUCCESS = "SUCCESS"
+AUDIT_OUTCOME_DENIED = "DENIED"
+AUDIT_OUTCOME_FAILED = "FAILED"
+
+__all__ = [
+    "DEFAULT_TENANT_SLUG",
+    "DEFAULT_TENANT_NAME",
+    "DEFAULT_ORG_SLUG",
+    "DEFAULT_ORG_NAME",
+    "SYSTEM_ROLE_ADMIN",
+    "ADMIN_PERMISSION",
+    "MEMBERSHIP_STATUS_ACTIVE",
+    "WORKSPACE_TYPE_PERSONAL",
+    "WORKSPACE_TYPE_TEAM",
+    # Agent
+    "AGENT_TYPE_PRIMARY",
+    "AGENT_TYPE_SUB_AGENT",
+    "AGENT_TYPE_WORKFLOW_AGENT",
+    "AGENT_TYPE_SCHEDULED_AGENT",
+    "AGENT_TYPE_EVENT_AGENT",
+    "AGENT_STATUS_DRAFT",
+    "AGENT_STATUS_ACTIVE",
+    "AGENT_STATUS_ARCHIVED",
+    "AGENT_VERSION_STATUS_DRAFT",
+    "AGENT_VERSION_STATUS_PUBLISHED",
+    "AGENT_VERSION_STATUS_DEPRECATED",
+    # Runtime
+    "DEFAULT_MAX_ITERATIONS",
+    "DEFAULT_TOOL_CHOICE",
+    "DEFAULT_ALLOW_STREAM",
+    "DEFAULT_MAX_INPUT_TOKENS",
+    "DEFAULT_RESERVE_OUTPUT_TOKENS",
+    "DEFAULT_OVERFLOW_STRATEGY",
+    "DEFAULT_TOOL_OUTPUT_MAX_CHARS",
+    "DEFAULT_MODEL_TIMEOUT_MS",
+    "DEFAULT_TOOL_TIMEOUT_MS",
+    "DEFAULT_RUN_TIMEOUT_MS",
+    "DEFAULT_MAX_RETRY",
+    "DEFAULT_RETRY_ON",
+    "DEFAULT_MAX_PARALLEL_TOOLS",
+    "DEFAULT_MAX_RUNS_PER_CONVERSATION",
+    "DEFAULT_MAX_PARALLEL",
+    # Run
+    "RUN_MODE_INLINE",
+    "RUN_MODE_QUEUED",
+    "RUN_STATUS_PENDING",
+    "RUN_STATUS_RUNNING",
+    "RUN_STATUS_SUCCESS",
+    "RUN_STATUS_FAILED",
+    "RUN_STATUS_CANCELLED",
+    "RUN_TRIGGER_USER",
+    "RUN_TRIGGER_SCHEDULE",
+    "RUN_TRIGGER_EVENT",
+    "COST_STATUS_PRICED",
+    "COST_STATUS_UNPRICED",
+    # Message
+    "MESSAGE_ROLE_SYSTEM",
+    "MESSAGE_ROLE_USER",
+    "MESSAGE_ROLE_ASSISTANT",
+    "MESSAGE_ROLE_TOOL",
+    # Tool
+    "TOOL_CALL_STATUS_PENDING",
+    "TOOL_CALL_STATUS_RUNNING",
+    "TOOL_CALL_STATUS_SUCCESS",
+    "TOOL_CALL_STATUS_FAILED",
+    "TOOL_CALL_STATUS_DENIED",
+    "TOOL_ACTION_EXECUTE",
+    "TOOL_ACTION_READ",
+    "TOOL_ACTION_WRITE",
+    "TOOL_EFFECT_ALLOW",
+    "TOOL_EFFECT_DENY",
+    "TOOL_EFFECT_APPROVAL",
+    "TOOL_SOURCE_BUILTIN",
+    "TOOL_SOURCE_PLUGIN",
+    "TOOL_TYPE_BUILTIN",
+    "TOOL_TYPE_MCP",
+    "TOOL_TYPE_CONNECTOR",
+    "TOOL_TYPE_SKILL_SCRIPT",
+    "TOOL_NAME_FILESYSTEM",
+    "TOOL_NAME_SHELL",
+    "TOOL_NAME_GIT",
+    "TOOL_NAME_HTTP",
+    "TOOL_NAME_PYTHON",
+    "BUILTIN_TOOL_NAMES",
+    # Sandbox
+    "SANDBOX_PROVIDER_DOCKER",
+    "SANDBOX_PROVIDER_LOCAL_PROCESS",
+    "SANDBOX_SESSION_STATUS_CREATED",
+    "SANDBOX_SESSION_STATUS_RUNNING",
+    "SANDBOX_SESSION_STATUS_STOPPED",
+    "SANDBOX_SESSION_STATUS_FAILED",
+    # Model
+    "MODEL_PROVIDER_STATUS_ACTIVE",
+    "MODEL_PROVIDER_STATUS_DISABLED",
+    "MODEL_TYPE_CHAT",
+    "MODEL_TYPE_REASONING",
+    "MODEL_TYPE_EMBEDDING",
+    "MODEL_TYPE_VISION",
+    "MODEL_TYPE_IMAGE",
+    "MODEL_TYPE_AUDIO",
+    "MODEL_TYPE_VIDEO",
+    "MODEL_STATUS_ACTIVE",
+    "MODEL_STATUS_DISABLED",
+    # Audit
+    "AUDIT_OUTCOME_SUCCESS",
+    "AUDIT_OUTCOME_DENIED",
+    "AUDIT_OUTCOME_FAILED",
+]

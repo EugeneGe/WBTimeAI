@@ -1,0 +1,6 @@
+# Document 008
+
+AstraAI platform guide number 008.
+
+This document explains the topic of workflow in detail.
+It belongs to the AstraAI platform knowledge corpus.

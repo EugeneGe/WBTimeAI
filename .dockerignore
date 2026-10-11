@@ -1,0 +1,53 @@
+# 构建上下文排除项（**保留**构建必需文件：apps/ packages/ migrations/ pyproject.toml uv.lock alembic.ini deployments/docker/entrypoint.sh）。
+
+# 版本控制 / 编辑器
+.git
+.gitignore
+.idea
+.vscode
+
+# Python 虚拟环境与缓存
+.venv
+venv
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+.uv
+.uv-cache
+.pytest_cache
+.pytest_tmp*
+.pytest_run*.txt
+.pytest_w4_tmp
+.ruff_cache
+.mypy_cache
+.coverage
+.coverage.*
+htmlcov
+
+# Node / 前端产物（API 镜像不需要）
+node_modules
+**/node_modules
+apps/web/dist
+.pnpm-store
+
+# 本地运行产物 / 数据 / 密钥
+*.db
+*.sqlite
+*.sqlite3
+.astra-ai
+.astra-ai/
+.env
+.env.*
+!.env.example
+secrets
+
+# 文档与测试（非构建必需）
+docs
+tests
+*.md
+!README.md
+
+# CI / 编辑器配置
+.github
+.editorconfig

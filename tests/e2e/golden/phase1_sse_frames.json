@@ -1,0 +1,105 @@
+{
+  "description": "Phase 1 全链路 e2e SSE 帧 golden 序列（W8 / T1-36）。脚本化 Provider 先产一次 shell 工具调用、再产最终答复；帧 id == agent_event.seq。含 id/时间戳等易变字段在比对前已规范化（见 normalize_frame）。",
+  "normalization": {
+    "volatile_keys": [
+      "run_id",
+      "agent_id",
+      "agent_version_id",
+      "conversation_id",
+      "message_id",
+      "tool_call_id",
+      "duration_ms"
+    ],
+    "placeholders": {
+      "run_id": "<RUN_ID>",
+      "agent_id": "<AGENT_ID>",
+      "agent_version_id": "<VERSION_ID>",
+      "conversation_id": "<CONVERSATION_ID>",
+      "message_id": "<MESSAGE_ID>",
+      "tool_call_id": "<TOOL_CALL_ID>",
+      "duration_ms": "<MS>"
+    }
+  },
+  "frames": [
+    {
+      "id": 1,
+      "event": "agent.started",
+      "data": {
+        "run_id": "<RUN_ID>",
+        "agent_id": "<AGENT_ID>",
+        "agent_version_id": "<VERSION_ID>",
+        "conversation_id": "<CONVERSATION_ID>",
+        "run_mode": "INLINE"
+      }
+    },
+    {
+      "id": 2,
+      "event": "agent.thinking",
+      "data": {
+        "run_id": "<RUN_ID>",
+        "iteration": 1
+      }
+    },
+    {
+      "id": 3,
+      "event": "message.delta",
+      "data": {
+        "run_id": "<RUN_ID>",
+        "message_id": "<MESSAGE_ID>",
+        "role": "assistant",
+        "delta": "{\"tool_calls\": [{\"name\": \"shell\", \"arguments\": {\"command\": \"echo hello\"}}]}"
+      }
+    },
+    {
+      "id": 4,
+      "event": "tool.started",
+      "data": {
+        "run_id": "<RUN_ID>",
+        "tool_call_id": "<TOOL_CALL_ID>",
+        "tool_name": "shell",
+        "attempt": 1,
+        "arguments": {
+          "command": "echo hello"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "event": "tool.completed",
+      "data": {
+        "run_id": "<RUN_ID>",
+        "tool_call_id": "<TOOL_CALL_ID>",
+        "tool_name": "shell",
+        "status": "SUCCESS",
+        "duration_ms": "<MS>"
+      }
+    },
+    {
+      "id": 6,
+      "event": "agent.thinking",
+      "data": {
+        "run_id": "<RUN_ID>",
+        "iteration": 2
+      }
+    },
+    {
+      "id": 7,
+      "event": "message.delta",
+      "data": {
+        "run_id": "<RUN_ID>",
+        "message_id": "<MESSAGE_ID>",
+        "role": "assistant",
+        "delta": "All done: hello"
+      }
+    },
+    {
+      "id": 8,
+      "event": "agent.completed",
+      "data": {
+        "run_id": "<RUN_ID>",
+        "duration_ms": "<MS>",
+        "iterations": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+event: content_block_delta
+data: {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "Hel"}}
+
+event: content_block_delta
+data: {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "lo!"}}
+
+event: message_stop
+data: {"type": "message_stop"}
+

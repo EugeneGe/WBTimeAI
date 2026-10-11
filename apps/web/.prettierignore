@@ -1,0 +1,8 @@
+dist
+node_modules
+coverage
+*.min.*
+pnpm-lock.yaml
+# vitest/vite 运行时临时配置（生成物，非源码）
+vitest.config.ts.timestamp-*.mjs
+vite.config.ts.timestamp-*.mjs

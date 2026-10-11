@@ -1,0 +1,6 @@
+# Document 012
+
+AstraAI platform guide number 012.
+
+This document explains the topic of sandbox in detail.
+It belongs to the AstraAI platform knowledge corpus.

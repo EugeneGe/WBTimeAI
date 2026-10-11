@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+# Astra AI · 行尾与文本归一化（T0-23 收尾加固）
+#
+# 背景：开发者本机可能 core.autocrlf=true（Windows 默认常见），若仓库无
+# .gitattributes，入库的 LF 会被检出为 CRLF，导致：
+#   - 前端 prettier（apps/web/.prettierrc.json: endOfLine=lf）format:check 失败；
+#   - 后端 black --check / ruff 对行尾敏感；
+# 即在 CI(LF) 与本机(CRLF) 之间产生「环境相关假红」。此处强制文本文件以 LF
+# 统一入库与检出，消除平台差异（对齐 .editorconfig: end_of_line=lf）。
+# ---------------------------------------------------------------------------
+
+# 默认：自动识别文本，强制 LF（覆盖 core.autocrlf 的影响）
+* text=auto eol=lf
+
+# 显式二进制（避免任何行尾/合并转换）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text eol=lf
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# Windows 专用脚本需 CRLF（Windows cmd/PowerShell 对 LF 容错差）
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 锁定文件按文本处理（CI 需可 diff / 可校验）
+pnpm-lock.yaml text eol=lf
+uv.lock text eol=lf

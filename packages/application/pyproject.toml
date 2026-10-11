@@ -1,0 +1,49 @@
+[project]
+name = "astra-application"
+version = "0.4.0"
+description = "Astra AI 应用层基座（Command/Query/Service/DTO + 用例）"
+requires-python = ">=3.12"
+dependencies = [
+    "astra-common",
+    "astra-core",
+    "astra-domain",
+    "astra-identity",
+    "astra-workspace",
+    "astra-security",
+    "astra-agent",
+    "astra-conversation",
+    "astra-runtime",
+    # W4 / T2-25：Workflow 用例编排（新边 application→workflow；W4 裁定 §6.2 / R6）
+    "astra-workflow",
+    # W6 / T2-35：Knowledge 用例编排（新边 application→knowledge；W6 裁定 §8.1）
+    "astra-knowledge",
+    # W6 / T2-32~34：Memory 用例编排（新边 application→memory；W6 裁定 §8.1）
+    "astra-memory",
+    # W8 / T2-44：Marketplace 用例编排（新边 application→plugin；W8 裁定 R4；无环）
+    "astra-plugin",
+    # W9 / T2-47：Evaluation 用例编排（新边 application→evaluation；W9 裁定 R1；无环）
+    "astra-evaluation",
+]
+
+[tool.uv.sources]
+astra-common = { workspace = true }
+astra-core = { workspace = true }
+astra-domain = { workspace = true }
+astra-identity = { workspace = true }
+astra-workspace = { workspace = true }
+astra-security = { workspace = true }
+astra-agent = { workspace = true }
+astra-conversation = { workspace = true }
+astra-runtime = { workspace = true }
+astra-workflow = { workspace = true }
+astra-knowledge = { workspace = true }
+astra-memory = { workspace = true }
+astra-plugin = { workspace = true }
+astra-evaluation = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astra_application"]

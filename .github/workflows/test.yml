@@ -1,0 +1,266 @@
+# ---------------------------------------------------------------------------
+# Astra AI · Test（T0-23 / §2U.3）
+#
+# 验收 §3-#13 的 test 面：迁移双向 + 单测/集成（SQLite）+ 双引擎冒烟（PG + 迁移
+# roundtrip）+ 社区启动冒烟 + 前端构建 + 前端单测（vitest，T1-01 / P0-09）。
+#
+# 防假绿（§2U.3 关键点 ④）：postgres-smoke 设 ASTRA_TEST_REQUIRE_PG=1，
+# PG 不可用即 pytest.fail（非 skip）。
+# D4 固化（§2U.8）：python-test 跑 tests/unit/test_config_mode_branch.py。
+# ---------------------------------------------------------------------------
+name: test
+
+# 最小权限（least privilege）：仅读取仓库内容，防止工作流被滥用提权。
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-test:
+    name: Python tests (migrations + pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      ASTRA_MODE: local
+      ASTRA_SECRET_KEY: ci-secret-key-0123456789abcdef-32bytes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python 3.12)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync workspace (locked)
+        run: uv sync --locked --all-packages --all-extras
+
+      - name: Migration roundtrip (upgrade head -> check -> downgrade base)
+        run: |
+          export ASTRA_DATABASE_URL="sqlite:///$(pwd)/ci_migration.db"
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+
+      # W10 / T2-51（加性）：SQLite 侧迁移 head 守卫——断言 head 覆盖 0017（双引擎冒烟之 SQLite 路）。
+      - name: Migration head guard (SQLite, expect 0017_phase2_evaluation)
+        run: |
+          export ASTRA_DATABASE_URL="sqlite:///$(pwd)/ci_migration.db"
+          uv run alembic heads | grep -q "0017_phase2_evaluation"
+
+      - name: D4 guard (mode branch only in providers.py)
+        run: uv run pytest tests/unit/test_config_mode_branch.py -q
+
+      - name: Pytest (unit + integration；NFR 基线见 nightly nfr.yml)
+        run: uv run pytest -q -o tmp_path_retention_policy=all --ignore=tests/nfr
+
+  scans:
+    name: Scans (layering / open-source / credential / ID / D4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ASTRA_MODE: local
+      ASTRA_SECRET_KEY: ci-secret-key-0123456789abcdef-32bytes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python 3.12)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync workspace (locked)
+        run: uv sync --locked --all-packages --all-extras
+
+      # G1 必绿门禁（总纲 §13.3）：五类扫描 + D4 guard 合并为**单一必绿**步骤，
+      # 禁 continue-on-error / `|| true` / 无条件 skip；任一扫描违反即整体红。
+      - name: Five scans + D4 guard
+        run: |
+          uv run pytest \
+            tests/integration/test_layering.py \
+            tests/integration/test_open_source.py \
+            tests/integration/test_credential_scan.py \
+            tests/integration/test_id_convention.py \
+            tests/integration/test_secret_scan.py \
+            tests/unit/test_config_mode_branch.py \
+            -q
+
+      # W10 / T2-51（加性）：纪律扫描**单入口**（分层 / 开源 / 凭证，AST + 正则）。
+      # 与上方五类扫描互补；脚本退出码非 0 即整体红（与 §2.17 纪律扫描口径一致）。
+      - name: Discipline scan (layering / open-source / credential)
+        run: uv run python scripts/scan_discipline.py
+
+  postgres-smoke:
+    name: PostgreSQL smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: astra
+          POSTGRES_PASSWORD: astra
+          POSTGRES_DB: astra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ASTRA_TEST_PG_URL: postgresql+psycopg://astra:astra@localhost:5432/astra
+      ASTRA_TEST_REQUIRE_PG: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python 3.12)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync workspace (locked, incl. postgres extra)
+        run: uv sync --locked --all-packages --all-extras
+
+      - name: PostgreSQL migration roundtrip (double-engine, upgrade -> check -> downgrade)
+        env:
+          ASTRA_MODE: server
+          ASTRA_SECRET_KEY: ci-secret-key-0123456789abcdef-32bytes
+        run: |
+          export ASTRA_DATABASE_URL="$ASTRA_TEST_PG_URL"
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+
+      # W10 / T2-51（加性）：PG 权威侧迁移 head 守卫（双引擎冒烟之 PG 路；alembic check 口径）。
+      - name: PostgreSQL migration head guard (expect 0017_phase2_evaluation)
+        env:
+          ASTRA_MODE: server
+          ASTRA_SECRET_KEY: ci-secret-key-0123456789abcdef-32bytes
+        run: |
+          export ASTRA_DATABASE_URL="$ASTRA_TEST_PG_URL"
+          uv run alembic heads | grep -q "0017_phase2_evaluation"
+
+      - name: PostgreSQL smoke test
+        run: uv run pytest tests/integration/test_postgres_smoke.py -q -ra
+
+  postgres-pgvector:
+    name: PostgreSQL (pgvector) migration + knowledge
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: astra
+          POSTGRES_PASSWORD: astra
+          POSTGRES_DB: astra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ASTRA_TEST_PG_URL: postgresql+psycopg://astra:astra@localhost:5432/astra
+      ASTRA_TEST_REQUIRE_PG: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python 3.12)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync workspace (locked, incl. postgres extra)
+        run: uv sync --locked --all-packages --all-extras
+
+      # pgvector Python 包**不在**依赖中（架构裁定：不加入 astra-database[postgres] ——
+      # 否则 CI 的 postgres:16 会因「迁移降级 JSON ↔ ORM 期望 vector」触发新漂移）。
+      # 本 job 用 pgvector/pgvector:pg16 提供扩展，并**仅在此 job** 经 `uv run --with` 注入
+      # pgvector，令 VectorType 渲染 vector(d) 并触发 0013/0014 的 hnsw 建索引 —— 与权威部署一致。
+      - name: PG(pgvector) migration roundtrip (upgrade -> check -> downgrade)
+        env:
+          ASTRA_MODE: server
+          ASTRA_SECRET_KEY: ci-secret-key-0123456789abcdef-32bytes
+        run: |
+          export ASTRA_DATABASE_URL="$ASTRA_TEST_PG_URL"
+          uv run --with 'psycopg[binary]' --with pgvector alembic upgrade head
+          uv run --with 'psycopg[binary]' --with pgvector alembic check
+          uv run --with 'psycopg[binary]' --with pgvector alembic downgrade base
+
+      # 覆盖本机无法复现的权威面：迁移双向 + 真实 pgvector 余弦召回（C2-31）+ NFR PG 基线（P2-105）。
+      - name: PG-gated tests (migrations / knowledge recall / NFR baselines)
+        run: |
+          uv run --with 'psycopg[binary]' --with pgvector pytest \
+            tests/integration/migrations \
+            tests/integration/knowledge \
+            tests/integration/test_postgres_smoke.py \
+            tests/nfr/test_pg_baselines.py \
+            -q -ra
+
+  community-smoke:
+    name: Community smoke (astra init/run + /health)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python 3.12)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync workspace (locked)
+        run: uv sync --locked --all-packages --all-extras
+
+      - name: Community smoke script
+        run: bash scripts/smoke_community.sh
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend tests (vitest)
+        run: pnpm --filter @astra/web test
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build

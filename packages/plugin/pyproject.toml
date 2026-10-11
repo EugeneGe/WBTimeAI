@@ -1,0 +1,31 @@
+[project]
+name = "astra-plugin"
+version = "0.4.0"
+description = "Astra AI Plugin 抽象包（8 个 ExtensionPoint 契约 + loader / registry；零 ORM）；marketplace 子包零 ORM/Web（pyyaml 函数级导入）"
+requires-python = ">=3.12"
+dependencies = [
+    "astra-common",
+    "astra-core",
+    "astra-domain",
+    # W1b 裁定 R2/C5：承载 model_provider / model_gateway 契约类型
+    # （ModelProvider / ChatMessage / ChatResult）。astra-model 为**抽象包（零 ORM）**，
+    # 引入不破坏 plugin「零 ORM」不变量，且无环。
+    "astra-model",
+    # W8 裁定 R2：marketplace 子包解析 astra-package.yaml / 资源清单。
+    # 库选型统一 PyYAML（config / skill 已用），并以**函数级延迟导入**保包可导入性
+    # （镜像 astra_skill/manifest.py）。yaml 不在分层门禁禁列，不破坏「零 ORM/Web」。
+    "pyyaml>=6.0.0",
+]
+
+[tool.uv.sources]
+astra-common = { workspace = true }
+astra-core = { workspace = true }
+astra-domain = { workspace = true }
+astra-model = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astra_plugin"]

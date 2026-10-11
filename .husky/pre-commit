@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+# ---------------------------------------------------------------------------
+# Astra AI · pre-commit（husky v9 · T0-23 / §2U.4）
+#
+# 仅对**暂存的前端文件**运行 lint-staged（eslint --fix + prettier --write）。
+# 失败即阻断提交；可用 `HUSKY=0 git commit ...` 或 `git commit --no-verify` 跳过
+# （**仅紧急**，CI 仍会强门禁）。
+#
+# 后端检查**不挂** pre-commit：husky 是 Node 工具，在无 Node / 无 uv 的贡献者环境
+# 强制后端钩子会阻塞提交。后端 ruff/black/mypy/pytest 由开发者按需自跑 + CI 保障。
+# 可选（默认不启用，供有完整工具链者）：
+#   if command -v uv >/dev/null 2>&1; then uv run ruff check . && uv run black --check .; fi
+# ---------------------------------------------------------------------------
+pnpm exec lint-staged

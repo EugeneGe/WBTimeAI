@@ -1,0 +1,6 @@
+# Document 002
+
+AstraAI platform guide number 002.
+
+This document explains the topic of embedding in detail.
+It belongs to the AstraAI platform knowledge corpus.

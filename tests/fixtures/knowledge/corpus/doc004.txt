@@ -1,0 +1,6 @@
+# Document 004
+
+AstraAI platform guide number 004.
+
+This document explains the topic of parser in detail.
+It belongs to the AstraAI platform knowledge corpus.

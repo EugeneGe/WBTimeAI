@@ -1,0 +1,77 @@
+# ---------------------------------------------------------------------------
+# Astra AI · Lint & Type Check（T0-23 / §2U.3）
+#
+# 验收 §3-#13：PR 触发 lint + test + docker build 全绿（本文件为 lint 面）。
+# 后端 job 仅用 uv；前端 job 仅用 node + pnpm；二者不共享环境（决策 D3）。
+# ---------------------------------------------------------------------------
+name: lint
+
+# 最小权限（least privilege）：仅读取仓库内容，防止工作流被滥用提权。
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-lint:
+    name: Python lint (ruff + black + mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python 3.12)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync workspace (locked)
+        run: uv sync --locked --all-packages --all-extras
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Black (format check)
+        run: uv run black --check .
+
+      - name: Mypy (type check)
+        run: uv run mypy packages apps
+
+  frontend-lint:
+    name: Frontend lint (eslint + prettier + tsc)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint (max-warnings=0)
+        run: pnpm lint
+
+      - name: Prettier (format check)
+        run: pnpm format:check
+
+      - name: TypeScript (typecheck)
+        run: pnpm typecheck

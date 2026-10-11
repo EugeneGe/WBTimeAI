@@ -1,0 +1,104 @@
+# ---------------------------------------------------------------------------
+# Astra AI · 标准 / 开发模式（docker compose）
+#
+# 服务：api（uv 镜像）+ web（node 镜像跑 pnpm dev）+ postgres + redis
+# 语义：ASTRA_MODE=server（PostgreSQL + 外部中间件），与设计 §2.13 对齐。
+#
+#   docker compose up --build
+#   前端 http://localhost:5173   后端 http://localhost:8080/docs   健康 /health
+#
+# ⚠️ Phase 0：`web` 以 **node 镜像跑开发态**（`pnpm dev`），**非生产镜像**；
+#    生产静态托管 / Nginx 属后续阶段（不在 W4 范围）。
+# ---------------------------------------------------------------------------
+name: astra-ai
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: astra-ai:standard
+    environment:
+      ASTRA_MODE: server
+      ASTRA_DATABASE_URL: postgresql+psycopg://astra:astra@postgres:5432/astra
+      ASTRA_SECRET_KEY: ${ASTRA_SECRET_KEY:-change-me-to-a-random-secret-at-least-32-bytes}
+      ASTRA_HOST: 0.0.0.0
+      ASTRA_PORT: "8080"
+      ASTRA_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      # Feature Flag 配置覆盖（最高优先级）；空 {} = 全部按注册表默认（全开）。
+      ASTRA_FEATURE_FLAGS: '{}'
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      VITE_API_BASE: /api/v1
+      # 容器内：Vite proxy 指向 compose 网络中的 api 服务（默认本地为 127.0.0.1:8080）。
+      VITE_PROXY_TARGET: http://api:8080
+    command: >
+      sh -c "corepack enable && pnpm install --frozen-lockfile=false && pnpm -C apps/web dev --host 0.0.0.0 --port 5173"
+    volumes:
+      - ./:/app
+      # 匿名卷保护容器内 node_modules，避免被宿主挂载目录覆盖。
+      - /app/node_modules
+      - /app/apps/web/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+  # Team：后台任务消费者（W1 / T2-02；工程范式切换 单进程 → 多进程）。
+  # 与 api 同镜像同网络；经 build_providers 装配 RedisTaskQueue + WorkerProcessExecutor，
+  # 消费 agent.run / workflow.run / knowledge.index。
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: astra-ai:standard
+    command: astra-worker
+    environment:
+      ASTRA_MODE: server
+      ASTRA_DATABASE_URL: postgresql+psycopg://astra:astra@postgres:5432/astra
+      ASTRA_REDIS_URL: redis://redis:6379/0
+      ASTRA_SECRET_KEY: ${ASTRA_SECRET_KEY:-change-me-to-a-random-secret-at-least-32-bytes}
+      ASTRA_FEATURE_FLAGS: '{}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: astra
+      POSTGRES_PASSWORD: astra
+      POSTGRES_DB: astra
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U astra -d astra"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres-data:
+  redis-data:

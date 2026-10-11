@@ -1,0 +1,78 @@
+"""FastAPI 依赖导出。"""
+
+from __future__ import annotations
+
+from .auth import CurrentUser, get_current_user, require_permission
+from .container import (
+    build_container,
+    build_container_services,
+    build_identity_services_from_providers,
+    get_container,
+    get_database_provider,
+    get_event_bus,
+    get_sandbox_provider,
+)
+from .idempotency import IdempotencyKey, get_idempotency_key, prepare_idempotency
+from .services import (
+    AppServices,
+    build_app_services,
+    get_agent_repository,
+    get_agent_run_service,
+    get_agent_service,
+    get_app_services,
+    get_audit_service,
+    get_auth_service,
+    get_conversation_service,
+    get_feature_flags,
+    get_idempotency_service,
+    get_identity,
+    get_model_catalog_service,
+    get_model_credential_binder,
+    get_provider_runtime,
+    get_run_service,
+    get_runtime,
+    get_settings_service,
+    get_task_repository,
+    get_tool_permission_service,
+    get_tool_registry,
+    get_workspace_services,
+)
+
+__all__ = [
+    "get_container",
+    "get_database_provider",
+    "get_event_bus",
+    "get_sandbox_provider",
+    "build_container",
+    "build_container_services",
+    "build_identity_services_from_providers",
+    "AppServices",
+    "build_app_services",
+    "get_app_services",
+    "get_identity",
+    "get_workspace_services",
+    "get_auth_service",
+    "get_settings_service",
+    "get_feature_flags",
+    "get_agent_service",
+    "get_conversation_service",
+    "get_run_service",
+    "get_agent_run_service",
+    "get_model_catalog_service",
+    "get_tool_registry",
+    "get_tool_permission_service",
+    "get_runtime",
+    "get_audit_service",
+    "get_idempotency_service",
+    "get_model_credential_binder",
+    "get_provider_runtime",
+    "get_agent_repository",
+    "get_task_repository",
+    "CurrentUser",
+    "get_current_user",
+    "require_permission",
+    # 幂等（W6 / T1-29）
+    "IdempotencyKey",
+    "get_idempotency_key",
+    "prepare_idempotency",
+]

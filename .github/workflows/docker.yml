@@ -1,0 +1,98 @@
+# ---------------------------------------------------------------------------
+# Astra AI · Docker Image Build（T0-23 / §2U.3）
+#
+# ⚠️ 仅构建镜像、**不推送**（Phase 0 无 registry 凭证）：push: false 保证零副作用。
+# 触发：push main + 手动 + PR 命中 docker 相关 paths。
+# 本地无 docker ⇒ 本 job 仅在 CI（ubuntu-latest）验证。
+#
+# ⚠️ 防假绿：build(push:false) 不会校验 ENTRYPOINT 引用的文件是否存在（BuildKit 不解引用入口）。
+#    故 build 之后追加 runtime smoke：以社区模式启动镜像并轮询 /health==200，失败即红。
+# TODO(phase1): 镜像推送 / 发布流水线 / k8s / SAST / 依赖扫描。
+# ---------------------------------------------------------------------------
+name: docker
+
+# 最小权限（least privilege）：仅读取仓库内容；本工作流不推送镜像（push: false）。
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "apps/**"
+      - "packages/**"
+      - "migrations/**"
+      - "deployments/**"
+
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Docker build (no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: astra-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+
+      - name: Runtime smoke test (community mode, /health must be 200)
+        run: |
+          set -eu
+
+          # 收尾必须清理容器（无论成功/失败）；日志便于失败诊断。
+          cleanup() {
+            echo "--- container logs (astra-smoke) ---"
+            docker logs astra-smoke 2>&1 || true
+            docker rm -f astra-smoke 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          # 以社区模式启动刚构建的镜像；env 对齐 deployments/compose/docker-compose.community.yml
+          # （ASTRA_MODE=local ⇒ SQLite + 进程内能力，零外部中间件）。
+          docker run --rm -d --name astra-smoke \
+            -e ASTRA_MODE=local \
+            -e ASTRA_DATABASE_URL=sqlite:////data/astra.db \
+            -e ASTRA_DATA_DIR=/data \
+            -e ASTRA_SECRET_KEY=ci-secret-key-0123456789abcdef-32bytes \
+            -e ASTRA_HOST=0.0.0.0 \
+            -e ASTRA_PORT=8080 \
+            -e ASTRA_CORS_ORIGINS='["http://localhost:5173","http://127.0.0.1:5173"]' \
+            -e ASTRA_FEATURE_FLAGS='{}' \
+            -p 8080:8080 \
+            astra-api:ci
+
+          # 轮询 /health 直至 HTTP 200（最长约 30s）。失败即红：
+          # 不使用 || true / continue-on-error / if: always() 掩盖。
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8080/health; then
+              echo "health OK after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "waiting for /health ... attempt ${i}/30"
+            sleep 1
+          done
+
+          echo "ERROR: /health did not return HTTP 200 within 30s" >&2
+          exit 1

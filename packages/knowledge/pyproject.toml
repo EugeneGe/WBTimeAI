@@ -1,0 +1,36 @@
+[project]
+name = "astra-knowledge"
+version = "0.4.0"
+description = "Astra AI Knowledge 能力包（KnowledgeBase / Document / Chunk / Embedding；W5 / T2-27 起）"
+requires-python = ">=3.12"
+dependencies = [
+    "astra-common",
+    "astra-core",
+    "astra-domain",
+    "astra-database",
+    "astra-storage",
+    "astra-model",
+]
+
+[project.optional-dependencies]
+# 可选解析依赖：仅 pdf / docx / html 需要；txt / md 走标准库（零额外依赖）。
+parsers = [
+    "pypdf>=5.0",
+    "python-docx>=1.1",
+    "beautifulsoup4>=4.12",
+]
+
+[tool.uv.sources]
+astra-common = { workspace = true }
+astra-core = { workspace = true }
+astra-domain = { workspace = true }
+astra-database = { workspace = true }
+astra-storage = { workspace = true }
+astra-model = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astra_knowledge"]

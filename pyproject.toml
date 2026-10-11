@@ -1,0 +1,134 @@
+# Astra AI · 根工程配置（uv workspace）
+#
+# 说明：
+# - 采用 uv workspace（决策 D3），根工程为「虚拟根」（package = false），
+#   仅承载工作区成员、依赖源与工具链配置。
+# - workspace members 采用**显式成员**写法（apps/api + packages/*），
+#   以避免 `apps/worker` 暂无 pyproject.toml 时 `uv sync` 报错。
+# - 各业务包位于 apps/ 与 packages/ 下，src 布局，包名 astra-*。
+[project]
+name = "astra-ai"
+version = "0.4.0"
+description = "Astra AI — 开源 AI 平台（Phase 0 可运行工程骨架）"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Astra AI Contributors" }]
+dependencies = [
+    "astra-common",
+    "astra-core",
+    "astra-config",
+    "astra-logging",
+    "astra-database",
+    "astra-domain",
+    "astra-identity",
+    "astra-application",
+    "astra-security",
+    "astra-workspace",
+    "astra-event",
+    "astra-task",
+    "astra-storage",
+    "astra-model",
+    "astra-tool",
+    "astra-sandbox",
+    "astra-conversation",
+    "astra-agent",
+    "astra-runtime",
+    "astra-api",
+    "astra-cli",
+    # -- Phase 2（W1 / T2-01）：新能力包 / 抽象包 + Worker -------------------
+    "astra-skill",
+    "astra-mcp",
+    "astra-workflow",
+    "astra-knowledge",
+    "astra-memory",
+    "astra-plugin",
+    "astra-audit",
+    # -- Phase 2（W9 / T2-45）：Evaluation 能力包 ----------------------------
+    "astra-evaluation",
+    "astra-worker",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.workspace]
+members = ["apps/api", "apps/cli", "apps/worker", "packages/*"]
+
+# 根工程不构建、不安装自身，仅作为工作区组合根。
+[tool.uv]
+package = false
+
+# 工作区依赖源：所有 astra-* 依赖解析为本地工作区成员。
+[tool.uv.sources]
+astra-common = { workspace = true }
+astra-core = { workspace = true }
+astra-config = { workspace = true }
+astra-logging = { workspace = true }
+astra-database = { workspace = true }
+astra-domain = { workspace = true }
+astra-identity = { workspace = true }
+astra-application = { workspace = true }
+astra-security = { workspace = true }
+astra-workspace = { workspace = true }
+astra-event = { workspace = true }
+astra-task = { workspace = true }
+astra-storage = { workspace = true }
+astra-model = { workspace = true }
+astra-tool = { workspace = true }
+astra-sandbox = { workspace = true }
+astra-conversation = { workspace = true }
+astra-agent = { workspace = true }
+astra-runtime = { workspace = true }
+astra-api = { workspace = true }
+astra-cli = { workspace = true }
+# -- Phase 2（W1 / T2-01）：新包 + Worker ---------------------------------
+astra-skill = { workspace = true }
+astra-mcp = { workspace = true }
+astra-workflow = { workspace = true }
+astra-knowledge = { workspace = true }
+astra-memory = { workspace = true }
+astra-plugin = { workspace = true }
+astra-audit = { workspace = true }
+# -- Phase 2（W9 / T2-45）：Evaluation 能力包 --------------------------------
+astra-evaluation = { workspace = true }
+astra-worker = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "httpx>=0.27.0",
+    "ruff>=0.6.0",
+    "black>=24.10.0",
+    "mypy>=1.13.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "contracts: Provider 契约套件（stub + 录制回放，默认运行）",
+    "provider_live: 真实 Provider 联调（默认不跑，需显式 `-m provider_live`）",
+    "docker: 需要 Docker 运行时的隔离强度测试（无运行时 skip/xfail，ASTRA_TEST_REQUIRE_DOCKER=1 时 fail）",
+    "security: 安全边界测试（路径逃逸 / SSRF / 危险动作）",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# UP046 / UP047：保留显式 Generic[T] 风格（PEP 695 为可选写法）。
+ignore = ["B008", "UP046", "UP047"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true

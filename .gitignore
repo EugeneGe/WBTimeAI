@@ -1,0 +1,65 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.uv/
+.uv-cache/
+
+# ---- 测试与工具缓存 ----
+.pytest_cache/
+.pytest_tmp*
+.pytest_run*.txt
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# ---- QA 断点分片 / 临时工件（施工期间生成，禁止提交） ----
+.bt_*/
+.qa_*_tmp/
+
+# ---- 环境变量与密钥（禁止提交） ----
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+
+# ---- 本地运行产物（~/.astra-ai 语义） ----
+*.db
+*.sqlite
+*.sqlite3
+.astra-ai/
+
+# ---- Node / 前端（T0-20 / T0-23：lockfile 入库以保证 CI 可复现） ----
+node_modules/
+apps/web/dist/
+.pnpm-store/
+# vitest/vite 运行时生成的临时配置（不入库、不参与格式检查）
+vitest.config.ts.timestamp-*.mjs
+vite.config.ts.timestamp-*.mjs
+
+# ---- 本地工具 / 智能体工作区（非源码，禁止提交） ----
+.workbuddy/
+
+# ---- 编辑器 / 操作系统 ----
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- 开源边界（2026-10-11）：docs → 独立私有仓（父仓忽略）；旧 .git 就地归档 ----
+docs/
+.git.archive-*/

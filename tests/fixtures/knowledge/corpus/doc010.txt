@@ -1,0 +1,6 @@
+# Document 010
+
+AstraAI platform guide number 010.
+
+This document explains the topic of audit in detail.
+It belongs to the AstraAI platform knowledge corpus.

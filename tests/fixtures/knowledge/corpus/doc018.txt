@@ -1,0 +1,6 @@
+# Document 018
+
+AstraAI platform guide number 018.
+
+This document explains the topic of queue in detail.
+It belongs to the AstraAI platform knowledge corpus.

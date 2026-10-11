@@ -1,0 +1,160 @@
+{
+  "kb_id": "kb-golden",
+  "workspace_id": "ws-golden",
+  "agent_version_id": "av-golden",
+  "document_count": 20,
+  "queries": [
+    {
+      "text": "retrieval",
+      "expected_chunk_ids": [
+        "chunk-001"
+      ]
+    },
+    {
+      "text": "embedding",
+      "expected_chunk_ids": [
+        "chunk-002"
+      ]
+    },
+    {
+      "text": "chunking",
+      "expected_chunk_ids": [
+        "chunk-003"
+      ]
+    },
+    {
+      "text": "parser",
+      "expected_chunk_ids": [
+        "chunk-004"
+      ]
+    },
+    {
+      "text": "vector",
+      "expected_chunk_ids": [
+        "chunk-005"
+      ]
+    },
+    {
+      "text": "sqlite",
+      "expected_chunk_ids": [
+        "chunk-006"
+      ]
+    },
+    {
+      "text": "postgres",
+      "expected_chunk_ids": [
+        "chunk-007"
+      ]
+    },
+    {
+      "text": "workflow",
+      "expected_chunk_ids": [
+        "chunk-008"
+      ]
+    },
+    {
+      "text": "security",
+      "expected_chunk_ids": [
+        "chunk-009"
+      ]
+    },
+    {
+      "text": "audit",
+      "expected_chunk_ids": [
+        "chunk-010"
+      ]
+    },
+    {
+      "text": "plugin",
+      "expected_chunk_ids": [
+        "chunk-011"
+      ]
+    },
+    {
+      "text": "sandbox",
+      "expected_chunk_ids": [
+        "chunk-012"
+      ]
+    },
+    {
+      "text": "model",
+      "expected_chunk_ids": [
+        "chunk-013"
+      ]
+    },
+    {
+      "text": "skill",
+      "expected_chunk_ids": [
+        "chunk-014"
+      ]
+    },
+    {
+      "text": "knowledge",
+      "expected_chunk_ids": [
+        "chunk-015"
+      ]
+    },
+    {
+      "text": "memory",
+      "expected_chunk_ids": [
+        "chunk-016"
+      ]
+    },
+    {
+      "text": "task",
+      "expected_chunk_ids": [
+        "chunk-017"
+      ]
+    },
+    {
+      "text": "queue",
+      "expected_chunk_ids": [
+        "chunk-018"
+      ]
+    },
+    {
+      "text": "event",
+      "expected_chunk_ids": [
+        "chunk-019"
+      ]
+    },
+    {
+      "text": "tenant",
+      "expected_chunk_ids": [
+        "chunk-020"
+      ]
+    },
+    {
+      "text": "retrieval sqlite",
+      "expected_chunk_ids": [
+        "chunk-001",
+        "chunk-006"
+      ]
+    },
+    {
+      "text": "astraai",
+      "expected_chunk_ids": [
+        "chunk-001",
+        "chunk-002",
+        "chunk-003",
+        "chunk-004",
+        "chunk-005",
+        "chunk-006",
+        "chunk-007",
+        "chunk-008",
+        "chunk-009",
+        "chunk-010",
+        "chunk-011",
+        "chunk-012",
+        "chunk-013",
+        "chunk-014",
+        "chunk-015",
+        "chunk-016",
+        "chunk-017",
+        "chunk-018",
+        "chunk-019",
+        "chunk-020"
+      ]
+    }
+  ]
+}

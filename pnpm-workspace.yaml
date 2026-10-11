@@ -1,0 +1,4 @@
+# pnpm workspace 成员：**仅** 前端应用。
+# 注意：**不**纳入 `packages/*`（那些是 uv / Python 包），避免 pnpm 与 uv 工作区互相污染（决策 D3）。
+packages:
+  - "apps/web"

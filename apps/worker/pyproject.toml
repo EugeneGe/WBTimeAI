@@ -1,0 +1,49 @@
+[project]
+name = "astra-worker"
+version = "0.4.0"
+description = "Astra AI Worker（后台任务消费者：agent.run / workflow.run / knowledge.index / maintenance.cleanup）"
+requires-python = ">=3.12"
+dependencies = [
+    "astra-common",
+    "astra-core",
+    "astra-config",
+    "astra-logging",
+    "astra-database",
+    "astra-domain",
+    "astra-application",
+    "astra-task",
+    "astra-agent",
+    "astra-conversation",
+    "astra-runtime",
+    "astra-model",
+    "astra-event",
+    "astra-storage",
+    "astra-security",
+]
+
+[project.scripts]
+astra-worker = "astra_worker.main:main"
+
+[tool.uv.sources]
+astra-common = { workspace = true }
+astra-core = { workspace = true }
+astra-config = { workspace = true }
+astra-logging = { workspace = true }
+astra-database = { workspace = true }
+astra-domain = { workspace = true }
+astra-application = { workspace = true }
+astra-task = { workspace = true }
+astra-agent = { workspace = true }
+astra-conversation = { workspace = true }
+astra-runtime = { workspace = true }
+astra-model = { workspace = true }
+astra-event = { workspace = true }
+astra-storage = { workspace = true }
+astra-security = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astra_worker"]

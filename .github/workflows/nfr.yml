@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# Astra AI · NFR 基线（nightly；W8 / T1-38；设计 §3.1 · 总纲 §13.3 G2）
+#
+# nightly NFR job：**软失败出报告、超基线即红**（`ASTRA_TEST_REQUIRE_NFR=1` 严格执行 →
+# 超基线即红；报告经 artifact 归档）。**不设** `continue-on-error`，不以 `|| true` 掩盖。
+#
+# 覆盖：
+#   - `tests/nfr`（N-P1-01 性能 / N-P1-02 并发 / N-P1-06 数据保留）——SQLite 实跑 +
+#     PG service 实跑（A17）；
+#   - `scripts/rollback_drill.sh`（DoD-D8 回滚演练，双引擎 + §4 不可逆前置动作）。
+# ---------------------------------------------------------------------------
+name: nfr
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nfr-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nfr:
+    name: NFR baseline (nightly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: astra
+          POSTGRES_PASSWORD: astra
+          POSTGRES_DB: astra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ASTRA_MODE: local
+      ASTRA_SECRET_KEY: ci-secret-key-0123456789abcdef-32bytes
+      # 强门禁：超基线即红（防假绿，总纲 §13.3）。
+      ASTRA_TEST_REQUIRE_NFR: "1"
+      # PG 侧基线（A17）：PG 不可用即 pytest.fail（非 skip）。
+      ASTRA_TEST_PG_URL: postgresql+psycopg://astra:astra@localhost:5432/astra
+      ASTRA_TEST_REQUIRE_PG: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python 3.12)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync workspace (locked, incl. postgres extra)
+        run: uv sync --locked --all-packages --all-extras
+
+      # 超基线即红：pipefail 保证 pytest 非零退出透传（GitHub `bash -e` 默认不含 pipefail）。
+      - name: NFR suite (nightly；超基线即红)
+        run: |
+          set -o pipefail
+          uv run pytest tests/nfr -q -s -ra 2>&1 | tee nfr-report.txt
+
+      - name: Rollback drill (双引擎 + §4 不可逆前置动作)
+        run: |
+          set -o pipefail
+          bash scripts/rollback_drill.sh 2>&1 | tee rollback-drill-report.txt
+
+      - name: Upload NFR reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfr-reports
+          path: |
+            nfr-report.txt
+            rollback-drill-report.txt
+          if-no-files-found: warn

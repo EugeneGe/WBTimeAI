@@ -1,0 +1,6 @@
+# Document 006
+
+AstraAI platform guide number 006.
+
+This document explains the topic of sqlite in detail.
+It belongs to the AstraAI platform knowledge corpus.

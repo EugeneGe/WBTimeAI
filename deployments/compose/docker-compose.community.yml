@@ -1,0 +1,63 @@
+# ---------------------------------------------------------------------------
+# Astra AI · 社区单容器（docker compose · SQLite + 本地文件 + 进程内任务）
+#
+# 验收 §3-#4：**一条命令**启动，**零外部中间件**（无 Postgres / Redis / 对象存储）。
+#
+#   docker compose -f deployments/compose/docker-compose.community.yml up --build
+#   后端 http://localhost:8080/health
+#
+# 语义：ASTRA_MODE=local（SQLite + 进程内能力），与设计 §2.13 对齐。
+#
+# ---------------------------------------------------------------------------
+# Sandbox 策略（设计 §2.10 / §5 #3；A-5 三档承诺）
+#
+#   社区单容器**仅**提供 `LocalProcessSandboxProvider`（ASTRA_SANDBOX_PROVIDER=local_process）：
+#   **进程级隔离（非容器级）**——受限子进程 + 工作目录隔离 + 环境变量白名单。
+#
+#   在单容器内再启容器需要二选一，二者都与「隔离」承诺冲突，故**默认关闭高级选项**：
+#     a) 挂载宿主 /var/run/docker.sock —— **等价于把宿主 root 交给 Agent**，仅用于受控环境；
+#     b) DinD（docker-in-docker）—— 需 `privileged: true`，隔离形同虚设。
+#
+#   如需容器级隔离，请使用 Team 形态（独立 sandbox 服务，`network=none` + 非 root +
+#   只读 rootfs + 资源限额 + Workspace bind mount），**不要**在生产挂载宿主 socket。
+# ---------------------------------------------------------------------------
+name: astra-ai-community
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: astra-ai:community
+    environment:
+      ASTRA_MODE: local
+      # 绝对路径 SQLite（4 个斜杠）：挂在命名卷 /data 上，跨重启持久。
+      ASTRA_DATABASE_URL: sqlite:////data/astra.db
+      ASTRA_DATA_DIR: /data
+      ASTRA_SECRET_KEY: ${ASTRA_SECRET_KEY:-change-me-to-a-random-secret-at-least-32-bytes}
+      ASTRA_HOST: 0.0.0.0
+      ASTRA_PORT: "8080"
+      ASTRA_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      ASTRA_FEATURE_FLAGS: '{}'
+      # 社区默认：进程级隔离（非容器级）。**不要**改为 docker（除非确知风险）。
+      ASTRA_SANDBOX_PROVIDER: local_process
+      # 沙箱镜像基线（仅当切换为 docker provider 时使用）。
+      ASTRA_SANDBOX_IMAGE: python:3.12-slim
+    ports:
+      - "8080:8080"
+    volumes:
+      - astra-data:/data
+      # （高级选项，默认关闭）如需 Docker 沙箱且接受风险，取消下一行注释：
+      # - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health').status == 200 else 1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  astra-data:
