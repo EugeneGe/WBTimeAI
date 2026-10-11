@@ -74,6 +74,17 @@ DEFAULT_SANDBOX_IMAGE = "python:3.12-slim"
 #: Sandbox 工作目录挂载点（可选；空 = 由 SandboxProvider 自行解析为 Workspace 目录）。
 DEFAULT_SANDBOX_WORKDIR = ""
 
+# -- Sandbox 网络隔离（T2-56；设计 §2.18 / §2.8.1） --------------------------
+
+#: Sandbox 网络档位：``offline``（默认，``network=none``）| ``allowlisted``（内部网络 + 受控代理）。
+DEFAULT_SANDBOX_NETWORK_PROFILE: Literal["offline", "allowlisted"] = "offline"
+
+#: ALLOWLISTED 档接入的**内部** Docker 网络名（``internal: true``，无外部路由）。
+DEFAULT_SANDBOX_EGRESS_NETWORK = "astra-sandbox-egress"
+
+#: 受控 Egress Proxy 地址（``http://host:port``；ALLOWLISTED 档注入沙箱容器；空 = 不注入）。
+DEFAULT_SANDBOX_EGRESS_PROXY_URL = ""
+
 #: 可观测：``/metrics`` 开关（§2.7.3）；社区默认关闭，Team 可开。
 DEFAULT_METRICS_ENABLED = False
 
@@ -252,6 +263,9 @@ __all__ = [
     "DEFAULT_SANDBOX_PROVIDER",
     "DEFAULT_SANDBOX_IMAGE",
     "DEFAULT_SANDBOX_WORKDIR",
+    "DEFAULT_SANDBOX_NETWORK_PROFILE",
+    "DEFAULT_SANDBOX_EGRESS_NETWORK",
+    "DEFAULT_SANDBOX_EGRESS_PROXY_URL",
     "DEFAULT_METRICS_ENABLED",
     "DEFAULT_RUN_TIMEOUT_MS",
     "DEFAULT_SSE_HEARTBEAT_SECONDS",

@@ -95,6 +95,10 @@ services:
       ASTRA_WORKSPACE_ROOT: /var/lib/astra-ai/workspaces
       # Compose 档：容器级隔离 Sandbox（Worker 作为 Sandbox Runtime 管理方）。
       ASTRA_SANDBOX_PROVIDER: docker
+      # T2-56：Agent Sandbox 网络隔离——接入**内部**网络（无外部路由），仅经受控 Egress Proxy 出网。
+      ASTRA_SANDBOX_NETWORK_PROFILE: allowlisted
+      ASTRA_SANDBOX_EGRESS_NETWORK: astra-sandbox-egress
+      ASTRA_SANDBOX_EGRESS_PROXY_URL: http://egress-proxy:8888
     volumes:
       - astra-data:/data
       - workspace-data:/var/lib/astra-ai/workspaces
@@ -112,6 +116,27 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  # T2-56：受控 Egress Proxy（判定复用唯一 EgressPolicy；默认拒绝全部出网）。
+  # 双网卡：内网 sandbox-egress（沙箱可达）+ 默认网（代理自身可出公网）。
+  # 沙箱容器仅接入 sandbox-egress（internal: true，无外部路由），故只能经本代理出网。
+  egress-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: astra-ai:standard
+    command: ["python", "-m", "astra_security.egress.proxy", "--host", "0.0.0.0", "--port", "8888"]
+    environment:
+      ASTRA_EGRESS__ENABLED: "true"
+      # 白名单**由部署方显式配置**；默认空 = 拒绝全部出网（最小暴露面）。
+      ASTRA_EGRESS__ALLOW: ${ASTRA_EGRESS_ALLOW:-[]}
+      ASTRA_EGRESS__DENY_PRIVATE: "true"
+    networks:
+      - default
+      - sandbox-egress
+    # 仅内网暴露代理端口（不绑宿主端口，不对宿主机/公网开放）。
+    expose:
+      - "8888"
 
   postgres:
     image: postgres:16-alpine
@@ -143,3 +168,12 @@ volumes:
   # T2-54：Workspace（Project / Attempt）与 Storage 持久卷（跨容器重建保留）。
   workspace-data:
   astra-data:
+
+networks:
+  # T2-56：Agent Sandbox 专用**内部**网络——`internal: true` 使其**无外部路由**；
+  # 沙箱只能与同网卡（egress-proxy）通信，出网一律经受控代理（复用唯一 EgressPolicy）。
+  # 若某部署不能证明网络层强制 → 保持 `network=none`（不放公网路由，A-13 / D19 / RK-6）。
+  sandbox-egress:
+    internal: true
+  default:
+    name: astra-ai-default

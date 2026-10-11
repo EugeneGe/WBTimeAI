@@ -26,6 +26,7 @@ from astra_domain.ports.egress import (
 
 from .dns import resolve_all, resolve_and_validate
 from .policy import EGRESS_ACTION, EGRESS_WIRING_POINTS, EgressWiringPoint, SecurityEgressPolicy
+from .proxy import PROXY_DEFAULT_PORT, ControlledEgressProxy
 
 __all__ = [
     # 唯一入口实现
@@ -45,4 +46,7 @@ __all__ = [
     "host_matches",
     "resolve_all",
     "resolve_and_validate",
+    # T2-56：受控 Egress Proxy（复用唯一判定源）
+    "ControlledEgressProxy",
+    "PROXY_DEFAULT_PORT",
 ]

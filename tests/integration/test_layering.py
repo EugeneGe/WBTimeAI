@@ -212,6 +212,24 @@ def test_identity_security_application_have_no_web_dependency() -> None:
         _assert_no_forbidden(package, {"fastapi", "starlette"})
 
 
+# -- R1（Phase 2）· T2-56：出网判定**不**直连 ORM（仅新增 / 收紧，零放宽） ------
+
+
+def test_security_egress_has_no_orm_dependency() -> None:
+    """``astra_security/egress/**`` **不得** import ``sqlalchemy`` / ``alembic`` / ``astra_database``。
+
+    R1 架构裁定 §R-R1R5-15 **L-5**（新增断言，收紧）：出网判定（``SecurityEgressPolicy`` /
+    受控 Egress Proxy）**不直连 ORM**——审计经**注入** Protocol（``audit_repository``），
+    判定**只**复用 ``astra_domain.ports.egress`` 原语。本断言**仅新增**，既有断言原样不动。
+    """
+    egress_dir = PACKAGES / "security" / "src" / "astra_security" / "egress"
+    assert egress_dir.is_dir(), "出网策略目录缺失：astra_security/egress"
+    forbidden = {"sqlalchemy", "alembic", "astra_database"}
+    for path in _iter_python_files(egress_dir):
+        bad = forbidden & _top_level_modules(path.read_text(encoding="utf-8"))
+        assert not bad, f"{path.relative_to(REPO_ROOT)}（egress）违规导入：{sorted(bad)}"
+
+
 def test_application_import_boundary() -> None:
     """``astra_application``（W3 扩展）只允许依赖
     ``{common, core, domain, identity, workspace, security}``。

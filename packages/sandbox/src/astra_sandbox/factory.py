@@ -21,6 +21,7 @@ from .availability import docker_available
 from .base import SandboxProvider
 from .docker_provider import DockerSandboxProvider
 from .local_process_provider import LocalProcessSandboxProvider
+from .network import network_config_from_settings
 
 __all__ = [
     "build_sandbox_provider",
@@ -52,8 +53,19 @@ def create_local_process_provider(settings: Any) -> LocalProcessSandboxProvider:
 
 
 def create_docker_provider(settings: Any) -> DockerSandboxProvider:
-    """按配置构造 Docker 沙箱（镜像基线 ``settings.sandbox_image``）。"""
-    return DockerSandboxProvider(image=str(_setting(settings, "sandbox_image", "python:3.12-slim")))
+    """按配置构造 Docker 沙箱（镜像基线 + T2-56 网络档位 / Egress Proxy）。
+
+    默认档位 ``offline``（``network=none``）；``allowlisted`` 时接入内部 Egress 网络并注入
+    受控代理环境变量（`ASTRA_SANDBOX_NETWORK_PROFILE` / `ASTRA_SANDBOX_EGRESS_NETWORK` /
+    `ASTRA_SANDBOX_EGRESS_PROXY_URL`，经 :func:`network_config_from_settings` 解析）。
+    """
+    network_config = network_config_from_settings(settings)
+    return DockerSandboxProvider(
+        image=str(_setting(settings, "sandbox_image", "python:3.12-slim")),
+        network_profile=network_config.profile,
+        egress_network=network_config.egress_network,
+        egress_proxy_url=network_config.egress_proxy_url,
+    )
 
 
 def build_sandbox_provider(settings: Any) -> SandboxProvider:

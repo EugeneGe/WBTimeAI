@@ -54,13 +54,18 @@ def test_discipline_scan_is_clean_on_current_repo() -> None:
 
 
 def test_scan_is_not_vacuous() -> None:
-    """正向断言：扫描集非空，且三类规则的扫描函数均存在（防「扫了空目录」的假绿）。"""
+    """正向断言：扫描集非空，且各类规则的扫描函数均存在（防「扫了空目录」的假绿）。"""
     module = _load_script()
 
     files = list(module._iter_py(REPO_ROOT))
     assert files, "扫描集为空，纪律扫描可能失效"
 
-    for rule in (module.scan_layering, module.scan_open_source, module.scan_credentials):
+    for rule in (
+        module.scan_layering,
+        module.scan_open_source,
+        module.scan_credentials,
+        module.scan_egress_single_source,
+    ):
         assert callable(rule), f"规则函数缺失：{rule}"
 
 
@@ -140,4 +145,43 @@ def test_scan_reports_no_false_positive_on_benign_samples(tmp_path: Path) -> Non
     findings = module.scan(tmp_path)
     assert findings == [], "良性样本不应误报：\n" + "\n".join(
         f"{item.path}:{item.line} [{item.rule}] {item.message}" for item in findings
+    )
+
+
+# -- R1（Phase 2）· T2-56 · L-6：出网判定唯一源 --------------------------------
+
+
+def test_scan_detects_second_egress_source(tmp_path: Path) -> None:
+    """在允许位置之外**定义**出网判定符号 → 检出 ``egress.single_decision_source``。
+
+    防「另建白名单判定源」：模拟在普通能力包里新定义 ``SecurityEgressPolicy`` / ``DENY_RANGES``。
+    """
+    module = _load_script()
+    rogue = tmp_path / "pkg" / "src" / "astra_pkg" / "rogue_egress.py"
+    rogue.parent.mkdir(parents=True, exist_ok=True)
+    rogue.write_text(
+        "class SecurityEgressPolicy:\n"
+        "    def authorize(self, url):\n"
+        "        return True\n"
+        "DENY_RANGES = ()\n",
+        encoding="utf-8",
+    )
+
+    findings = module.scan_egress_single_source(tmp_path)
+    detected = {(item.rule, item.path.replace("\\", "/")) for item in findings}
+    assert ("egress.single_decision_source", "pkg/src/astra_pkg/rogue_egress.py") in detected, (
+        f"未检出另建判定源：{sorted(detected)}"
+    )
+
+
+def test_scan_allows_canonical_egress_definitions() -> None:
+    """规范原语 / 唯一入口 / Phase 1 薄委托的**定义**不被误判（允许位置白名单有效）。"""
+    module = _load_script()
+    findings = [
+        item
+        for item in module.scan_egress_single_source(REPO_ROOT)
+        if item.rule == "egress.single_decision_source"
+    ]
+    assert findings == [], "允许位置被误判为第二判定源：\n" + "\n".join(
+        f"{item.path}:{item.line} {item.message}" for item in findings
     )

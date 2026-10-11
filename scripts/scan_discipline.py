@@ -2,7 +2,7 @@
 """纪律扫描脚本（W10 / T2-51；设计 §2.17 / §3-#22 ``I-P2-22``）。
 
 **定位**：与既有 ``tests/integration/test_layering.py`` **分工互补**（不重复造）——
-本脚本为 **CI 可执行**的**单一入口**，覆盖三类纪律，**任一违规 → 退出码非 0**：
+本脚本为 **CI 可执行**的**单一入口**，覆盖四类纪律，**任一违规 → 退出码非 0**：
 
 1. **分层（layering）** —— AST 级 import / 使用点扫描（非子串，规避 docstring 误报）：
    - ``packages/*/src/*/domain/**``（含 ``packages/domain`）**零** ``fastapi`` / ``starlette`` /
@@ -15,6 +15,9 @@
 3. **凭证（credential）** —— AST 级：**无明文密码 / 令牌写入日志或响应**——检测把敏感标识符
    （``password`` / ``secret`` / ``token`` / ``api_key`` / ``private_key``）经 ``logger.*`` /
    ``print`` 输出的调用点（f-string / 格式化 / 直接实参均覆盖）。
+4. **出网判定唯一源（egress single-source）** —— 全仓**仅**规范原语（``astra_domain.ports.egress``）
+   / 唯一入口（``astra_security.egress``）/ Phase 1 薄委托（``astra_tool.security``）**定义**出网判定
+   符号；其它位置定义即「另建白名单判定源」违规（R1 / T2-56 · L-6）。
 
 用法::
 
@@ -41,6 +44,7 @@ __all__ = [
     "main",
     "scan",
     "scan_credentials",
+    "scan_egress_single_source",
     "scan_layering",
     "scan_open_source",
 ]
@@ -88,6 +92,38 @@ SENSITIVE_TOKENS: tuple[str, ...] = (
     "api_key",
     "apikey",
     "private_key",
+)
+
+#: R1 / T2-56（L-6）：出网**判定**源（决策原语 / 白名单门）符号名——**唯一来源**。
+#: 全仓**仅**下列文件允许**定义**这些符号；其它文件定义即视为「另建白名单判定源」违规。
+EGRESS_DECISION_SYMBOLS: frozenset[str] = frozenset(
+    {
+        "SecurityEgressPolicy",
+        "EgressPolicy",
+        "EgressDecision",
+        "host_matches",
+        "is_blocked_ip",
+        "is_metadata_ip",
+        "resolve_all",
+        "resolve_and_validate",
+        "DENY_RANGES",
+        "METADATA_IPS",
+        "ALLOWED_SCHEMES",
+    }
+)
+
+#: 允许**定义**出网判定符号的位置（相对仓库根的 posix 路径后缀）。
+#: - ``astra_domain.ports.egress``：**规范原语**（唯一来源）；
+#: - ``astra_security/egress/**``：**唯一入口实现**（策略 / DNS / 拒段再导出）；
+#: - ``astra_tool/security.py``：Phase 1 **薄委托**兼容层（签名 / 语义不变，grandfathered）。
+EGRESS_ALLOWED_DEFINITION_PATHS: tuple[str, ...] = (
+    "packages/domain/src/astra_domain/ports/egress.py",
+    "packages/security/src/astra_security/egress/policy.py",
+    "packages/security/src/astra_security/egress/dns.py",
+    "packages/security/src/astra_security/egress/deny_ranges.py",
+    "packages/security/src/astra_security/egress/__init__.py",
+    "packages/security/src/astra_security/egress/proxy.py",
+    "packages/tool/src/astra_tool/security.py",
 )
 
 #: ``token`` 属**歧义**片段：命中它时，若标识符同时含下列「良性限定词」（用量 / 计数 /
@@ -360,12 +396,69 @@ def scan_credentials(root: Path) -> list[Finding]:
     return findings
 
 
+# -- 规则 4：出网判定唯一源（R1 / T2-56 · L-6） -------------------------------
+
+
+def _module_defined_symbols(tree: ast.Module) -> Iterator[tuple[str, int]]:
+    """产出**模块级**定义（``class`` / ``def`` / 赋值）的符号名与行号。
+
+    仅看**顶层**定义（类 / 函数 / 赋值 / 带注解赋值），**不看** import（再导出不算“另建源”）。
+    """
+    for node in tree.body:
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            yield node.name, node.lineno
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    yield target.id, node.lineno
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            yield node.target.id, node.lineno
+
+
+def scan_egress_single_source(root: Path) -> list[Finding]:
+    """出网判定**唯一源**：全仓**仅**允许规范原语 / 唯一入口 / Phase 1 薄委托**定义**判定符号。
+
+    依据：设计 §2.18 / R1 裁定 R-R1R5-15 **L-6** / §R-R1R5-07（``EgressPolicy`` 复用唯一判定源；
+    **无第二白名单实现**）。检测「另建白名单判定源」——在允许位置**之外**定义
+    ``SecurityEgressPolicy`` / ``EgressPolicy`` / ``EgressDecision`` / ``host_matches`` /
+    ``is_blocked_ip`` / ``DENY_RANGES`` 等判定原语即违规。**仅新增（收紧）**。
+    """
+    findings: list[Finding] = []
+    for path in _iter_py(root):
+        rel = _rel(path, root).replace("\\", "/")
+        if rel in EGRESS_ALLOWED_DEFINITION_PATHS:
+            continue
+        tree = _parse(path)
+        if tree is None:
+            continue
+        for name, lineno in _module_defined_symbols(tree):
+            if name in EGRESS_DECISION_SYMBOLS:
+                findings.append(
+                    Finding(
+                        rule="egress.single_decision_source",
+                        path=rel,
+                        line=lineno,
+                        message=(
+                            f"检测到在允许位置之外定义出网判定符号 `{name}`"
+                            "（唯一判定源＝astra_domain.ports.egress / "
+                            "astra_security.egress.SecurityEgressPolicy）"
+                        ),
+                    )
+                )
+    return findings
+
+
 # -- 汇总 / CLI --------------------------------------------------------------
 
 
 def scan(root: Path) -> list[Finding]:
     """执行全部规则，返回聚合发现项（按路径 / 行号排序）。"""
-    findings = [*scan_layering(root), *scan_open_source(root), *scan_credentials(root)]
+    findings = [
+        *scan_layering(root),
+        *scan_open_source(root),
+        *scan_credentials(root),
+        *scan_egress_single_source(root),
+    ]
     return sorted(findings, key=lambda item: (item.path, item.line, item.rule))
 
 

@@ -61,6 +61,9 @@ from .defaults import (
     DEFAULT_RETENTION_TOOL_CALL_DAYS,
     DEFAULT_RUN_TIMEOUT_MS,
     DEFAULT_SANDBOX_IMAGE,
+    DEFAULT_SANDBOX_NETWORK_PROFILE,
+    DEFAULT_SANDBOX_EGRESS_NETWORK,
+    DEFAULT_SANDBOX_EGRESS_PROXY_URL,
     DEFAULT_SANDBOX_PROVIDER,
     DEFAULT_SANDBOX_WORKDIR,
     DEFAULT_SECRET_PROVIDER,
@@ -320,6 +323,13 @@ class Settings(BaseSettings):
     sandbox_provider: Literal["local_process", "docker"] = DEFAULT_SANDBOX_PROVIDER
     sandbox_image: str = DEFAULT_SANDBOX_IMAGE
     sandbox_workdir: str = DEFAULT_SANDBOX_WORKDIR
+    # Sandbox 网络隔离（T2-56；设计 §2.18 / §2.8.1）：
+    #  - offline（默认）：network=none；allowlisted：内部网络（无外部路由）+ 受控 Egress Proxy。
+    #  - egress_network：ALLOWLISTED 接入的内部网络名（compose 创建，internal: true）。
+    #  - egress_proxy_url：受控代理地址（注入沙箱容器 HTTP(S)_PROXY；判定复用 EgressPolicy）。
+    sandbox_network_profile: Literal["offline", "allowlisted"] = DEFAULT_SANDBOX_NETWORK_PROFILE
+    sandbox_egress_network: str = DEFAULT_SANDBOX_EGRESS_NETWORK
+    sandbox_egress_proxy_url: str = DEFAULT_SANDBOX_EGRESS_PROXY_URL
 
     # -- Runtime / SSE（W6 · T1-31；设计 §2.9 / §2.16） --------------------
     # Run 级总超时（毫秒）：重启兜底扫描阈值（``RUNNING`` Run 心跳超期判定）。

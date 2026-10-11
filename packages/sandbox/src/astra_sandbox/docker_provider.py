@@ -24,6 +24,12 @@ from astra_domain import (
 )
 
 from .base import ExecResult
+from .network import (
+    DEFAULT_EGRESS_NETWORK,
+    NETWORK_OFFLINE,
+    NETWORK_PROFILE_ALLOWLISTED,
+    NETWORK_PROFILE_OFFLINE,
+)
 
 __all__ = ["DockerSandboxProvider", "DEFAULT_SANDBOX_IMAGE"]
 
@@ -32,13 +38,21 @@ DEFAULT_SANDBOX_IMAGE = "python:3.12-slim"
 
 
 class DockerSandboxProvider:
-    """基于 Docker 的容器级隔离沙箱。"""
+    """基于 Docker 的容器级隔离沙箱。
+
+    T2-56：新增**网络档位**（``network_profile``）与**受控 Egress Proxy** 注入——默认
+    ``offline``（``network=none``）；``allowlisted`` 时接入**内部**网络（无外部路由）+ 注入
+    代理环境变量。**不改** Phase 1 ``SandboxProvider`` Protocol（``create_session``/``exec`` 签名零改）。
+    """
 
     def __init__(
         self,
         *,
         image: str = DEFAULT_SANDBOX_IMAGE,
-        network: str = "none",
+        network: str = NETWORK_OFFLINE,
+        network_profile: str = NETWORK_PROFILE_OFFLINE,
+        egress_network: str = DEFAULT_EGRESS_NETWORK,
+        egress_proxy_url: str = "",
         user: str = "65534:65534",
         read_only: bool = True,
         mem_limit: str = "512m",
@@ -49,7 +63,14 @@ class DockerSandboxProvider:
         client: Any | None = None,
     ) -> None:
         self._image = image
-        self._network = network
+        self._network_profile = network_profile
+        self._egress_network = egress_network
+        self._egress_proxy_url = egress_proxy_url
+        # 解析生效网络模式：allowlisted → 内部 Egress 网络；否则 → 显式/默认 ``none``。
+        if network_profile == NETWORK_PROFILE_ALLOWLISTED:
+            self._network = egress_network
+        else:
+            self._network = network
         self._user = user
         self._read_only = read_only
         self._mem_limit = mem_limit
@@ -65,6 +86,34 @@ class DockerSandboxProvider:
     def kind(self) -> str:
         """提供方种类：``docker``。"""
         return SANDBOX_PROVIDER_DOCKER
+
+    @property
+    def network(self) -> str:
+        """生效的 Docker ``network_mode``（``none`` 或内部 Egress 网络名）。"""
+        return self._network
+
+    @property
+    def network_profile(self) -> str:
+        """生效的网络档位（``offline`` / ``allowlisted``）。"""
+        return self._network_profile
+
+    @property
+    def egress_proxy_url(self) -> str:
+        """受控 Egress Proxy 地址（``allowlisted`` 时有意义）。"""
+        return self._egress_proxy_url
+
+    def container_environment(self) -> dict[str, str]:
+        """返回需注入沙箱容器的代理环境变量（仅 ``allowlisted`` 且配 URL 时非空）。"""
+        if self._network_profile != NETWORK_PROFILE_ALLOWLISTED or not self._egress_proxy_url:
+            return {}
+        return {
+            "HTTP_PROXY": self._egress_proxy_url,
+            "HTTPS_PROXY": self._egress_proxy_url,
+            "http_proxy": self._egress_proxy_url,
+            "https_proxy": self._egress_proxy_url,
+            "NO_PROXY": "localhost,127.0.0.1,::1",
+            "no_proxy": "localhost,127.0.0.1,::1",
+        }
 
     @property
     def available(self) -> bool:
@@ -91,6 +140,8 @@ class DockerSandboxProvider:
             command=["sleep", "infinity"],
             detach=True,
             network_mode=self._network,
+            # T2-56：ALLOWLISTED 档注入受控 Egress Proxy 环境变量（offline 档为空）。
+            environment=(self.container_environment() or None),
             user=self._user,
             read_only=self._read_only,
             mem_limit=self._mem_limit,

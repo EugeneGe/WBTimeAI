@@ -19,6 +19,16 @@ from .factory import (
     create_local_process_provider,
 )
 from .local_process_provider import LocalProcessSandboxProvider
+from .network import (
+    DEFAULT_EGRESS_NETWORK,
+    DEFAULT_EGRESS_PROXY_PORT,
+    NETWORK_OFFLINE,
+    NETWORK_PROFILE_ALLOWLISTED,
+    NETWORK_PROFILE_OFFLINE,
+    NETWORK_PROFILES,
+    SandboxNetworkConfig,
+    network_config_from_settings,
+)
 from .process_spawner import SubprocessProcessSpawner
 
 __all__ = [
@@ -32,4 +42,13 @@ __all__ = [
     "build_sandbox_provider",
     "create_local_process_provider",
     "create_docker_provider",
+    # T2-56：网络档位 / 受控 Egress 网络
+    "SandboxNetworkConfig",
+    "network_config_from_settings",
+    "NETWORK_OFFLINE",
+    "NETWORK_PROFILE_OFFLINE",
+    "NETWORK_PROFILE_ALLOWLISTED",
+    "NETWORK_PROFILES",
+    "DEFAULT_EGRESS_NETWORK",
+    "DEFAULT_EGRESS_PROXY_PORT",
 ]
