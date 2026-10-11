@@ -105,6 +105,14 @@ services:
       # 🔴 Worker / 控制面拥有宿主 root 等价权限（设计 §2.8.1 信任级别）：
       #    仅用于 Worker 创建 / 管理 Sandbox 容器；**绝不**把该 socket 挂进 Agent Sandbox。
       - /var/run/docker.sock:/var/run/docker.sock
+    # T2-54 · F-1：worker 容器用户 `astra`(uid 10001) 不属宿主 `docker` 组 → 无法访问
+    #   `root:docker 660` 的 docker.sock → `docker_available()`=False → worker 启动即报
+    #   「显式配置 docker 沙箱但 Docker 不可用」。此处**仅追加**宿主 docker 组 GID
+    #   （保持 worker 非 root，避免以 root 写共享卷破坏 api 属主）。
+    #   宿主 GID 取值：`stat -c '%g' /var/run/docker.sock`；经 ASTRA_DOCKER_GID 覆写。
+    #   若 GID 未知，亦可用 `user: "0:0"`（worker root 等价，设计 §2.8.1）。
+    group_add:
+      - "${ASTRA_DOCKER_GID:-1001}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -139,7 +147,11 @@ services:
       - "8888"
 
   postgres:
-    image: postgres:16-alpine
+    # T2-54 · F-3：**必须使用 pgvector 镜像**（与 CI 权威面 `.github/workflows/test.yml`
+    #   的 `postgres-pgvector` job 一致）。普通 `postgres:16*` 无 `vector` 扩展 → 迁移
+    #   0013/0014 降级 `embedding/memory.vector` 为 JSONB，而 ORM `VectorType` 降级为 JSON
+    #   → `alembic check` 报假漂移（PG 权威面 FAIL）。pgvector 镜像下 `alembic check` 零漂移。
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: astra
       POSTGRES_PASSWORD: astra

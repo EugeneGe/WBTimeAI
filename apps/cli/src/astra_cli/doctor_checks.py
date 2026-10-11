@@ -17,8 +17,6 @@
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 import tempfile
 from typing import TYPE_CHECKING, Literal
 
@@ -44,9 +42,6 @@ CheckStatus = Literal["ok", "fail", "skip"]
 
 #: 单项自检结果三元组。
 CheckOutcome = tuple[str, CheckStatus, str]
-
-#: Docker 探测超时（秒）——避免守护进程不可达时长时间挂起。
-_DOCKER_PROBE_TIMEOUT_SECONDS = 5
 
 
 def load_settings() -> tuple[CheckOutcome, Settings | None]:
@@ -146,38 +141,46 @@ def check_dependencies() -> CheckOutcome:
 
 
 def _docker_daemon_reachable() -> bool:
-    """探测 Docker 守护进程可达性（**仅探测**，不创建 / 运行任何容器）。"""
+    """探测 Docker 守护进程可达性（**仅探测**，不创建 / 运行任何容器）。
+
+    与装配侧（:func:`astra_sandbox.availability.docker_available`）**同源**：以 docker
+    **SDK** ``docker.from_env().ping()`` 判定，而非 docker CLI 是否存在——镜像可能仅含
+    SDK（无 CLI），旧 CLI 判定会误报（F-2）。
+    """
     try:
-        completed = subprocess.run(  # noqa: S603 - 固定参数、仅探测
-            ["docker", "info"],
-            capture_output=True,
-            timeout=_DOCKER_PROBE_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
+        from astra_sandbox.availability import docker_available
+    except Exception:  # noqa: BLE001 - 探测不可用即视为不可达（doctor 容错）
         return False
-    return completed.returncode == 0
+    return docker_available()
 
 
 def check_docker(settings: Settings | None) -> CheckOutcome:
     """检查 6：Sandbox 运行时可探测性（**仅探测**，不触发 Sandbox 执行）。
 
+    判定与装配侧 :func:`astra_sandbox.availability.docker_sdk_status` **同源**（SDK +
+    ``ping``，**非** docker CLI），保证「doctor 语义 == capabilities 装配语义」（F-2）。
+
     语义：
-    - 未安装 ``docker`` CLI → ``skip``（社区 LocalProcess 降级，非错误）；
-    - 安装了且守护进程可达 → ``ok``；
-    - 安装了但守护进程不可达：若 ``ASTRA_SANDBOX_PROVIDER=docker``（显式要求 Docker）
+    - 未安装 docker **SDK** → ``skip``（社区 LocalProcess 降级，非错误）；
+    - SDK 就位且守护进程可达 → ``ok``；
+    - SDK 就位但守护进程不可达：若 ``ASTRA_SANDBOX_PROVIDER=docker``（显式要求 Docker）
       → ``fail``（配置与运行时不符，明确报错）；否则 → ``skip``。
     """
     provider = getattr(settings, "sandbox_provider", "local_process") if settings else None
-    if shutil.which("docker") is None:
+    try:
+        from astra_sandbox.availability import docker_sdk_status
+    except Exception as exc:  # noqa: BLE001 - astra_sandbox 不可用按跳过处理
+        return ("docker", "skip", f"astra_sandbox 不可用：{type(exc).__name__}: {exc}")
+    status = docker_sdk_status()
+    if status == "no_sdk":
         if provider == "docker":
-            return ("docker", "fail", "ASTRA_SANDBOX_PROVIDER=docker 但未找到 docker CLI")
-        return ("docker", "skip", "docker CLI 未安装（社区以 LocalProcess 降级）")
-    if _docker_daemon_reachable():
-        return ("docker", "ok", "docker daemon 可达")
+            return ("docker", "fail", "ASTRA_SANDBOX_PROVIDER=docker 但未安装 docker SDK")
+        return ("docker", "skip", "docker SDK 未安装（社区以 LocalProcess 降级）")
+    if status == "reachable":
+        return ("docker", "ok", "docker daemon 可达（SDK ping 成功）")
     if provider == "docker":
         return ("docker", "fail", "ASTRA_SANDBOX_PROVIDER=docker 但 docker daemon 不可达")
-    return ("docker", "skip", "docker CLI 存在但 daemon 不可达")
+    return ("docker", "skip", "docker SDK 存在但 daemon 不可达")
 
 
 def check_provider(settings: Settings | None) -> CheckOutcome:
