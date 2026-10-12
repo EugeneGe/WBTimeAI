@@ -5,6 +5,7 @@
   "description": "Astra AI 桌面壳（Electron）· M2 · WS3（发行形态 B）",
   "author": "Astra AI Contributors",
   "license": "MIT",
+  "homepage": "https://github.com/EugeneGe/astra-ai",
   "type": "commonjs",
   "main": "out/main/main.js",
   "engines": {
