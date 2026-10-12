@@ -247,6 +247,23 @@ def test_environment_digest_excludes_secrets() -> None:
     )
 
 
+def test_environment_digest_excludes_authorization_and_bearer() -> None:
+    """R5A-06：``AUTHORIZATION`` / ``BEARER`` 键名**同源敏感**（不进摘要，不回归 token/secret）。"""
+    from astra_workspace.environment_snapshot import is_sensitive_key
+
+    for key in ("AUTHORIZATION", "Authorization", "HTTP_AUTHORIZATION", "BEARER", "BEARER_TOKEN"):
+        assert is_sensitive_key(key) is True, key
+    for key in ("python", "LOG_LEVEL", "network"):
+        assert is_sensitive_key(key) is False, key
+
+    with_creds = compute_environment_digest(
+        runtime={"python": "3.12"},
+        config={"AUTHORIZATION": "Bearer leak", "BEARER": "leak", "TOKEN": "leak", "SECRET": "leak"},
+    )
+    without_creds = compute_environment_digest(runtime={"python": "3.12"}, config={})
+    assert with_creds == without_creds
+
+
 def test_environment_digest_for_workspace_environment() -> None:
     """``environment_digest_for`` 由 ``WorkspaceEnvironment.runtime`` 计算（敏感剔除）。"""
     env = WorkspaceEnvironment(

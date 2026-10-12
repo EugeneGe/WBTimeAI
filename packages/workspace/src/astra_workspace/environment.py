@@ -44,8 +44,11 @@ REF_PREFIX_CREDENTIAL = "credential:"
 REF_PREFIX_SECRET = "secret:"
 
 #: 敏感键名模式（命中且为明文标量 → 拒绝，强制走引用）。
+#: R5 补全轮（R5A-06）：增补 ``AUTHORIZATION`` / ``BEARER``（HTTP ``Authorization: Bearer``
+#: 头键名同源敏感；``re.IGNORECASE`` 已具备，大小写不敏感）。
 SENSITIVE_KEY_PATTERN = re.compile(
-    r"(SECRET|TOKEN|PASSWORD|PASSWD|PWD|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIAL)",
+    r"(SECRET|TOKEN|PASSWORD|PASSWD|PWD|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|"
+    r"CREDENTIAL|AUTHORIZATION|BEARER)",
     re.IGNORECASE,
 )
 

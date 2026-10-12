@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -60,6 +61,34 @@ def test_create_app_assembles_remote_services(client: Any) -> None:
     services = client.app.state.services
     assert getattr(services, "remote_tasks", None) is not None
     assert getattr(services, "change_review", None) is not None
+
+
+# -- F1（R5A-03）：Compose egress 网络名一致性（静态防回归） ------------------
+
+
+def test_compose_egress_network_name_matches_worker_env() -> None:
+    """🔴 Compose 的 ``sandbox-egress`` 网络**显式命名**，且与 worker 注入名 / 默认常量一致。
+
+    R5A-03：compose 默认把网络命名为 ``<project>_sandbox-egress``（本例 ``astra-ai_sandbox-egress``），
+    而 worker 经 ``ASTRA_SANDBOX_EGRESS_NETWORK`` 注入的是字面 ``astra-sandbox-egress`` ——
+    二者不一致时干净 ``docker compose up`` 下 allowlisted 沙箱接入失败。本静态测试锁定：
+    网络 ``name`` / worker env / ``astra_config.defaults`` 三者同值。
+    """
+    import yaml
+
+    from astra_config.defaults import DEFAULT_SANDBOX_EGRESS_NETWORK
+
+    compose_path = Path(__file__).resolve().parents[2] / "docker-compose.yml"
+    compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
+
+    network = compose["networks"]["sandbox-egress"]
+    assert network.get("name") == DEFAULT_SANDBOX_EGRESS_NETWORK
+    assert network.get("internal") is True
+
+    worker_env = compose["services"]["worker"]["environment"]
+    assert worker_env["ASTRA_SANDBOX_EGRESS_NETWORK"] == DEFAULT_SANDBOX_EGRESS_NETWORK
+    # egress-proxy 双网卡含该命名网络（引用同一 key）。
+    assert "sandbox-egress" in compose["services"]["egress-proxy"]["networks"]
 
 
 # -- server 档一致性（本地可证：不静默误配） ---------------------------------

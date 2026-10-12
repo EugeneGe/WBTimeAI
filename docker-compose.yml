@@ -96,6 +96,9 @@ services:
       # Compose 档：容器级隔离 Sandbox（Worker 作为 Sandbox Runtime 管理方）。
       ASTRA_SANDBOX_PROVIDER: docker
       # T2-56：Agent Sandbox 网络隔离——接入**内部**网络（无外部路由），仅经受控 Egress Proxy 出网。
+      # ⚠️ R5A-05 口径：`allowlisted` 内网 + 代理白名单**默认空**（`ASTRA_EGRESS_ALLOW:-[]`）
+      #    ＝**等价拒绝出网**（最小暴露面）；若要放开出网，须部署方**显式**配置白名单
+      #    （`ASTRA_EGRESS__ALLOW`），且 `deny_private` 不可被覆盖。
       ASTRA_SANDBOX_NETWORK_PROFILE: allowlisted
       ASTRA_SANDBOX_EGRESS_NETWORK: astra-sandbox-egress
       ASTRA_SANDBOX_EGRESS_PROXY_URL: http://egress-proxy:8888
@@ -186,6 +189,12 @@ networks:
   # 沙箱只能与同网卡（egress-proxy）通信，出网一律经受控代理（复用唯一 EgressPolicy）。
   # 若某部署不能证明网络层强制 → 保持 `network=none`（不放公网路由，A-13 / D19 / RK-6）。
   sandbox-egress:
+    # 🔴 固定网络名（F1 / R5A-03）：compose 默认会以 `<project>_<key>`（即
+    #    `astra-ai_sandbox-egress`）命名，而 worker 经 `ASTRA_SANDBOX_EGRESS_NETWORK`
+    #    注入的是字面 `astra-sandbox-egress` → 二者不一致时 allowlisted 沙箱接入失败。
+    #    显式 `name` 对齐（与 `default: name: astra-ai-default` 同体例、与
+    #    `astra_config.defaults.DEFAULT_SANDBOX_EGRESS_NETWORK` 一致）。
+    name: astra-sandbox-egress
     internal: true
   default:
     name: astra-ai-default
