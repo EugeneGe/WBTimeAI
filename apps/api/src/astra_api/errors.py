@@ -63,6 +63,9 @@ _STATUS_BY_CODE: dict[ErrorCode, int] = {
     ErrorCode.HEARTBEAT_TIMEOUT: 500,
     # R3 / T2-60：事件续读游标过期（I-P2-39「过期游标返回稳定错误码」）→ 410 Gone。
     ErrorCode.EVENT_CURSOR_EXPIRED: 410,
+    # R5 补全轮（F8a）· 执行期资源限额（pending / artifact 等）→ 429 Too Many Requests。
+    # 原映射表未列该码（回退 ``DomainError.status_code``）；此处显式登记（最接近语义 = 429）。
+    ErrorCode.RESOURCE_LIMIT_EXCEEDED: 429,
 }
 
 #: HTTP 状态码 → 统一错误码（用于框架层抛出的 ``HTTPException``）。

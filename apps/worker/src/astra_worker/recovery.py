@@ -26,6 +26,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from astra_common.time import utcnow
+from astra_core import DomainError, ErrorCode
 from astra_task import (
     DEFAULT_HEARTBEAT_SECONDS,
     DEFAULT_LEASE_SECONDS,
@@ -43,6 +44,9 @@ __all__ = [
     "RecoveryReport",
     "LeaseManager",
     "TaskStatusReader",
+    "REASON_ALREADY_CLAIMED",
+    "REASON_CLAIMED",
+    "REASON_CONCURRENCY_LIMITED",
 ]
 
 _logger = logging.getLogger("astra_worker.recovery")
@@ -52,6 +56,10 @@ REASON_ALREADY_CLAIMED = "already_claimed"
 
 #: 「已领取」原因码（首次领取成功）。
 REASON_CLAIMED = "claimed"
+
+#: 「并发受限 → 跳过」原因码（R5 补全轮 F8b：活跃执行数达 ``max_concurrent_executions``；
+#: **非**执行失败，**非静默**——处理器据此返回稳定非静默状态）。
+REASON_CONCURRENCY_LIMITED = "concurrency_limited"
 
 
 @runtime_checkable
@@ -68,9 +76,10 @@ class ClaimOutcome:
     """一次 Claim 的结果（**非静默**：区分「新领取」与「已领取 → 跳过」）。
 
     Attributes:
-        claimed: 是否**本次**成功领取（``False`` = 重复投递，已由他者领取）。
-        record: 领取到的执行记录（``claimed=False`` 时为既有的 **既有**记录，可空）。
-        reason: 结果原因码（``claimed`` / ``already_claimed``）。
+        claimed: 是否**本次**成功领取（``False`` = 重复投递 / 并发受限，已由他者领取或超限）。
+        record: 领取到的执行记录（``claimed=False`` 时为既有的 **既有**记录；
+            并发受限 / 首次冲突无 → ``None``）。
+        reason: 结果原因码（``claimed`` / ``already_claimed`` / ``concurrency_limited``）。
     """
 
     claimed: bool
@@ -99,11 +108,20 @@ class LeaseManager:
         recorder: 注入的执行记录器（:class:`astra_task.ExecutionRecorder`）。
         heartbeat_seconds: 心跳周期（秒；默认 30）。
         lease_seconds: 租约时长（秒；默认 90）。
+        max_concurrent_executions: 并发上限（可空；R5 补全轮 F8b——``claim`` 前统计「RUNNING 且
+            租约未过期」数量，``>=`` 上限 → ``claimed=False`` / ``concurrency_limited``；
+            **缺省 ``None`` = 不启用**该检查，向后兼容）。
+        max_artifact_count: 单次执行 artifact 数量上限（可空；R5 补全轮 F8d）。
+        max_artifact_bytes: 单次执行 artifact 累计字节上限（可空；R5 补全轮 F8d）。
+        clock: 时钟（可注入 fake clock）。
     """
 
     recorder: ExecutionRecorder
     heartbeat_seconds: int = DEFAULT_HEARTBEAT_SECONDS
     lease_seconds: int = DEFAULT_LEASE_SECONDS
+    max_concurrent_executions: int | None = None
+    max_artifact_count: int | None = None
+    max_artifact_bytes: int | None = None
     clock: Callable[[], datetime] = field(default=utcnow)
 
     # -- Claim --------------------------------------------------------------
@@ -136,9 +154,27 @@ class LeaseManager:
 
         Returns:
             :class:`ClaimOutcome`——``claimed=True`` 为新领取；``claimed=False`` 为重复投递
-            （``reason="already_claimed"``，附既有记录）。
+            （``reason="already_claimed"``，附既有记录）或**并发受限**
+            （``reason="concurrency_limited"``，无记录；R5 补全轮 F8b）。
         """
         ts = now if now is not None else self.clock()
+        # F8b（防御性并发检查）：活跃（RUNNING 且租约未过期）数达上限 → 不领取（非静默）。
+        if self.max_concurrent_executions is not None:
+            active = self._count_active(now=ts)
+            if active >= self.max_concurrent_executions:
+                _logger.warning(
+                    "worker.concurrency_limited",
+                    extra={
+                        "handler": "remote.agent_run",
+                        "task_id": task_id,
+                        "attempt": attempt,
+                        "active": active,
+                        "limit": self.max_concurrent_executions,
+                    },
+                )
+                return ClaimOutcome(
+                    claimed=False, record=None, reason=REASON_CONCURRENCY_LIMITED
+                )
         try:
             record = self.recorder.claim(
                 task_id=task_id,
@@ -167,6 +203,16 @@ class LeaseManager:
             return ClaimOutcome(claimed=False, record=existing, reason=REASON_ALREADY_CLAIMED)
         return ClaimOutcome(claimed=True, record=record, reason=REASON_CLAIMED)
 
+    def _count_active(self, *, now: datetime) -> int:
+        """统计「``RUNNING`` 且租约**未**过期」的执行数（F8b 并发上限依据）。
+
+        🔴 复用既有 ``repository.list(status=RUNNING)`` + :meth:`ExecutionRecorder.is_lease_expired`
+           过滤（**不**新增仓储 SQL 方法）——保持注入 Protocol 不变（公开签名零改）；对 fake
+           repo / 真实 ``SqlTaskExecutionRepository`` 同构可用。
+        """
+        running = self.recorder.repository.list(status=TaskStatus.RUNNING.value)
+        return sum(1 for record in running if not self.recorder.is_lease_expired(record, now=now))
+
     # -- 租约续期 / 终态 -----------------------------------------------------
 
     def heartbeat(
@@ -191,8 +237,38 @@ class LeaseManager:
 
         ``status`` 为空时取 ``SUCCESS``。落库前先把结果字段写到记录上，再由
         :meth:`astra_task.ExecutionRecorder.finish` 一并持久化。
+
+        🔴 **artifact 上限（R5 补全轮 F8d；N10）**：落 ``artifact_refs`` **前**累加 count 与
+           size（各引用 dict 的 ``size`` 字段）；超 ``max_artifact_count`` / ``max_artifact_bytes``
+           → **拒绝落库**该产物引用 + **稳定失败终态**（``FAILED``，错误含
+           ``RESOURCE_LIMIT_EXCEEDED``）并**抛** :class:`DomainError`（``RESOURCE_LIMIT_EXCEEDED``
+           → 429，**非静默**；调用方据此感知）。
+
+        Raises:
+            DomainError: ``artifact_refs`` 数量 / 累计字节超上限（``RESOURCE_LIMIT_EXCEEDED``）。
         """
         ts = now if now is not None else self.clock()
+        limit_error = self._artifact_limit_error(artifact_refs)
+        if limit_error is not None:
+            # 拒绝落库超限产物（artifact_refs 不写入），并以稳定失败终态收尾（非静默）。
+            record.artifact_refs = None
+            self.recorder.finish(
+                record,
+                status=TaskStatus.FAILED.value,
+                error=limit_error,
+                finished_at=ts,
+            )
+            raise DomainError(
+                "远程执行产物超限（拒绝落库）",
+                code=ErrorCode.RESOURCE_LIMIT_EXCEEDED,
+                status_code=429,
+                data={
+                    "scope": "artifact",
+                    "count": len(artifact_refs or {}),
+                    "max_artifact_count": self.max_artifact_count,
+                    "max_artifact_bytes": self.max_artifact_bytes,
+                },
+            )
         if result_commit is not None:
             record.result_commit = result_commit
         if environment_digest is not None:
@@ -205,6 +281,32 @@ class LeaseManager:
             error=error,
             finished_at=ts,
         )
+
+    def _artifact_limit_error(self, artifact_refs: dict[str, Any] | None) -> str | None:
+        """artifact 上限校验（F8d）：超限返回稳定错误串（含码）；否则 ``None``。
+
+        ``size`` 取各引用 dict 的 ``size`` 字段（缺失 / 非数值 → 按 0 计）；恰在上限内（``==``）
+        **通过**（仅 ``>`` 判超）。
+        """
+        if not artifact_refs:
+            return None
+        refs = artifact_refs or {}
+        if self.max_artifact_count is not None and len(refs) > self.max_artifact_count:
+            return (
+                f"{ErrorCode.RESOURCE_LIMIT_EXCEEDED}: artifact 数量 {len(refs)} "
+                f"超过上限 {self.max_artifact_count}"
+            )
+        if self.max_artifact_bytes is not None:
+            total = 0
+            for value in refs.values():
+                if isinstance(value, dict):
+                    total += int(value.get("size") or 0)
+            if total > self.max_artifact_bytes:
+                return (
+                    f"{ErrorCode.RESOURCE_LIMIT_EXCEEDED}: artifact 累计字节 {total} "
+                    f"超过上限 {self.max_artifact_bytes}"
+                )
+        return None
 
     def fail(
         self,

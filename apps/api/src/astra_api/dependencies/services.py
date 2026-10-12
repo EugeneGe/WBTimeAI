@@ -807,6 +807,10 @@ def build_app_services(providers: Providers) -> AppServices:
         submitter=_RemoteTaskSubmitter(
             tasks=task_repository,
             task_queue=providers.task_queue,
+            # R5 补全轮（F8a/F8c）：执行期限额经**组合根**注入（提交面强制点：pending 上限 +
+            # deadline 落载荷）。能力包 / 公开签名零改（行为收紧）。
+            max_pending_per_user=settings.remote_execution.max_pending_per_user,
+            max_duration_seconds=settings.remote_execution.max_duration_seconds,
         ),
         clone_dispatcher=_ProjectCloneDispatcher(
             tasks=task_repository,
@@ -816,7 +820,8 @@ def build_app_services(providers: Providers) -> AppServices:
         # containment）——装配后下载端点可达（此前恒 503）。
         artifact_reader=_StorageArtifactReader(providers.storage),
         # R5A-01(b) / F3：Git 引用查询仅经 Sandbox（``GitService.for_each_ref``）；仅当装配
-        # Sandbox 时注入（对齐 change_review 的 ``GitService(sandbox) if sandbox else None`` 体例）。
+        # Sandbox 时注入（对齐 change_review 的 ``GitService(sandbox) if sandbox
+        # else None`` 体例）。
         git_refs_provider=(
             _SandboxGitRefsProvider(
                 projects=remote_projects,
@@ -1768,18 +1773,55 @@ class _RemoteTaskSubmitter:
 
     🔴 **幂等（F-R2）**：同 ``(tenant_id, idempotency_key)`` 同体 → 复用既有 ``task_id``
     （按载荷 ``idempotency_key`` 匹配；无新列 / 无新迁移）。
+
+    🔴 **执行期限额强制（R5 补全轮 · F8a / F8c；N10）**：本适配为**提交面**的两个**强制点**：
+
+    1. **pending 上限（F8a）**：在**幂等查找之后 / 创建之前**统计该 user 的**未终态**远程任务
+       （``payload.created_by == user_id`` 且 status ∉ {SUCCESS, FAILED, CANCELLED}）；
+       ``>= max_pending_per_user`` → ``DomainError(RESOURCE_LIMIT_EXCEEDED)``（**不静默排队**）。
+       **幂等复用不计数**（复用走既有 ``task_id``，不新建）。
+    2. **deadline 落载荷（F8c）**：``max_duration_seconds`` 非空时在 ``payload`` 写 ``deadline_at``
+       （ISO8601，``utcnow() + max_duration_seconds``；**免迁移**——payload 为 JSON）；worker 侧
+       （``remote_agent_run``）运行**前**读取，过期即**不运行执行体**、经租约落稳定失败终态。
+
+    两个 cap 均**构造注入**（组合根取 ``settings.remote_execution``）；缺省 ``None`` = **不启用**
+    该检查（向后兼容既有装配 / 测试）。
     """
 
-    def __init__(self, *, tasks: TaskRepository, task_queue: Any | None = None) -> None:
-        """装配（任务仓储 + 队列 Provider）。"""
+    def __init__(
+        self,
+        *,
+        tasks: TaskRepository,
+        task_queue: Any | None = None,
+        max_pending_per_user: int | None = None,
+        max_duration_seconds: int | None = None,
+    ) -> None:
+        """装配（任务仓储 + 队列 Provider + 可选执行期限额）。
+
+        Args:
+            tasks: 任务仓储（注入 Protocol）。
+            task_queue: 队列 Provider（可空；缺省 → 尽最大努力入队，落库不受影响）。
+            max_pending_per_user: 单用户未终态远程任务上限（可空；缺省 → 不启用 pending 检查）。
+            max_duration_seconds: 单次执行时长上限（秒；可空；缺省 → 不写 ``deadline_at``）。
+        """
         self._tasks = tasks
         self._queue = task_queue
+        self._max_pending_per_user = max_pending_per_user
+        self._max_duration_seconds = max_duration_seconds
 
     def submit(self, spec: RemoteTaskSpec, *, tenant_id: str, user_id: str) -> str:
-        """创建并派发远程任务，返回 ``task_id``（幂等复用）。"""
+        """创建并派发远程任务，返回 ``task_id``（幂等复用）。
+
+        Raises:
+            DomainError: 该 user 未终态远程任务数达 ``max_pending_per_user``
+                （``RESOURCE_LIMIT_EXCEEDED`` → 429）。
+        """
         existing = self._find_idempotent(tenant_id, spec.idempotency_key)
         if existing is not None:
             return existing
+        creator = spec.created_by or user_id
+        # F8a：幂等查找之后 / 创建之前 → pending 上限强制（幂等复用**不**计数）。
+        self._enforce_pending_limit(tenant_id=tenant_id, user_id=creator)
         payload: dict[str, Any] = {
             "project_id": spec.project_id,
             "workspace_id": spec.workspace_id,
@@ -1790,8 +1832,12 @@ class _RemoteTaskSubmitter:
             "environment_id": spec.environment_id,
             "idempotency_key": spec.idempotency_key,
             "limits": dict(spec.limits),
-            "created_by": spec.created_by or user_id,
+            "created_by": creator,
         }
+        # F8c：写 deadline_at（免迁移；worker 侧运行前快速失败）。
+        deadline_at = self._deadline_at()
+        if deadline_at is not None:
+            payload["deadline_at"] = deadline_at
         task = Task(
             tenant_id=tenant_id,
             workspace_id=spec.workspace_id,
@@ -1805,6 +1851,37 @@ class _RemoteTaskSubmitter:
             self._queue, handler=REMOTE_TASK_TYPE, payload=payload, task=task, tenant_id=tenant_id
         )
         return str(task.task_id)
+
+    def _enforce_pending_limit(self, *, tenant_id: str, user_id: str) -> None:
+        """统计该 user 未终态远程任务；达上限 → ``RESOURCE_LIMIT_EXCEEDED``（**非静默**）。"""
+        cap = self._max_pending_per_user
+        if cap is None:
+            return
+        pending = 0
+        for task in self._tasks.list(tenant_id=tenant_id, type=REMOTE_TASK_TYPE):
+            if bool(getattr(task, "is_terminal", False)):
+                continue
+            payload = dict(getattr(task, "payload", None) or {})
+            if str(payload.get("created_by") or "") == user_id:
+                pending += 1
+        if pending >= cap:
+            raise DomainError(
+                "远程任务待处理数已达上限（请等待在途任务完成后重试）",
+                code=ErrorCode.RESOURCE_LIMIT_EXCEEDED,
+                status_code=429,
+                data={"limit": cap, "scope": "pending_per_user", "pending": pending},
+            )
+
+    def _deadline_at(self) -> str | None:
+        """由 ``max_duration_seconds`` 计算 ``deadline_at``（ISO8601 UTC；缺省 → ``None``）。"""
+        seconds = self._max_duration_seconds
+        if seconds is None:
+            return None
+        from datetime import timedelta
+
+        from astra_common.time import utcnow
+
+        return (utcnow() + timedelta(seconds=int(seconds))).isoformat()
 
     def _find_idempotent(self, tenant_id: str, idempotency_key: str | None) -> str | None:
         """按载荷 ``idempotency_key`` 查找既有远程任务（无 → ``None``）。"""

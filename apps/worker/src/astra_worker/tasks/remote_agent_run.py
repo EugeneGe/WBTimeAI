@@ -16,6 +16,15 @@ Sandbox** 内运行选定 Agent / Workflow 版本并保存结果引用（``resul
 
    未注入 ``lease_manager`` 时**退化为 T2-58 行为**（直接运行执行体，向后兼容）。
 
+🔴 **R5 补全轮执行期限额（F8b / F8c；N10）**：在**运行执行体之前**追加两个**强制点**：
+
+   - **F8b 并发受限**：:meth:`LeaseManager.claim` 返回 ``claimed=False`` 且
+     ``reason="concurrency_limited"``（活跃执行数达 ``max_concurrent_executions``）→ 返回
+     ``status="concurrency_limited"`` + ``skipped=True``（**非静默**，不运行执行体）；
+   - **F8c deadline 快速失败**：``payload.deadline_at``（ISO8601，提交面写入）已过期 →
+     **不运行**执行体，经 :meth:`LeaseManager.fail` 落稳定失败终态，返回
+     ``status="deadline_exceeded"`` + ``skipped=True``（**非静默**）。
+
 🔴 **Git 仅经 Sandbox**（C-4）：本处理器**不**启动宿主 Git Shell；供给 / 提交经注入的执行体
    （其内部再经 ``GitService`` → ``SandboxProvider``）。
 🔴 执行体 / 队列**正交**（R-23）：本模块**不 import** 具体队列 / ORM / Runtime / 能力包实现；
@@ -32,19 +41,33 @@ Sandbox** 内运行选定 Agent / Workflow 版本并保存结果引用（``resul
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
+from astra_common.time import utcnow
 from astra_core import DomainError, ErrorCode, NotImplementedYetError
 
 from astra_worker import HandlerContext
 
-__all__ = ["HANDLER_KEY", "STATUS_ALREADY_CLAIMED", "handle_remote_agent_run"]
+__all__ = [
+    "HANDLER_KEY",
+    "STATUS_ALREADY_CLAIMED",
+    "STATUS_CONCURRENCY_LIMITED",
+    "STATUS_DEADLINE_EXCEEDED",
+    "handle_remote_agent_run",
+]
 
 #: 处理器键（``task.type`` 为 ``String(100)`` → 取值 ``remote.agent_run`` **免迁移**）。
 HANDLER_KEY = "remote.agent_run"
 
 #: 重复投递（已由他者领取）时的返回状态（**非静默**：显式区分「跳过」与「已执行」）。
 STATUS_ALREADY_CLAIMED = "already_claimed"
+
+#: 并发受限（活跃执行数达上限）时的返回状态（R5 补全轮 F8b；**非静默**）。
+STATUS_CONCURRENCY_LIMITED = "concurrency_limited"
+
+#: deadline 已过期（运行前快速失败）时的返回状态（R5 补全轮 F8c；**非静默**）。
+STATUS_DEADLINE_EXCEEDED = "deadline_exceeded"
 
 
 def handle_remote_agent_run(message: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
@@ -57,8 +80,9 @@ def handle_remote_agent_run(message: dict[str, Any], ctx: HandlerContext) -> dic
 
     Returns:
         ``{"execution_id": ..., "status": ..., "result_commit": ...,
-           "environment_digest": ...}``；重复投递时含 ``"skipped": True`` 且
-        ``status="already_claimed"``。
+           "environment_digest": ...}``；**未运行**执行体时含 ``"skipped": True`` 且 ``status`` 为
+        稳定非静默状态：``already_claimed``（重复投递）/ ``concurrency_limited``（并发受限 F8b）/
+        ``deadline_exceeded``（deadline 过期 F8c）。
 
     Raises:
         DomainError: 缺少 ``execution_id``（``VALIDATION_ERROR``）；接租约但缺 ``task_id``。
@@ -96,14 +120,30 @@ def handle_remote_agent_run(message: dict[str, Any], ctx: HandlerContext) -> dic
             environment_digest=payload.get("environment_digest"),
         )
         if not outcome.claimed:
-            # 重复投递（Redis 重投）→ 已领取 → 跳过（**非静默**；不重复执行、不产生并发 Attempt）。
+            # 未领取（**非静默**，不重复执行、不产生并发 Attempt）：
+            #   - 重复投递（Redis 重投）→ 已领取 → 跳过（``already_claimed``）；
+            #   - 并发受限（R5 补全轮 F8b）→ ``concurrency_limited``（活跃执行数达上限）。
+            # 两者均经 ``outcome.reason`` **显式**透传（稳定非静默状态）。
             return {
                 "execution_id": execution_id,
                 "task_id": task_id,
-                "status": STATUS_ALREADY_CLAIMED,
+                "status": outcome.reason,
                 "skipped": True,
             }
         record = outcome.record
+
+    # ②c deadline 快速失败（R5 补全轮 F8c；在**运行执行体之前**）：
+    #     ``payload.deadline_at``（ISO8601，由提交面写入）已过期 → **不运行**执行体，
+    #     经租约落**稳定失败终态**（``deadline_exceeded``，**非静默**）。
+    if _deadline_exceeded(payload):
+        if lease_manager is not None and record is not None:
+            lease_manager.fail(record, error=STATUS_DEADLINE_EXCEEDED)
+        return {
+            "execution_id": execution_id,
+            "task_id": payload.get("task_id") or message.get("task_id"),
+            "status": STATUS_DEADLINE_EXCEEDED,
+            "skipped": True,
+        }
 
     # ② 执行体（组合根注入；未注入 → 非静默失败）。
     runner = ctx.services.get("remote_agent_run")
@@ -147,3 +187,21 @@ def _field(outcome: Any, name: str) -> Any:
     if isinstance(outcome, dict):
         return outcome.get(name)
     return getattr(outcome, name, None)
+
+
+def _deadline_exceeded(payload: dict[str, Any]) -> bool:
+    """``payload.deadline_at`` 是否已过期（R5 补全轮 F8c）。
+
+    缺 ``deadline_at``（未启用提交面 deadline）/ 无法解析 → **不**判过期（``False``，向后兼容）。
+    ``deadline_at`` 无时区 → 按 UTC 归一（由 ``astra_common.time.utcnow`` 生成的带 tz 值为准）。
+    """
+    raw = payload.get("deadline_at")
+    if not raw:
+        return False
+    try:
+        deadline = datetime.fromisoformat(str(raw))
+    except ValueError:
+        return False
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=UTC)
+    return utcnow() >= deadline

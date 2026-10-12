@@ -28,6 +28,7 @@ from typing import Any
 import pytest
 from astra_config import RemoteExecutionSettings, Settings
 from astra_config import defaults as cfg_defaults
+from astra_core import DomainError, ErrorCode
 from astra_sandbox import DockerSandboxProvider
 from astra_task import (
     DEFAULT_HEARTBEAT_SECONDS,
@@ -37,6 +38,7 @@ from astra_task import (
     TaskExecutionRecord,
     TaskStatus,
 )
+from astra_worker.recovery import REASON_CONCURRENCY_LIMITED, LeaseManager
 from pydantic import ValidationError
 
 T0 = datetime(2026, 10, 14, 12, 0, 0, tzinfo=UTC)
@@ -230,6 +232,9 @@ def test_n10_community_app_layer_caps_present() -> None:
     """Community 档：**应用层**边界限额在位（并发 / 时长 / 产物大小 / 磁盘）。
 
     Community 为**进程级 best-effort**（仅单用户 / 可信代码），**不**宣称 OS 级隔离（A-13）。
+
+    R5 补全轮（F8）增强：除配置字段断言外，**真实验证强制点**——限额经组合根注入后**确实生效**
+    （并发 claim 拒领 / 提交面 pending 拒提交），非仅「字段存在」。
     """
     limits = RemoteExecutionSettings()
 
@@ -241,6 +246,138 @@ def test_n10_community_app_layer_caps_present() -> None:
         "max_disk_bytes",
     ):
         assert getattr(limits, field) >= 1, f"{field} 应用层边界缺失"
+
+    # F8 强制点行为真实验证（非仅字段存在）：把 cap 注入实际组件 → 第二次操作被拒。
+    recorder = ExecutionRecorder(_FakeExecutionRepository())
+    manager = LeaseManager(
+        recorder,
+        max_concurrent_executions=1,
+        max_artifact_count=limits.max_artifact_count,
+        max_artifact_bytes=limits.max_artifact_bytes,
+    )
+    assert manager.claim(task_id="n10-c1", attempt=1, now=T0).claimed is True
+    blocked = manager.claim(task_id="n10-c2", attempt=1, now=T0)
+    assert blocked.claimed is False and blocked.reason == REASON_CONCURRENCY_LIMITED
+
+
+# -- F8 执行期资源限额强制（R5 补全轮；N10 应用层） --------------------------
+
+
+class _FakeSubmitRepository:
+    """最小 ``TaskRepository``（内存；供提交面 pending 上限行为验证）。"""
+
+    def __init__(self) -> None:
+        self.rows: dict[str, Any] = {}
+
+    def add(self, entity: Any) -> Any:
+        self.rows[entity.task_id] = entity
+        return entity
+
+    def list(self, **filters: Any) -> list[Any]:
+        return [
+            task
+            for task in self.rows.values()
+            if all(getattr(task, key, None) == value for key, value in filters.items())
+        ]
+
+
+def _submitter(*, max_pending_per_user: int | None = None, max_duration_seconds: int | None = None):
+    from astra_api.dependencies.services import _RemoteTaskSubmitter
+
+    return _RemoteTaskSubmitter(
+        tasks=_FakeSubmitRepository(),
+        task_queue=None,
+        max_pending_per_user=max_pending_per_user,
+        max_duration_seconds=max_duration_seconds,
+    )
+
+
+def _remote_spec(*, key: str | None = None):
+    from astra_workspace import RemoteTaskSpec
+
+    return RemoteTaskSpec(
+        workspace_id="ws-1",
+        project_id="pj-1",
+        agent_version_id="av-1",
+        requirement="r",
+        idempotency_key=key,
+    )
+
+
+def test_n10_pending_limit_enforced_on_submit() -> None:
+    """F8a：单用户未终态远程任务达 ``max_pending_per_user`` → 第 3 个提交被拒（稳定码）。"""
+    submitter = _submitter(max_pending_per_user=2)
+
+    submitter.submit(_remote_spec(key="k1"), tenant_id="t", user_id="u")
+    submitter.submit(_remote_spec(key="k2"), tenant_id="t", user_id="u")
+
+    with pytest.raises(DomainError) as excinfo:
+        submitter.submit(_remote_spec(key="k3"), tenant_id="t", user_id="u")
+    assert excinfo.value.code is ErrorCode.RESOURCE_LIMIT_EXCEEDED
+    assert excinfo.value.status_code == 429
+
+
+def test_n10_pending_limit_frees_after_terminal() -> None:
+    """F8a：一任务完成（终态）→ 待处理数下降 → 恢复放行。"""
+    submitter = _submitter(max_pending_per_user=1)
+    first_id = submitter.submit(_remote_spec(), tenant_id="t", user_id="u")
+
+    with pytest.raises(DomainError):
+        submitter.submit(_remote_spec(key="k2"), tenant_id="t", user_id="u")
+
+    submitter._tasks.rows[first_id].cancel()  # PENDING → CANCELLED（终态）
+
+    assert submitter.submit(_remote_spec(key="k2"), tenant_id="t", user_id="u")
+
+
+def test_n10_pending_limit_idempotent_reuse_not_counted() -> None:
+    """F8a：同 ``idempotency_key`` 幂等复用**不**计数（不因复用触发上限）。"""
+    submitter = _submitter(max_pending_per_user=1)
+
+    first = submitter.submit(_remote_spec(key="same"), tenant_id="t", user_id="u")
+    again = submitter.submit(_remote_spec(key="same"), tenant_id="t", user_id="u")
+
+    assert again == first
+
+
+def test_n10_pending_limit_isolated_per_user() -> None:
+    """F8a：pending 上限**按用户**隔离（他人未终态任务不占本用户额度）。"""
+    submitter = _submitter(max_pending_per_user=1)
+    submitter.submit(_remote_spec(), tenant_id="t", user_id="u1")
+
+    # 不同 user → 不占 u1 的额度（且 u2 自身额度为空）。
+    assert submitter.submit(_remote_spec(), tenant_id="t", user_id="u2")
+
+
+def test_n10_submit_writes_deadline_at_when_configured() -> None:
+    """F8c：配置 ``max_duration_seconds`` → 提交载荷写 ``deadline_at``（免迁移）。"""
+    submitter = _submitter(max_duration_seconds=60)
+    task_id = submitter.submit(_remote_spec(), tenant_id="t", user_id="u")
+    payload = submitter._tasks.rows[task_id].payload
+    assert "deadline_at" in payload
+    datetime.fromisoformat(payload["deadline_at"])  # 合法 ISO8601
+
+
+def test_n10_submit_omits_deadline_at_when_unconfigured() -> None:
+    """F8c：未配置 ``max_duration_seconds`` → 不写 ``deadline_at``（向后兼容）。"""
+    submitter = _submitter()
+    task_id = submitter.submit(_remote_spec(), tenant_id="t", user_id="u")
+    assert "deadline_at" not in submitter._tasks.rows[task_id].payload
+
+
+def test_n10_artifact_count_limit_enforced() -> None:
+    """F8d：artifact 数量超上限 → 拒绝落库 + 稳定失败（``RESOURCE_LIMIT_EXCEEDED``）。"""
+    manager = LeaseManager(ExecutionRecorder(_FakeExecutionRepository()), max_artifact_count=1)
+    record = manager.claim(task_id="n10-art", attempt=1, now=T0).record
+    assert record is not None
+
+    with pytest.raises(DomainError) as excinfo:
+        manager.finish(
+            record,
+            artifact_refs={"a": {"size": 1}, "b": {"size": 1}},
+            now=T0,
+        )
+    assert excinfo.value.code is ErrorCode.RESOURCE_LIMIT_EXCEEDED
 
 
 @pytest.mark.docker

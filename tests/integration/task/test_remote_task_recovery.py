@@ -39,10 +39,16 @@ from astra_task import (
 from astra_worker import HandlerContext
 from astra_worker.recovery import (
     REASON_ALREADY_CLAIMED,
+    REASON_CONCURRENCY_LIMITED,
     LeaseManager,
     RecoveryReport,
 )
-from astra_worker.tasks.remote_agent_run import STATUS_ALREADY_CLAIMED, handle_remote_agent_run
+from astra_worker.tasks.remote_agent_run import (
+    STATUS_ALREADY_CLAIMED,
+    STATUS_CONCURRENCY_LIMITED,
+    STATUS_DEADLINE_EXCEEDED,
+    handle_remote_agent_run,
+)
 from sqlalchemy.exc import IntegrityError
 
 T0 = datetime(2026, 10, 14, 12, 0, 0, tzinfo=UTC)
@@ -410,6 +416,203 @@ def test_handler_requires_task_id_when_leasing() -> None:
     with pytest.raises(DomainError) as excinfo:
         handle_remote_agent_run({"payload": {"execution_id": "exec-5"}}, ctx)
     assert excinfo.value.code is ErrorCode.VALIDATION_ERROR
+
+
+# -- R5 补全轮 F8b：并发上限（claim 面；fake clock） --------------------------
+
+
+def test_claim_concurrency_limit_blocks_when_active() -> None:
+    """F8b：活跃（RUNNING 且租约未过期）数达 ``max_concurrent_executions`` → 拒领（非静默）。"""
+    manager = LeaseManager(
+        ExecutionRecorder(_FakeExecutionRepository()), max_concurrent_executions=2
+    )
+
+    first = manager.claim(task_id="task-c1", attempt=1, now=T0)
+    second = manager.claim(task_id="task-c2", attempt=1, now=T0)
+    third = manager.claim(task_id="task-c3", attempt=1, now=T0)
+
+    assert first.claimed is True and second.claimed is True
+    assert third.claimed is False
+    assert third.reason == REASON_CONCURRENCY_LIMITED
+    assert third.record is None
+    # 被拒的 Attempt **未**落库（无并发残留）。
+    assert manager.recorder.repository.get_by_attempt("task-c3", 1) is None
+
+
+def test_claim_concurrency_frees_after_finish() -> None:
+    """F8b：终态（SUCCESS）后活跃数下降 → 恢复放行（限额非永久阻塞）。"""
+    manager = LeaseManager(
+        ExecutionRecorder(_FakeExecutionRepository()), max_concurrent_executions=1
+    )
+    first = manager.claim(task_id="task-c4", attempt=1, now=T0)
+    assert first.record is not None
+    blocked = manager.claim(task_id="task-c5", attempt=1, now=T0)
+    assert blocked.reason == REASON_CONCURRENCY_LIMITED
+
+    manager.finish(first.record, now=T0)
+
+    assert manager.claim(task_id="task-c5", attempt=1, now=T0).claimed is True
+
+
+def test_claim_concurrency_ignores_expired_lease() -> None:
+    """F8b：租约**已过期**的 RUNNING 不计入活跃数（失联 ≠ 占位）。"""
+    manager = LeaseManager(
+        ExecutionRecorder(_FakeExecutionRepository()), max_concurrent_executions=1
+    )
+    manager.claim(task_id="task-c6", attempt=1, now=T0)
+
+    later = T0 + timedelta(seconds=DEFAULT_LEASE_SECONDS + 1)
+    outcome = manager.claim(task_id="task-c7", attempt=1, now=later)
+
+    assert outcome.claimed is True
+
+
+def test_claim_without_concurrency_cap_is_unlimited() -> None:
+    """F8b：未注入 cap（缺省）→ 不启用并发检查（零回归；无限领取）。"""
+    manager = LeaseManager(ExecutionRecorder(_FakeExecutionRepository()))
+
+    assert all(
+        manager.claim(task_id=f"task-u{index}", attempt=1, now=T0).claimed
+        for index in range(5)
+    )
+
+
+# -- R5 补全轮 F8c：deadline 快速失败（handler 面；fake clock） --------------
+
+
+def test_handler_deadline_exceeded_skips_runner() -> None:
+    """F8c：``payload.deadline_at`` 已过期 → **不运行**执行体，落稳定失败终态（非静默）。"""
+    manager = LeaseManager(ExecutionRecorder(_FakeExecutionRepository()))
+    runner = _Runner()
+    ctx = HandlerContext(
+        providers=object(), services={"lease_manager": manager, "remote_agent_run": runner}
+    )
+    past = (utcnow() - timedelta(seconds=5)).isoformat()
+
+    result = handle_remote_agent_run(
+        {
+            "payload": {
+                "execution_id": "exec-d1",
+                "task_id": "task-d1",
+                "attempt": 1,
+                "deadline_at": past,
+            }
+        },
+        ctx,
+    )
+
+    assert result["status"] == STATUS_DEADLINE_EXCEEDED
+    assert result["skipped"] is True
+    assert runner.calls == 0, "deadline 过期仍运行了执行体"
+    record = manager.recorder.repository.get_by_attempt("task-d1", 1)
+    assert record is not None
+    assert record.status == TaskStatus.FAILED.value
+    assert "deadline_exceeded" in (record.error or "")
+
+
+def test_handler_with_future_deadline_runs() -> None:
+    """F8c：deadline **未**过期 → 正常运行执行体（零回归）。"""
+    manager = LeaseManager(ExecutionRecorder(_FakeExecutionRepository()))
+    runner = _Runner()
+    ctx = HandlerContext(
+        providers=object(), services={"lease_manager": manager, "remote_agent_run": runner}
+    )
+    future = (utcnow() + timedelta(seconds=3600)).isoformat()
+
+    result = handle_remote_agent_run(
+        {
+            "payload": {
+                "execution_id": "exec-d2",
+                "task_id": "task-d2",
+                "attempt": 1,
+                "deadline_at": future,
+            }
+        },
+        ctx,
+    )
+
+    assert result["status"] == "SUCCEEDED"
+    assert runner.calls == 1
+
+
+def test_handler_returns_concurrency_limited_status() -> None:
+    """F8b：并发受限 → handler 返回 ``concurrency_limited`` + ``skipped``（**非静默**）。"""
+    manager = LeaseManager(
+        ExecutionRecorder(_FakeExecutionRepository()), max_concurrent_executions=1
+    )
+    manager.claim(task_id="task-occupied", attempt=1, now=utcnow())
+    runner = _Runner()
+    ctx = HandlerContext(
+        providers=object(), services={"lease_manager": manager, "remote_agent_run": runner}
+    )
+
+    result = handle_remote_agent_run(
+        {"payload": {"execution_id": "exec-cl", "task_id": "task-cl", "attempt": 1}}, ctx
+    )
+
+    assert result["status"] == STATUS_CONCURRENCY_LIMITED
+    assert result["skipped"] is True
+    assert runner.calls == 0
+
+
+def test_artifact_limit_rejects_and_fails_terminal() -> None:
+    """F8d：artifact 数量超上限 → 拒绝落库 + 稳定失败终态 + 抛 ``RESOURCE_LIMIT_EXCEEDED``。"""
+    manager = LeaseManager(
+        ExecutionRecorder(_FakeExecutionRepository()), max_artifact_count=1
+    )
+    record = manager.claim(task_id="task-a1", attempt=1, now=T0).record
+    assert record is not None
+
+    too_many = {"log": {"ref": "s://1", "size": 1}, "report": {"ref": "s://2", "size": 1}}
+    with pytest.raises(DomainError) as excinfo:
+        manager.finish(record, artifact_refs=too_many, now=T0 + timedelta(seconds=1))
+
+    assert excinfo.value.code is ErrorCode.RESOURCE_LIMIT_EXCEEDED
+    persisted = manager.recorder.repository.get_by_attempt("task-a1", 1)
+    assert persisted is not None
+    assert persisted.status == TaskStatus.FAILED.value
+    assert persisted.artifact_refs is None  # 超限产物**拒绝落库**
+    assert "RESOURCE_LIMIT_EXCEEDED" in (persisted.error or "")
+
+
+def test_artifact_size_limit_rejects() -> None:
+    """F8d：artifact 累计字节超上限 → 拒绝落库（稳定失败）。"""
+    manager = LeaseManager(
+        ExecutionRecorder(_FakeExecutionRepository()), max_artifact_bytes=10
+    )
+    record = manager.claim(task_id="task-a2", attempt=1, now=T0).record
+    assert record is not None
+
+    with pytest.raises(DomainError) as excinfo:
+        manager.finish(
+            record,
+            artifact_refs={"big": {"ref": "s://big", "size": 11}},
+            now=T0 + timedelta(seconds=1),
+        )
+    assert excinfo.value.code is ErrorCode.RESOURCE_LIMIT_EXCEEDED
+
+
+def test_artifact_within_limit_passes() -> None:
+    """F8d：恰在上限内（``==``）→ 通过并落库（仅 ``>`` 判超）。"""
+    manager = LeaseManager(
+        ExecutionRecorder(_FakeExecutionRepository()),
+        max_artifact_count=2,
+        max_artifact_bytes=100,
+    )
+    record = manager.claim(task_id="task-a3", attempt=1, now=T0).record
+    assert record is not None
+
+    finished = manager.finish(
+        record,
+        artifact_refs={"a": {"ref": "s://a", "size": 50}, "b": {"ref": "s://b", "size": 50}},
+        now=T0 + timedelta(seconds=1),
+    )
+
+    assert finished.status == TaskStatus.SUCCESS.value
+    assert finished.artifact_refs == {
+        "a": {"ref": "s://a", "size": 50},
+        "b": {"ref": "s://b", "size": 50},
+    }
 
 
 # -- 契约：零新 Task 状态枚举（A-16） ----------------------------------------
