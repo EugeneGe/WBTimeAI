@@ -23,6 +23,8 @@ class OllamaProvider(HttpModelProvider):
     """Ollama 本地推理 Provider。"""
 
     provider_name = "ollama"
+    #: 本地推理**无需** API Key（M1：执行期绑定对 ``requires_api_key=False`` 不强制凭证）。
+    requires_api_key = False
 
     def __init__(
         self,

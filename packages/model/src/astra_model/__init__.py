@@ -28,7 +28,9 @@ from .services import (
     MODEL_PROVIDER_TYPES,
     ModelCatalogService,
     ModelCredentialBinder,
+    ProviderResolver,
     ProviderRuntime,
+    build_provider_resolver,
 )
 from .stub import StubModelProvider
 from .types import ChatMessage, ChatResult, Embedding, ModelInfo, TokenCount
@@ -50,6 +52,9 @@ __all__ = [
     # 凭证复用（W6 / T1-30）
     "ModelCredentialBinder",
     "ProviderRuntime",
+    # 执行期绑定（M1）
+    "ProviderResolver",
+    "build_provider_resolver",
     # Router（T1-12）
     "ModelRouter",
     # 装配（W6 / T1-31）

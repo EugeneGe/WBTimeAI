@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import Iterator, Sequence
 from typing import Any
@@ -92,6 +93,12 @@ class HttpModelProvider:
 
     #: Provider 名（注册进 ``ModelRegistry`` 的键）。
     provider_name: str = ""
+    #: 是否**必须**绑定凭证（API Key）。
+    #:
+    #: M1：默认 ``True``——本地 / 无密钥 Provider（如 ``OllamaProvider``）置 ``False``，
+    #: 以便执行期绑定（``ProviderResolver``）区分「需密钥却未绑 → ``CONFIGURATION_ERROR``」
+    #: 与「本就无需密钥 → ``api_key=None``」。
+    requires_api_key: bool = True
     #: 能力声明（供契约套件按能力断言）。
     supports_chat: bool = True
     supports_stream: bool = True
@@ -118,6 +125,40 @@ class HttpModelProvider:
         self.max_retries = max_retries
         self._extra_headers = dict(extra_headers or {})
         self._client = client if client is not None else httpx.Client(timeout=timeout)
+
+    # -- 执行期绑定（M1：仅内存；明文不落库 / 日志 / 回显） ---------------------
+
+    def with_binding(
+        self,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ) -> HttpModelProvider:
+        """返回一个携带**当次绑定** ``base_url`` / ``api_key`` 的**新实例**（浅拷贝）。
+
+        M1 执行期「原型 + 租户 endpoint + 解密凭证」合流用：``ProviderResolver`` 以注册表
+        原型为模板，覆盖租户 ``endpoint`` 与解密后的明文密钥，产出**当次可调用**的具体实例。
+
+        - **不重跑构造**、**不引入工厂反射**：``copy.copy(self)`` 后仅覆盖 ``base_url`` /
+          ``_api_key``（``httpx.Client`` 等其余状态按引用共享）。
+        - 形参为 ``None`` 时**保持**原值（``base_url=None`` ＝ 沿用原型默认端点；
+          ``api_key=None`` ＝ 不注入密钥，如 ``requires_api_key=False`` 的本地 Provider）。
+        - 🔴 **明文仅内存**：``api_key`` 只存于新实例的 ``_api_key``，**不落库 / 不落日志 /
+          不回显 / 不入错误 ``data``**（C-07）；原型实例**不被修改**。
+
+        Args:
+            base_url: 覆盖端点（``None`` → 沿用原型 ``base_url``）。
+            api_key: 覆盖明文密钥（``None`` → 保持原型密钥，通常为 ``None``）。
+
+        Returns:
+            覆盖后的新 :class:`HttpModelProvider` 实例（原型不变）。
+        """
+        bound = copy.copy(self)
+        if base_url is not None:
+            bound.base_url = base_url.rstrip("/")
+        if api_key is not None:
+            bound._api_key = api_key
+        return bound
 
     # -- 生命周期 ------------------------------------------------------------
 
