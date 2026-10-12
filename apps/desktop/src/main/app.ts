@@ -32,14 +32,18 @@ export class DesktopApp {
   constructor() {
     this.settings = new SettingsStore(app.getPath("userData"));
     this.backend = new BackendManager(this.settings);
-    // 编译产物：out/main/app.js → 内置前端产物在 <app>/renderer。
-    this.renderer = new RendererServer(join(__dirname, "..", "..", "renderer"));
+    // 编译产物：out/main/app.js → 内置前端产物在 <app>/renderer；引导页在 <app>/guide。
+    this.renderer = new RendererServer(
+      join(__dirname, "..", "..", "renderer"),
+      join(__dirname, "..", "..", "guide", "guide.html"),
+    );
     this.windows = new WindowManager();
 
     this.ipc = new IpcBridge({
       settings: this.settings,
       backend: this.backend,
       getMainWindow: () => this.windows.getMainWindow(),
+      onBackendChanged: (status) => this.renderer.setBackendBaseUrl(status.baseUrl),
     });
 
     this.menu = new AppMenu({

@@ -88,12 +88,15 @@ export class RendererServer {
   private port = 0;
   private backendBaseUrl = "";
   private readonly rendererDir: string;
+  private readonly guideFile: string | null;
 
   /**
    * @param rendererDir 内置前端产物目录（含 `index.html`）。
+   * @param guideFile 可选：**无后端**（`kind=none`）时改用此引导页（绝对路径）。
    */
-  constructor(rendererDir: string) {
+  constructor(rendererDir: string, guideFile?: string) {
     this.rendererDir = resolve(rendererDir);
+    this.guideFile = guideFile ? resolve(guideFile) : null;
   }
 
   /** 设置后端基址（`kind=none` 时传空串 → 反代返回 502）。 */
@@ -162,6 +165,12 @@ export class RendererServer {
       return;
     }
 
+    // 入口（`/`）：无后端 → 引导页；有后端 → 应用 UI。
+    if (relativePath === "") {
+      this.sendEntry(res);
+      return;
+    }
+
     const target = this.resolveWithin(relativePath);
     if (target !== null && this.isFile(target)) {
       this.sendFile(target, res);
@@ -175,15 +184,30 @@ export class RendererServer {
       }
     }
 
-    // SPA 回退：导航路径（无扩展名）→ index.html；带扩展名的缺失资源 → 404。
+    // SPA 回退：导航路径（无扩展名）→ 入口；带扩展名的缺失资源 → 404。
     if (!hasExtension(relativePath)) {
-      const indexTarget = join(this.rendererDir, INDEX_FILE);
-      if (this.isFile(indexTarget)) {
-        this.sendFile(indexTarget, res);
-        return;
-      }
+      this.sendEntry(res);
+      return;
     }
     this.sendPlain(res, 404, "Not Found");
+  }
+
+  /** 入口文件：**无后端**且有引导页时用引导页，否则用应用 `index.html`。 */
+  private entryFile(): string {
+    if (this.backendBaseUrl === "" && this.guideFile !== null) {
+      return this.guideFile;
+    }
+    return join(this.rendererDir, INDEX_FILE);
+  }
+
+  /** 发送入口文件（引导页 / 应用 UI）。 */
+  private sendEntry(res: ServerResponse): void {
+    const file = this.entryFile();
+    if (this.isFile(file)) {
+      this.sendFile(file, res);
+      return;
+    }
+    this.sendPlain(res, 500, "Entry not found");
   }
 
   /** 解析路径，确保不越出 `rendererDir`（防目录穿越）；越界 / 非法返回 `null`。 */
@@ -219,9 +243,10 @@ export class RendererServer {
       "content-type": contentType,
       "content-length": String(stat.size),
     };
-    // 入口 html 不缓存（保证版本更新即时生效）；带哈希资源可长缓存。
-    headers["cache-control"] =
-      filePath.endsWith(INDEX_FILE) ? "no-cache" : "public, max-age=31536000, immutable";
+    // 入口 html（index/guide）不缓存；带哈希的静态资源可长缓存。
+    headers["cache-control"] = filePath.endsWith(".html")
+      ? "no-cache"
+      : "public, max-age=31536000, immutable";
     res.writeHead(200, headers);
     createReadStream(filePath).pipe(res);
   }

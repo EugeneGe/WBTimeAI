@@ -21,6 +21,8 @@ export interface IpcDeps {
   backend: BackendManager;
   /** 取当前主窗口（用于推送状态变更；可能尚未创建 → 返回 null）。 */
   getMainWindow(): BrowserWindow | null;
+  /** 后端目标变化回调（用于同步 RendererServer 的反代基址，如引导页连接后）。 */
+  onBackendChanged?(status: BackendStatus): void;
 }
 
 /** IPC 通道名常量（与 preload 契约一致）。 */
@@ -86,6 +88,7 @@ export class IpcBridge {
   }
 
   private broadcast(status: BackendStatus): BackendStatus {
+    this.deps.onBackendChanged?.(status);
     this.pushStatus(status);
     return status;
   }

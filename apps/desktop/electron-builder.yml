@@ -19,6 +19,7 @@ directories:
 files:
   - out/**
   - renderer/**
+  - guide/**
   - package.json
   - "!**/*.map"
   - "!**/*.ts"
