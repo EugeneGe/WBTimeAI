@@ -21,6 +21,11 @@ __all__ = [
     "FileContentResponse",
     "EnvironmentVarResponse",
     "EnvironmentResponse",
+    # R3 / T2-60：远程 Project 视图
+    "CloneProjectRequest",
+    "CloneProjectResponse",
+    "ProjectStatusResponse",
+    "GitRefResponse",
 ]
 
 
@@ -92,3 +97,40 @@ class EnvironmentResponse(BaseModel):
     runtime: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+# -- R3 / T2-60：远程 Project 视图 -------------------------------------------
+
+
+class CloneProjectRequest(BaseModel):
+    """Project Clone 请求（F-R1；``base_ref`` / ``idempotency_key`` 可空）。"""
+
+    base_ref: str | None = Field(default=None, description="克隆基准引用（可空）")
+    idempotency_key: str | None = Field(default=None, description="幂等键（可空）")
+
+
+class CloneProjectResponse(BaseModel):
+    """Project Clone 响应（``202 {task_id}``；异步派发 ``project.clone``）。"""
+
+    task_id: str
+
+
+class ProjectStatusResponse(BaseModel):
+    """远程 Project 状态视图（**不含宿主路径**）。"""
+
+    project_id: str
+    name: str = ""
+    workspace_id: str = ""
+    tenant_id: str | None = None
+    default_branch: str | None = None
+    repo_configured: bool = False
+    clone_task_id: str | None = None
+    refs_available: bool = False
+
+
+class GitRefResponse(BaseModel):
+    """Git 引用视图（分支 / 标签；**不含宿主路径**）。"""
+
+    name: str
+    commit: str | None = None
+    kind: str = "branch"

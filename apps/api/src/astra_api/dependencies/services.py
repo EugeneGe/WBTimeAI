@@ -50,12 +50,14 @@ from astra_database import (
     SqlTaskRepository,
     SqlToolPermissionRepository,
     SqlToolRepository,
+    session_scope,
 )
 from astra_database.repositories import (
     SqlScheduleRepository,
     SqlTaskExecutionRepository,
 )
 from astra_domain import (
+    ADMIN_PERMISSION,
     AUDIT_OUTCOME_SUCCESS,
     Agent,
     AgentRepository,
@@ -64,6 +66,7 @@ from astra_domain import (
     AuditRepository,
     ConcurrencyConfig,
     PluginRepository,
+    ResourcePermissionRepository,
     TaskRepository,
 )
 from astra_domain.repositories import ScheduleRepository, TaskExecutionRepository
@@ -129,6 +132,11 @@ from astra_security import (
 )
 from astra_security.egress import SecurityEgressPolicy
 from astra_security.permission import ApprovalService
+from astra_security.permission.capability import (
+    denied_capabilities,
+    granted_capabilities,
+    match_capability,
+)
 from astra_security.repositories import SqlApprovalRepository
 from astra_skill import (
     SKILL_STATUS_ACTIVE,
@@ -145,7 +153,7 @@ from astra_skill import (
     build_skill_registry,
     build_skill_resolver,
 )
-from astra_task import SchedulerTick
+from astra_task import SchedulerTick, Task
 from astra_tool import (
     PermissionService,
     ToolRegistry,
@@ -173,7 +181,20 @@ from astra_workflow.run import (
     ReplayService,
 )
 from astra_workspace import WorkspaceServices, build_workspace_services
+from astra_workspace.application.remote_task_service import (
+    ACTION_EXECUTE,
+    PROJECT_CLONE_TASK_TYPE,
+    REMOTE_TASK_TYPE,
+    TASK_RESOURCE_TYPE,
+    ExecutionTaskEventSource,
+    RemoteAccessDecision,
+    RemotePrincipal,
+    RemoteTaskService,
+    RemoteTaskSpec,
+)
+from astra_workspace.repositories import SqlProjectRepository
 from fastapi import Depends, Request
+from sqlalchemy.orm import Session, sessionmaker
 
 __all__ = [
     "AppServices",
@@ -310,6 +331,8 @@ class AppServices:
     schedules: ScheduleRepository
     task_executions: TaskExecutionRepository
     scheduler: SchedulerTick
+    # -- R3 / T2-60：远程 Task / Project 用例（scope 校验 + 事件游标服务） -------
+    remote_tasks: RemoteTaskService
 
 
 def build_app_services(providers: Providers) -> AppServices:
@@ -745,6 +768,31 @@ def build_app_services(providers: Providers) -> AppServices:
         executions=task_execution_repository,
     )
 
+    # -- R3 / T2-60：远程 Task / Project 用例（scope 校验 + 事件游标服务） ------
+    # 分层：能力包 ``astra_workspace.application.RemoteTaskService`` **零** Web / **零**
+    # ``astra_runtime`` / **零** ORM；授权 / 审计 / 提交 / 克隆派发 / 事件源**全部经注入适配器**
+    # （组合根，C-7 单写者）。A-14：创建 / 取消 / Diff / Download 以 ``EXECUTE`` + capability
+    # 细分校验，**不新增** action 枚举；``TASK`` 资源类型仅为字符串（无 DB 枚举迁移）。
+    remote_task_service = RemoteTaskService(
+        tasks=task_repository,
+        task_executions=task_execution_repository,
+        projects=_SessionScopedProjectRepository(session_factory),
+        authorizer=_RemoteTaskAuthorizer(
+            authorization=identity.authorization,
+            permissions=resource_permission_repository,
+        ),
+        audit=_RemoteAuditSink(audit),
+        events=ExecutionTaskEventSource(task_execution_repository),
+        submitter=_RemoteTaskSubmitter(
+            tasks=task_repository,
+            task_queue=providers.task_queue,
+        ),
+        clone_dispatcher=_ProjectCloneDispatcher(
+            tasks=task_repository,
+            task_queue=providers.task_queue,
+        ),
+    )
+
     return AppServices(
         providers=providers,
         identity=identity,
@@ -796,6 +844,8 @@ def build_app_services(providers: Providers) -> AppServices:
         schedules=schedule_repository,
         task_executions=task_execution_repository,
         scheduler=scheduler_runner,
+        # -- R3 / T2-60（远程 Task / Project 用例）
+        remote_tasks=remote_task_service,
     )
 
 
@@ -1075,9 +1125,7 @@ class _ResourcePermissionCheckerAdapter(RuntimePermissionChecker):
         """暴露底层单一判定链实现（供装配 / 断言）。"""
         return self._resource_checker
 
-    def check(
-        self, ctx: Any, tool: Any, action: str
-    ):  # noqa: ANN201 - 与 RuntimePermissionChecker 同形
+    def check(self, ctx: Any, tool: Any, action: str):  # noqa: ANN201 - 与 RuntimePermissionChecker 同形
         """委托单一判定链（① resource_permission → ② scope 只收窄 → ③ 默认拒绝 → ④ PEP/PDP）。"""
         return self._resource_checker.check(ctx, tool, action)
 
@@ -1521,6 +1569,262 @@ class _EvaluationRunLauncher:
             )
             for call in self._tool_calls.list_by_run(run_id)
         ]
+
+
+# -- R3 / T2-60：远程 Task / Project 组合根适配器 ------------------------------
+
+#: 远程审计 / 入队日志器（失败隔离仅告警）。
+_REMOTE_LOGGER = logging.getLogger("astra_api.remote")
+
+
+class _RemoteTaskAuthorizer:
+    """``RemoteTaskAuthorizer`` 适配：RBAC（``admin = *`` / 精确码）+ resource_permission scope。
+
+    🔴 **A-14**：复用既有 ``EXECUTE`` 动作；capability 细分（``task.submit`` / ``task.cancel`` /
+    ``git.diff`` / ``artifact.download`` …）经 ``resource_permission.scope.capabilities`` 判定；
+    ``TASK`` 资源类型仅为**字符串**（无 DB 枚举迁移）。判定顺序：
+
+    1. RBAC 通配（``admin = *``）→ 全量放行（``role``）；
+    2. RBAC 精确权限码 → 放行（``rbac``）；
+    3. ``resource_permission``（``TASK`` × ``EXECUTE``）scope：按 ``resource_id`` 收窄 + capability
+       匹配（``scoped``）；无任何规则 → ``no_grant``（``in_scope=False`` → 统一 404）。
+    """
+
+    def __init__(
+        self,
+        *,
+        authorization: AuthorizationService,
+        permissions: ResourcePermissionRepository,
+    ) -> None:
+        """装配适配器（组合根注入 RBAC 判定 + 资源权限仓储）。"""
+        self._authorization = authorization
+        self._permissions = permissions
+
+    def authorize(
+        self,
+        principal: RemotePrincipal,
+        *,
+        capability: str,
+        resource_type: str = TASK_RESOURCE_TYPE,
+        resource_id: str | None = None,
+    ) -> RemoteAccessDecision:
+        """判定 ``principal`` 对 ``resource_id`` 是否具备 ``capability``（A-14）。"""
+        if self._authorization.has_permission(principal.user_id, ADMIN_PERMISSION):
+            return RemoteAccessDecision(allowed=True, in_scope=True, reason="role")
+        if self._authorization.has_permission(principal.user_id, capability):
+            return RemoteAccessDecision(allowed=True, in_scope=True, reason="rbac")
+        rules = [
+            rule
+            for rule in self._permissions.list_for_subject(
+                principal.tenant_id, "user", principal.user_id
+            )
+            if rule.resource_type == resource_type and rule.action == ACTION_EXECUTE
+        ]
+        if not rules:
+            return RemoteAccessDecision(allowed=False, in_scope=False, reason="no_grant")
+        type_level = any(rule.resource_id is None for rule in rules)
+        granted_ids = {rule.resource_id for rule in rules if rule.resource_id}
+        # 集合操作（``resource_id is None``）→ 逐项鉴权交由后续列表过滤；此处只要有足迹即在范围。
+        in_scope = type_level or resource_id is None or resource_id in granted_ids
+        allowed = False
+        for rule in rules:
+            if rule.effect != "ALLOW":
+                continue
+            if rule.resource_id is not None and rule.resource_id != resource_id:
+                continue
+            if match_capability(
+                capability,
+                declared=granted_capabilities(rule.scope),
+                denied=denied_capabilities(rule.scope),
+            ):
+                allowed = True
+        return RemoteAccessDecision(
+            allowed=allowed, in_scope=in_scope, reason="scoped" if allowed else "denied"
+        )
+
+
+class _RemoteAuditSink:
+    """``RemoteAuditSink`` 适配：把远程动作审计写入既有 ``AuditService``（落 ``audit_log``）。"""
+
+    def __init__(self, audit: AuditService) -> None:
+        """注入审计应用服务（组合根已装配的同一实例）。"""
+        self._audit = audit
+
+    def record(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        action: str,
+        resource_type: str,
+        resource_id: str | None,
+        outcome: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        """写一条审计记录（**不含**宿主路径 / Secret 明文；失败隔离仅告警）。"""
+        try:
+            self._audit.record(
+                AuditRecordDTO(
+                    tenant_id=tenant_id,
+                    action=action,
+                    request_id=generate_id(),
+                    resource_type=resource_type,
+                    resource_id=resource_id,
+                    outcome=outcome,
+                    metadata={"user_id": user_id, **dict(metadata)},
+                )
+            )
+        except Exception:  # noqa: BLE001 - 审计失败不得阻断业务
+            _REMOTE_LOGGER.warning("远程审计写入失败（已隔离）", exc_info=True)
+
+
+def _enqueue_best_effort(
+    queue: Any | None,
+    *,
+    handler: str,
+    payload: dict[str, Any],
+    task: Task,
+    tenant_id: str | None,
+) -> None:
+    """把任务**尽力**入队（队列缺失 / 失败 → 告警，任务已持久化为 ``PENDING`` 可被恢复重投）。"""
+    if queue is None or not hasattr(queue, "enqueue"):
+        return
+    message = {
+        "handler": handler,
+        "payload": dict(payload),
+        "task_id": task.task_id,
+        "tenant_id": tenant_id,
+    }
+    try:
+        queue.enqueue(message)
+    except Exception:  # noqa: BLE001 - 入队失败隔离：任务已落 PENDING，可经启动恢复重投
+        _REMOTE_LOGGER.warning(
+            "远程任务入队失败（任务已落 PENDING，可经启动恢复重投）",
+            extra={"task_id": task.task_id, "handler": handler},
+            exc_info=True,
+        )
+
+
+class _RemoteTaskSubmitter:
+    """``RemoteTaskSubmitter`` 适配：构造 ``remote.agent_run`` 任务（幂等）+ 入队。
+
+    🔴 **幂等（F-R2）**：同 ``(tenant_id, idempotency_key)`` 同体 → 复用既有 ``task_id``
+    （按载荷 ``idempotency_key`` 匹配；无新列 / 无新迁移）。
+    """
+
+    def __init__(self, *, tasks: TaskRepository, task_queue: Any | None = None) -> None:
+        """装配（任务仓储 + 队列 Provider）。"""
+        self._tasks = tasks
+        self._queue = task_queue
+
+    def submit(self, spec: RemoteTaskSpec, *, tenant_id: str, user_id: str) -> str:
+        """创建并派发远程任务，返回 ``task_id``（幂等复用）。"""
+        existing = self._find_idempotent(tenant_id, spec.idempotency_key)
+        if existing is not None:
+            return existing
+        payload: dict[str, Any] = {
+            "project_id": spec.project_id,
+            "workspace_id": spec.workspace_id,
+            "agent_version_id": spec.agent_version_id,
+            "workflow_version_id": spec.workflow_version_id,
+            "requirement": spec.requirement,
+            "base_ref": spec.base_ref,
+            "environment_id": spec.environment_id,
+            "idempotency_key": spec.idempotency_key,
+            "limits": dict(spec.limits),
+            "created_by": spec.created_by or user_id,
+        }
+        task = Task(
+            tenant_id=tenant_id,
+            workspace_id=spec.workspace_id,
+            type=REMOTE_TASK_TYPE,
+            execution_mode="QUEUED",
+            payload=payload,
+        )
+        task.enqueue()
+        task = self._tasks.add(task)
+        _enqueue_best_effort(
+            self._queue, handler=REMOTE_TASK_TYPE, payload=payload, task=task, tenant_id=tenant_id
+        )
+        return str(task.task_id)
+
+    def _find_idempotent(self, tenant_id: str, idempotency_key: str | None) -> str | None:
+        """按载荷 ``idempotency_key`` 查找既有远程任务（无 → ``None``）。"""
+        if not idempotency_key:
+            return None
+        for task in self._tasks.list(tenant_id=tenant_id, type=REMOTE_TASK_TYPE):
+            payload = dict(getattr(task, "payload", None) or {})
+            if str(payload.get("idempotency_key") or "") == idempotency_key:
+                return str(task.task_id)
+        return None
+
+
+class _ProjectCloneDispatcher:
+    """``TaskDispatcher`` 适配：派发 ``project.clone`` 任务（返回 ``task_id``）。"""
+
+    def __init__(self, *, tasks: TaskRepository, task_queue: Any | None = None) -> None:
+        """装配（任务仓储 + 队列 Provider）。"""
+        self._tasks = tasks
+        self._queue = task_queue
+
+    def dispatch_clone(
+        self,
+        *,
+        tenant_id: str,
+        workspace_id: str,
+        project_id: str,
+        repo_url: str,
+        base_ref: str | None = None,
+    ) -> str:
+        """创建并派发 ``project.clone`` 任务，返回 ``task_id``。"""
+        payload: dict[str, Any] = {
+            "project_id": project_id,
+            "workspace_id": workspace_id,
+            "repo_url": repo_url,
+            "base_ref": base_ref,
+        }
+        task = Task(
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            type=PROJECT_CLONE_TASK_TYPE,
+            execution_mode="QUEUED",
+            payload=payload,
+        )
+        task.enqueue()
+        task = self._tasks.add(task)
+        _enqueue_best_effort(
+            self._queue,
+            handler=PROJECT_CLONE_TASK_TYPE,
+            payload=payload,
+            task=task,
+            tenant_id=tenant_id,
+        )
+        return str(task.task_id)
+
+
+class _SessionScopedProjectRepository:
+    """``ProjectRepository`` 适配：为**风格①** ``SqlProjectRepository`` 提供**逐调用**会话。
+
+    🔴 分层（C-7 单写者）：既有 ``SqlProjectRepository``（``astra_workspace.repositories``）为
+    **风格①**——构造需**已绑定**的 ``Session``。远程能力包 ``RemoteTaskService``（``application``，
+    零 ORM / 零 Web）仅依赖 ``astra_workspace.domain.ProjectRepository`` Protocol；本适配器在
+    **组合根**以 ``session_scope`` 打开短时会话并委派，使能力包与 ORM 会话生命周期彻底解耦。
+    返回的 ``Project`` 为**纯数据类**（域实体，脱离会话后仍可安全读取）。
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        """装配（仅持有会话工厂；**不**跨调用复用会话）。"""
+        self._session_factory = session_factory
+
+    def get(self, project_id: str) -> Any | None:
+        """按主键获取项目（短时会话内委派），不存在返回 ``None``。"""
+        with session_scope(self._session_factory) as session:
+            return SqlProjectRepository(session).get(project_id)
+
+    def list_by_workspace(self, workspace_id: str, *, scope: Any | None = None) -> list[Any]:
+        """列出某 Workspace 下的项目（短时会话内委派）。"""
+        with session_scope(self._session_factory) as session:
+            return SqlProjectRepository(session).list_by_workspace(workspace_id, scope=scope)
 
 
 def get_app_services(request: Request) -> AppServices:

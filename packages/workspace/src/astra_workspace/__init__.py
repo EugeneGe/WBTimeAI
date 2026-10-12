@@ -13,6 +13,22 @@ W7（T2-37）新增（能力包自含布局，R1）：``Project`` / ``WorkspaceE
 from __future__ import annotations
 
 from .application import AttemptCheckoutResult, CloneResult, ProjectService, TaskDispatcher
+from .application.remote_task_service import (
+    ArtifactView,
+    ExecutionTaskEventSource,
+    RemoteAccessDecision,
+    RemoteAttemptView,
+    RemoteDiffView,
+    RemoteEventPage,
+    RemotePrincipal,
+    RemoteProjectStatus,
+    RemoteTaskAuthorizer,
+    RemoteTaskService,
+    RemoteTaskSpec,
+    RemoteTaskView,
+    TaskEvent,
+    TaskLogView,
+)
 from .domain import (
     Project,
     ProjectRepository,
@@ -69,4 +85,19 @@ __all__ = [
     "AttemptCheckoutResult",
     "compute_environment_digest",
     "environment_digest_for",
+    # R3 / T2-60：远程 Task / Project 用例 + 事件游标服务
+    "RemoteTaskService",
+    "RemotePrincipal",
+    "RemoteAccessDecision",
+    "RemoteTaskSpec",
+    "RemoteTaskView",
+    "RemoteAttemptView",
+    "RemoteProjectStatus",
+    "RemoteDiffView",
+    "ArtifactView",
+    "TaskEvent",
+    "TaskLogView",
+    "RemoteEventPage",
+    "RemoteTaskAuthorizer",
+    "ExecutionTaskEventSource",
 ]

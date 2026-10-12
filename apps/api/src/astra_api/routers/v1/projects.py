@@ -40,12 +40,16 @@ from fastapi import APIRouter, Depends, Query
 from astra_api.dependencies.auth import CurrentUser
 from astra_api.dependencies.services import AppServices, get_app_services
 from astra_api.schemas.project import (
+    CloneProjectRequest,
+    CloneProjectResponse,
     CreateProjectRequest,
     EnvironmentResponse,
     EnvironmentVarResponse,
     FileContentResponse,
     FileObjectResponse,
+    GitRefResponse,
     ProjectResponse,
+    ProjectStatusResponse,
 )
 
 router = APIRouter(tags=["projects"])
@@ -57,6 +61,26 @@ _ENV_REF_KEY = "$ref"
 def _tenant_id(user: UserDTO) -> str:
     """取当前用户租户标识。"""
     return user.tenant_id or ""
+
+
+def _principal(user: UserDTO) -> Any:
+    """由当前用户派生远程调用主体（``RemotePrincipal``）。"""
+    from astra_workspace import RemotePrincipal
+
+    return RemotePrincipal(tenant_id=_tenant_id(user), user_id=user.id)
+
+
+def _require_remote_service(services: AppServices) -> Any:
+    """取远程 Task / Project 服务（缺装配 → 结构化 503，不静默）。"""
+    remote = getattr(services, "remote_tasks", None)
+    if remote is None:
+        raise DomainError(
+            "远程 Project 能力未装配",
+            code=ErrorCode.DEPENDENCY_MISSING,
+            status_code=503,
+            data={"capability": "remote_tasks"},
+        )
+    return remote
 
 
 def _to_project_response(project: Any) -> ProjectResponse:
@@ -276,3 +300,73 @@ def get_workspace_environment(
             data={"environment_id": environment_id},
         )
     return _to_environment_response(environment)
+
+
+# -- R3 / T2-60：远程 Project（Clone / 状态 / Git ref 查询） ------------------
+
+
+@router.post(
+    "/projects/{project_id}/clone",
+    response_model=CloneProjectResponse,
+    status_code=202,
+    summary="克隆项目（异步派发 project.clone）",
+)
+def clone_project(
+    project_id: str,
+    payload: CloneProjectRequest,
+    user: CurrentUser,
+    services: Annotated[AppServices, Depends(get_app_services)],
+) -> CloneProjectResponse:
+    """显式 Clone 项目（F-R1；``EXECUTE + project.clone``；``202 {task_id}``）。
+
+    跨租户 / 越界 → 404；未授权 → 403；无仓库地址 → 422；未装配派发器 → 503。
+    """
+    remote = _require_remote_service(services)
+    task_id = remote.clone_project(
+        _principal(user),
+        project_id,
+        base_ref=payload.base_ref,
+        idempotency_key=payload.idempotency_key,
+    )
+    return CloneProjectResponse(task_id=str(task_id))
+
+
+@router.get(
+    "/projects/{project_id}/status",
+    response_model=ProjectStatusResponse,
+    summary="项目状态（远程）",
+)
+def get_project_status(
+    project_id: str,
+    user: CurrentUser,
+    services: Annotated[AppServices, Depends(get_app_services)],
+) -> ProjectStatusResponse:
+    """项目状态视图（**不含宿主路径**；跨租户 / 越界 → 404）。"""
+    remote = _require_remote_service(services)
+    status = remote.project_status(_principal(user), project_id)
+    return ProjectStatusResponse(
+        project_id=status.project_id,
+        name=status.name,
+        workspace_id=status.workspace_id,
+        tenant_id=status.tenant_id,
+        default_branch=status.default_branch,
+        repo_configured=status.repo_configured,
+        clone_task_id=status.clone_task_id,
+        refs_available=status.refs_available,
+    )
+
+
+@router.get(
+    "/projects/{project_id}/git/refs",
+    response_model=list[GitRefResponse],
+    summary="项目 Git 引用查询（远程）",
+)
+def list_project_git_refs(
+    project_id: str,
+    user: CurrentUser,
+    services: Annotated[AppServices, Depends(get_app_services)],
+) -> list[GitRefResponse]:
+    """查询项目 Git 引用（分支 / 标签；**不含宿主路径**；未装配 → 503）。"""
+    remote = _require_remote_service(services)
+    refs = remote.list_git_refs(_principal(user), project_id)
+    return [GitRefResponse(name=item.name, commit=item.commit, kind=item.kind) for item in refs]

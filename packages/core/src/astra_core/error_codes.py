@@ -59,5 +59,11 @@ class ErrorCode(StrEnum):
     IDEMPOTENCY_KEY_REUSE = "IDEMPOTENCY_KEY_REUSE"
     HEARTBEAT_TIMEOUT = "HEARTBEAT_TIMEOUT"
 
+    # -- 远程 Task 事件游标（R3 / T2-60；设计 §2.8.1 / §2.9.1；I-P2-39） ----
+    #: 事件续读游标已过期（所引用序号已超出保留窗口低水位）。
+    #: 🔴 **加性**新增（纯 Python 枚举字面值，**无** DB 枚举迁移）；满足 I-P2-39
+    #:    「过期游标返回稳定错误码」。
+    EVENT_CURSOR_EXPIRED = "EVENT_CURSOR_EXPIRED"
+
     def __str__(self) -> str:  # noqa: D105 - 便于日志与序列化
         return self.value

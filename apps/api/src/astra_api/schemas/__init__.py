@@ -82,12 +82,16 @@ from .plugin import InstallPluginRequest, PluginResponse
 
 # -- W10 / T2-49：2c API 子集（projects / workspace files / environment） ------
 from .project import (
+    CloneProjectRequest,
+    CloneProjectResponse,
     CreateProjectRequest,
     EnvironmentResponse,
     EnvironmentVarResponse,
     FileContentResponse,
     FileObjectResponse,
+    GitRefResponse,
     ProjectResponse,
+    ProjectStatusResponse,
 )
 from .run import RunEventResponse, RunResponse, ToolCallResponse
 
@@ -113,7 +117,20 @@ from .skill import (
     SkillVersionResponse,
     UpdateSkillRequest,
 )
-from .task import TaskExecutionResponse, TaskResponse
+from .task import (
+    DiffFileResponse,
+    RemoteTaskSubmitRequest,
+    RemoteTaskSubmitResponse,
+    RemoteTaskViewResponse,
+    TaskArtifactResponse,
+    TaskAttemptResponse,
+    TaskDiffResponse,
+    TaskEventPageResponse,
+    TaskEventResponse,
+    TaskExecutionResponse,
+    TaskLogResponse,
+    TaskResponse,
+)
 from .tool import ToolPermissionRequest, ToolPermissionResponse, ToolResponse
 from .user import DeviceResponse, UpdateUserRequest, UserResponse
 from .workflow import (
@@ -189,9 +206,19 @@ __all__ = [
     "CreateConversationRequest",
     "ConversationResponse",
     "ConversationMessageResponse",
-    # task（W6 / T1-29；W10-E2 增执行记录）
+    # task（W6 / T1-29；W10-E2 增执行记录；R3 / T2-60 增远程视图）
     "TaskResponse",
     "TaskExecutionResponse",
+    "RemoteTaskSubmitRequest",
+    "RemoteTaskSubmitResponse",
+    "RemoteTaskViewResponse",
+    "TaskAttemptResponse",
+    "TaskEventResponse",
+    "TaskEventPageResponse",
+    "TaskLogResponse",
+    "DiffFileResponse",
+    "TaskDiffResponse",
+    "TaskArtifactResponse",
     # permission（W3 / T2-14）
     "PermissionCheckResponse",
     # skill / mcp / plugin / audit（W3 / T2-17）
@@ -259,5 +286,10 @@ __all__ = [
     "FileContentResponse",
     "EnvironmentVarResponse",
     "EnvironmentResponse",
+    # R3 / T2-60：远程 Project 视图
+    "CloneProjectRequest",
+    "CloneProjectResponse",
+    "ProjectStatusResponse",
+    "GitRefResponse",
     "ApprovalResponse",
 ]

@@ -61,6 +61,8 @@ _STATUS_BY_CODE: dict[ErrorCode, int] = {
     ErrorCode.TOOL_TIMEOUT: 504,
     ErrorCode.IDEMPOTENCY_KEY_REUSE: 409,
     ErrorCode.HEARTBEAT_TIMEOUT: 500,
+    # R3 / T2-60：事件续读游标过期（I-P2-39「过期游标返回稳定错误码」）→ 410 Gone。
+    ErrorCode.EVENT_CURSOR_EXPIRED: 410,
 }
 
 #: HTTP 状态码 → 统一错误码（用于框架层抛出的 ``HTTPException``）。
