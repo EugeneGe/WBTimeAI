@@ -401,18 +401,26 @@ def test_push_credential_only_in_push_env_not_response_or_audit(
 
 
 def test_remote_task_view_exposes_no_host_path_or_token(
-    client: Any, auth_headers: dict[str, str]
+    client: Any, auth_headers: dict[str, str], session_factory: Any, tmp_path: Any
 ) -> None:
-    """远程任务视图仅返回不透明 ``checkout_ref``（无宿主路径 / 令牌样式串）。"""
+    """远程任务视图仅返回**必有**的不透明 ``checkout_ref``（无宿主路径 / 令牌样式串）。"""
     task_id = _api_seed_remote_task(client, auth_headers, name="sec-view")
+    storage = ProjectStorage(tmp_path / "wsroot")
+    opaque = storage.checkout_ref("exec-secview", 1)
+    _seed_attempt(session_factory, task_id=task_id, storage=storage, checkout_ref=opaque)
+
     resp = client.get(f"/api/v1/tasks/{task_id}", headers=auth_headers)
     assert resp.status_code == 200, resp.text
     text = resp.text
     assert ":/" not in text  # 无 scheme:/（如 C:/、file:/）宿主路径
-    assert "\\\\" not in text  # 无 Windows 宿主路径
-    ref = _shell(resp)["data"].get("checkout_ref")
-    if ref is not None:
-        assert "/" not in ref and "\\" not in ref  # 不透明引用不含路径分隔符
+    assert "\\\\" not in text  # 无 JSON 转义双反斜杠（Windows 宿主路径）
+    assert str(tmp_path) not in text  # 不含宿主配置根绝对路径
+    # 去条件化强断言：视图**必**暴露不透明 ``checkout_ref``，且不含任何路径分隔符。
+    data = _shell(resp)["data"]
+    ref = data.get("checkout_ref")
+    assert ref is not None, f"视图应暴露不透明 checkout_ref：{data}"
+    assert ref == opaque
+    assert "/" not in ref and "\\" not in ref  # 不透明引用不含路径分隔符
 
 
 def test_remote_events_and_logs_have_no_plaintext_secret(

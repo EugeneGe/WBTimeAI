@@ -222,15 +222,45 @@ def test_remove_attempt_dir_only_removes_attempt(tmp_path: Path) -> None:
     assert storage.root.is_dir()
 
 
-def test_remove_attempt_dir_guards_project_root(tmp_path: Path) -> None:
-    """清理守卫：即便构造指向 Project 根，也不得删除（越出 executions/ 即拒）。"""
+def test_remove_attempt_dir_guards_project_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """清理守卫：删除目标**指向 Project 根** → **拒绝**（PERMISSION_DENIED），Project 根不被删。"""
     storage = ProjectStorage(tmp_path)
-    storage.ensure_project_root("project-a")
-    # 直接对不存在的 execution 调用不越界；守卫以「目标须在 executions/ 之下」为准。
-    # 这里验证：attempt 目录名无法伪装为 projects/ 下的路径（片段校验）。
+    project_repo = storage.ensure_project_root("project-a")
+    sentinel = project_repo / "keep.txt"
+    sentinel.write_text("keep", encoding="utf-8")
+
+    # 主场景（不依赖符号链接，恒执行）：构造「删除目标 = Project 受管仓库目录」——
+    # 令 attempt 目标解析为 Project 根。守卫必须以「不在 executions/ 之下」**拒绝**。
+    monkeypatch.setattr(storage.paths, "attempt_dir", lambda _eid, _att: project_repo)
+
     with pytest.raises(DomainError) as excinfo:
+        storage.remove_attempt_dir("exec-1", 1)
+    assert excinfo.value.code is ErrorCode.PERMISSION_DENIED
+    # Project 根及其内容**未被**删除。
+    assert project_repo.is_dir()
+    assert sentinel.is_file()
+
+    # 变体（平台支持符号链接时）：execution 目录符号链接**穿透**到 Project 根 → 同样拒绝。
+    monkeypatch.undo()
+    execution_dir = storage.paths.execution_dir("exec-2")
+    execution_dir.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.symlink(project_repo, execution_dir, target_is_directory=True)
+    except (OSError, NotImplementedError):  # pragma: no cover - 平台无符号链接权限
+        pass
+    else:
+        (project_repo / "attempt-1").mkdir(exist_ok=True)
+        with pytest.raises(DomainError) as excinfo_link:
+            storage.remove_attempt_dir("exec-2", 1)
+        assert excinfo_link.value.code is ErrorCode.PERMISSION_DENIED
+        assert sentinel.is_file()
+
+    # 兜底（原断言保留）：非法 execution 片段 → 仍拒（VALIDATION_ERROR）。
+    with pytest.raises(DomainError) as excinfo2:
         storage.remove_attempt_dir("../projects/project-a", 0)
-    assert excinfo.value.code is ErrorCode.VALIDATION_ERROR
+    assert excinfo2.value.code is ErrorCode.VALIDATION_ERROR
 
 
 def test_cleanup_does_not_follow_symlink(tmp_path: Path) -> None:
