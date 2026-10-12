@@ -103,9 +103,11 @@ from astra_model import (
     ChatMessage,
     ModelCatalogService,
     ModelCredentialBinder,
+    ProviderResolver,
     ProviderRuntime,
     build_model_catalog_service,
     build_model_router,
+    build_provider_resolver,
 )
 from astra_plugin.marketplace import (
     KIND_AGENT,
@@ -229,6 +231,7 @@ __all__ = [
     "get_permission_checker",
     "get_model_credential_binder",
     "get_provider_runtime",
+    "get_provider_resolver",
     "get_agent_repository",
     "get_task_repository",
     "get_skill_repository",
@@ -274,6 +277,8 @@ class AppServices:
         run: Run ↔ Task 挂靠服务（含重启兜底扫描）。
         agent_run: Agent / Run 用例编排器（调用 Runtime）。
         model: 模型目录服务（Provider / Model / 凭证引用）。
+        provider_resolver: 执行期 Provider 绑定器（M1；把注册表原型绑定为「租户 endpoint +
+            解密凭证」的具体实例；挂 ``providers.model_router``，业务不感知）。
         tool: Tool 注册表（内置工具浏览器）。
         tool_permissions: Tool 授权读写服务。
         runtime: Agent Runtime（组合根 DI 装配）。
@@ -306,6 +311,8 @@ class AppServices:
     idempotency: IdempotencyService
     model_credentials: ModelCredentialBinder
     provider_runtime: ProviderRuntime
+    # -- M1：执行期 Provider 绑定器（组合根装配；挂 ``providers.model_router``，业务不感知） --
+    provider_resolver: ProviderResolver
     # -- W3 / T2-14：capability 判定（``GET /permissions/check`` 数据源） ------
     permission: ResourcePermissionChecker
     # -- W3 / T2-17：2a API 骨架（skill / mcp / plugin / audit） --------------
@@ -574,6 +581,15 @@ def build_app_services(providers: Providers) -> AppServices:
         decoder=CredentialServiceDecoder(credentials, cipher),
         audit=_audit_recorder(audit),
     )
+
+    # M1 · 执行期 Provider 绑定（组合根**唯一**装配出口，H5）：把「注册表原型 + 租户行 +
+    # 解密凭证」合流器注入 ``model_router``（**reference** 语义，Runtime 装配零改）。
+    # 🔴 无 ``if mode ==``（H3）：解密唯一经 ``provider_runtime``（写审计），明文仅内存（H4）。
+    provider_resolver = build_provider_resolver(
+        provider_repository=SqlModelProviderRepository(session_factory),
+        provider_runtime=provider_runtime,
+    )
+    model_router.bind_provider_resolver(provider_resolver)
 
     # -- W3 / T2-17：2a API 骨架（skill / mcp / plugin / audit） -------------
     # Router 经 ``AppServices`` 面向**领域 Protocol** 取用（N-8，无 ORM 直调）。
@@ -874,6 +890,7 @@ def build_app_services(providers: Providers) -> AppServices:
         idempotency=idempotency,
         model_credentials=model_credentials,
         provider_runtime=provider_runtime,
+        provider_resolver=provider_resolver,
         permission=resource_checker,
         skill=skill_repository,
         skill_versions=skill_version_repository,
@@ -2180,6 +2197,11 @@ def get_model_credential_binder(services: AppServicesDep) -> ModelCredentialBind
 def get_provider_runtime(services: AppServicesDep) -> ProviderRuntime:
     """取出 Provider 运行时（显式可审计解密，T1-30）。"""
     return services.provider_runtime
+
+
+def get_provider_resolver(services: AppServicesDep) -> ProviderResolver:
+    """取出执行期 Provider 绑定器（M1；组合根装配，业务经 ``AppServices`` 取用）。"""
+    return services.provider_resolver
 
 
 def get_agent_repository(services: AppServicesDep) -> AgentRepository:
