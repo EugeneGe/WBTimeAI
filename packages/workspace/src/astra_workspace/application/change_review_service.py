@@ -280,7 +280,7 @@ class ChangeReviewService:
         self._require_task(
             principal, task_id, capability=CAPABILITY_GIT_DIFF, action="task.remote.diff"
         )
-        record = self._require_attempt(task_id, attempt)
+        record = self._select_latest_attempt(task_id, attempt)
         base_commit = getattr(record, "base_commit", None)
         result_commit = getattr(record, "result_commit", None)
         checkout_ref = getattr(record, "checkout_ref", None)
@@ -582,6 +582,28 @@ class ChangeReviewService:
             if not usable:
                 raise self._not_found("attempt", task_id)
             return usable[-1]
+        match = next(
+            (rec for rec in records if int(getattr(rec, "attempt", 0)) == int(attempt)), None
+        )
+        if match is None:
+            raise self._not_found("attempt", f"{task_id}:{attempt}")
+        return match
+
+    def _select_latest_attempt(self, task_id: str, attempt: int | None) -> Any:
+        """取指定（缺省取**最近**）Attempt —— **含**缺 ``result_commit`` 的在跑 Attempt。
+
+        R5 补全轮（F4 / R5A-02）：Diff 读取需在结果提交**尚缺**时**降级**（``available=False`` →
+        200），故 ``attempt is None`` 时取**最近一条**（**不**要求 ``result_commit``）；仅**无任何
+        Attempt** 才 404。与 :meth:`_require_attempt`（Apply 用，要求**可比对**）区分，**不**改其语义。
+
+        Raises:
+            DomainError: 无任何 Attempt（``NOT_FOUND``）。
+        """
+        records = self._sorted_executions(task_id)
+        if not records:
+            raise self._not_found("attempt", f"{task_id}:{attempt or 1}")
+        if attempt is None:
+            return records[-1]
         match = next(
             (rec for rec in records if int(getattr(rec, "attempt", 0)) == int(attempt)), None
         )

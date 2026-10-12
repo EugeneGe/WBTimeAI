@@ -167,6 +167,36 @@ class _FakeArtifactReader:
         return f"content-of:{ref}".encode(), "text/plain"
 
 
+class _FakeDiffGit:
+    """确定性 Git 替身：``diff_name_status`` 返回预置 ``--name-status`` 输出（不触宿主 Git）。"""
+
+    def __init__(self, stdout: str = "M\tapp.py\n") -> None:
+        self._stdout = stdout
+
+    def diff_name_status(
+        self,
+        session: Any,
+        base: str,
+        result: str,
+        *,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+        env: Any = None,
+    ) -> Any:
+        """返回预置 ``(ok=True, stdout=...)``（供 :meth:`ChangeReviewService.diff` 解析）。"""
+        from types import SimpleNamespace
+
+        return SimpleNamespace(ok=True, stdout=self._stdout, stderr="", exit_code=0)
+
+
+def _valid_checkout_ref(execution_id: str) -> str:
+    """构造一个**可服务端还原**的不透明 ``checkout_ref``（供 ChangeReviewService containment 解析）。"""
+    from astra_config import get_settings
+    from astra_workspace import ProjectStorage
+
+    return ProjectStorage(get_settings().workspace_root).checkout_ref(execution_id, 1)
+
+
 # -- 1. API 权限（提交 / 列表 / 读取 / 取消） ---------------------------------
 
 
@@ -501,11 +531,12 @@ def test_artifact_metadata_and_diff_hide_host_paths(
     ws = _create_workspace(client, auth_headers, name="meta-ws")
     project = _create_project(client, auth_headers, workspace_id=ws)
     task_id = _submit_task(client, auth_headers, workspace_id=ws, project_id=project)
+    checkout_ref = _valid_checkout_ref("exec-meta-1")
     _seed_execution(
         session_factory,
         task_id=task_id,
         attempt=1,
-        checkout_ref="wr_opaque",
+        checkout_ref=checkout_ref,
         artifact_refs={"log": {"ref": "art://log-1", "size": 12}},
     )
 
@@ -514,13 +545,42 @@ def test_artifact_metadata_and_diff_hide_host_paths(
     body = _shell_data(artifacts)
     assert body[0]["name"] == "log" and body[0]["ref"] == "art://log-1"
 
+    # F4：Diff 出口统一至 ``ChangeReviewService.diff``（经 Sandbox）；注入 fake git 返回真实摘要
+    # （**不**触真实仓库 / 宿主 Git），保留「不透明 checkout_ref / 无宿主路径」断言。
+    _services(client).change_review._git = _FakeDiffGit()  # noqa: SLF001
     diff = client.get(f"/api/v1/tasks/{task_id}/diff", headers=auth_headers)
     assert diff.status_code == 200, diff.text
     diff_body = _shell_data(diff)
-    assert diff_body["checkout_ref"] == "wr_opaque"
+    assert diff_body["checkout_ref"] == checkout_ref
     dumped = str(diff_body)
     assert "/" not in diff_body["checkout_ref"]  # 不透明句柄（不含路径分隔符）
     assert "\\" not in dumped and "C:" not in dumped and "/tmp" not in dumped
+
+
+def test_task_diff_reaches_change_review_service(
+    client: Any, auth_headers: dict[str, str], session_factory: Any
+) -> None:
+    """F4 / R5A-02：``GET /tasks/{id}/diff`` 经 ``ChangeReviewService.diff`` 真实出口。
+
+    fake git 返回 ``M\\tapp.py`` / ``A\\tsrc/new.py`` → 200 且 ``files`` 逐项映射、
+    ``available == True`` —— 证明 Diff 已由占位视图切到变更审阅服务（经 Sandbox 的文件摘要）。
+    """
+    ws = _create_workspace(client, auth_headers, name="diff-real-ws")
+    project = _create_project(client, auth_headers, workspace_id=ws)
+    task_id = _submit_task(client, auth_headers, workspace_id=ws, project_id=project)
+    _seed_execution(
+        session_factory,
+        task_id=task_id,
+        attempt=1,
+        checkout_ref=_valid_checkout_ref("exec-diff-real"),
+    )
+
+    _services(client).change_review._git = _FakeDiffGit("M\tapp.py\nA\tsrc/new.py\n")  # noqa: SLF001
+    resp = client.get(f"/api/v1/tasks/{task_id}/diff", headers=auth_headers)
+    assert resp.status_code == 200, resp.text
+    body = _shell_data(resp)
+    assert body["available"] is True
+    assert [item["path"] for item in body["files"]] == ["app.py", "src/new.py"]
 
 
 def test_project_clone_and_status(

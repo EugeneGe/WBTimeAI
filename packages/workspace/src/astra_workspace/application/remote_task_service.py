@@ -827,6 +827,12 @@ class RemoteTaskService:
     ) -> RemoteDiffView:
         """返回某 Attempt 的**受限** Diff（``EXECUTE + git.diff``；不 Apply / 不 Push）。
 
+        🔴 **R5 补全轮裁定（F4 / R5A-02）**：远程 API 的 Diff **唯一出口**为
+           :meth:`ChangeReviewService.diff`（经 Sandbox、真实文件摘要）。本方法**保留**为
+           **应用层降级元数据视图**（无 Sandbox 依赖、不产出文件内容），**无 API 调用者**
+           （端点 ``GET /tasks/{task_id}/diff`` 已改调变更审阅服务）。``DiffProvider`` /
+           :class:`RemoteDiffView` 一并**保留**（同上定位：降级元数据视图）。
+
         Raises:
             DomainError: 跨租户 / 越界（``NOT_FOUND``）、缺 capability（``PERMISSION_DENIED``）、
                 Attempt 不存在（``NOT_FOUND``）。

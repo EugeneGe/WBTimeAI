@@ -89,6 +89,28 @@ def _seed_execution(session_factory: Any, *, task_id: str, attempt: int, checkou
     repository.update(record)
 
 
+class _FakeDiffGit:
+    """确定性 Git 替身：``diff_name_status`` 返回预置 ``--name-status``（不触宿主 Git）。"""
+
+    def __init__(self, stdout: str = "M\tapp.py\n") -> None:
+        self._stdout = stdout
+
+    def diff_name_status(
+        self,
+        session: Any,
+        base: str,
+        result: str,
+        *,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+        env: Any = None,
+    ) -> Any:
+        """返回预置 ``(ok=True, stdout=...)``。"""
+        from types import SimpleNamespace
+
+        return SimpleNamespace(ok=True, stdout=self._stdout, stderr="", exit_code=0)
+
+
 class _RecordingTransport:
     """进程内传输：记录请求路径并把调用转发给真实 ``TestClient``。"""
 
@@ -125,9 +147,16 @@ def cli_harness(
 
     ws_id, project_id = _create_workspace_and_project(client, auth_headers, name="e2e")
     task_id = _submit_remote_task(client, auth_headers, workspace_id=ws_id, project_id=project_id)
-    _seed_execution(session_factory, task_id=task_id, attempt=1, checkout_ref="wr_e2e_opaque")
+    # F4：Diff 出口统一至 ``ChangeReviewService.diff``（经 Sandbox），``checkout_ref`` 须**可服务端
+    # 还原**（canonical containment）——用真实 ``ProjectStorage.checkout_ref`` 生成（不含宿主路径）。
+    from astra_config import get_settings
+    from astra_workspace import ProjectStorage
 
-    # Git 能力未装配 → Diff / Apply / Push 返回结构化 503（确定性；**不**触碰宿主 Git）。
+    checkout_ref = ProjectStorage(get_settings().workspace_root).checkout_ref("exec-e2e", 1)
+    _seed_execution(session_factory, task_id=task_id, attempt=1, checkout_ref=checkout_ref)
+
+    # Git 能力未装配 → Apply / Push 返回结构化 503（确定性；**不**触碰宿主 Git）。
+    # （Diff 读取在专用用例内注入 fake git 以 200 降级；见 test_remote_diff_read_degrades_*。）
     client.app.state.services.change_review._git = None  # noqa: SLF001 - 测试注入未装配态
 
     yield {
@@ -137,6 +166,7 @@ def cli_harness(
         "project_id": project_id,
         "task_id": task_id,
         "token": real_token,
+        "checkout_ref": checkout_ref,
     }
 
 
@@ -215,9 +245,13 @@ def test_remote_push_uses_frozen_path(cli_harness: dict[str, Any]) -> None:
     assert "DEPENDENCY_MISSING" in result.output
 
 
-def test_remote_diff_read_degrades_without_host_paths(cli_harness: dict[str, Any]) -> None:
-    """``remote diff`` 命中冻结读取路径 ``/tasks/{id}/diff``；以 ``available`` 标志降级
-    （**200**，非 503）；输出**不含**宿主路径 / 令牌。"""
+def test_remote_diff_read_degrades_without_host_paths(
+    cli_harness: dict[str, Any], client: Any
+) -> None:
+    """``remote diff`` 命中冻结读取路径 ``/tasks/{id}/diff``；经 ``ChangeReviewService.diff``
+    （注入 fake git）→ **200 + available 标志**；输出**不含**宿主路径 / 令牌。"""
+    # F4：Diff 出口 = ChangeReviewService.diff（经 Sandbox）；注入 fake git（本地面确定性，不触宿主）。
+    client.app.state.services.change_review._git = _FakeDiffGit("M\tapp.py\n")  # noqa: SLF001
     result = cli_harness["runner"].invoke(app, ["remote", "diff", cli_harness["task_id"]])
     assert f"/api/v1/tasks/{cli_harness['task_id']}/diff" in cli_harness["transport"].paths()
     # Diff 读取为 **200 + available 标志**的降级（**不**是 503）。
