@@ -106,7 +106,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# 默认排除真实联调用例（provider_live）；显式 `-m provider_live` 会在命令行覆盖此值。
+# 未配置凭证的 Provider 由用例内 pytest.skip 兜底，故 CI 永绿。
+addopts = "-q -m 'not provider_live'"
 filterwarnings = ["ignore::DeprecationWarning"]
 markers = [
     "contracts: Provider 契约套件（stub + 录制回放，默认运行）",
