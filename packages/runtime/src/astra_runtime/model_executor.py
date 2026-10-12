@@ -45,15 +45,34 @@ class ModelExecutor:
         self,
         model_config: Any,
         messages: list[ChatMessage],
+        *,
+        tenant_id: str | None = None,
+        run_id: str | None = None,
         **options: Any,
     ) -> ChatResult:
         """执行一次对话补全（经显式路由解析 Provider + 模型 + 参数）。
 
+        M1 · 加性扩展（向后兼容，非改签名）：``tenant_id`` / ``run_id`` 作为**可选关键字**
+        形参，**只**透传给 :meth:`ModelRouter.resolve` 供执行期「原型 + 租户 endpoint + 解密
+        凭证」合流；🔴 **绝不**混入 provider 的 ``params``（否则会被当作采样参数发出去）。
+        ``tenant_id`` 缺省（``None``）→ 与 Phase 1 行为逐字节一致。
+
+        Args:
+            model_config: ``agent_version.model_config``（或等价字典）。
+            messages: 已组装的对话消息。
+            tenant_id: 租户标识（可选；缺省 ＝ Phase 1 行为，不绑定）。
+            run_id: 关联 Run 标识（可选；透传绑定 / 审计）。
+            **options: 采样参数（覆盖 ``resolved.params``）。
+
         Raises:
-            DomainError: ``model_config`` 缺失 / 非法或 Provider 未注册
+            DomainError: ``model_config`` 缺失 / 非法、Provider 未注册、或执行期绑定失败
                 （``CONFIGURATION_ERROR``，由 :class:`ModelRouter` 抛出）。
         """
-        resolved = self._router.resolve(model_config)
+        resolved = self._router.resolve(
+            model_config,
+            tenant_id=tenant_id,
+            run_id=run_id,
+        )
         params: dict[str, Any] = dict(resolved.params)
         params.update(options)
         return resolved.provider.chat(messages, **params)

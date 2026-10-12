@@ -410,7 +410,13 @@ class ExecutionManager:
                 model_messages = self._context_manager.build(
                     system_prompt=system_prompt, history=history
                 )
-                result = self._model_executor.complete(agent_version.model_config, model_messages)
+                result = self._model_executor.complete(
+                    agent_version.model_config,
+                    model_messages,
+                    # M1：执行期凭证 / endpoint 绑定上下文（仅透传 router，**不进采样参数**）。
+                    tenant_id=ctx.tenant_id,
+                    run_id=run.id,
+                )
                 assistant_text = result.content or ""
                 tool_requests = self._model_executor.parse_tool_calls(assistant_text)
 
