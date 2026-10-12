@@ -19,7 +19,7 @@
     "dist:dir": "npm run build && npm run sync:renderer && electron-builder --dir",
     "dist:win": "npm run build && npm run sync:renderer && electron-builder --win nsis",
     "dist:linux": "npm run build && npm run sync:renderer && electron-builder --linux AppImage deb",
-    "test": "npm run build && node --test out/main/__tests__"
+    "test": "npm run build && node --test \"out/**/*.test.js\""
   },
   "devDependencies": {
     "@types/node": "^22.7.4",
