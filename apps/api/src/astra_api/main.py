@@ -15,6 +15,7 @@ from astra_api.errors import register_exception_handlers
 from astra_api.lifespan import lifespan
 from astra_api.middleware import RequestContextMiddleware, ResponseShellMiddleware
 from astra_api.routers import api_router, health_router
+from astra_api.web_static import install_web_static, resolve_web_dist
 
 __all__ = ["create_app", "app"]
 
@@ -74,6 +75,13 @@ def create_app() -> FastAPI:
         from astra_api.routers.metrics import router as metrics_router
 
         application.include_router(metrics_router)
+
+    # 前端静态托管（发行形态 A / M2 · WS2）：API 同源托管 apps/web/dist → 单容器
+    # 打开即完整 UI。**仅当**解析到产物目录（含 index.html）存在时启用；缺省 /
+    # 开发 / 测试无 dist 时零影响。仅在路由未命中的兜底处接管，不改既有 404/405。
+    web_dist = resolve_web_dist(settings)
+    if web_dist is not None:
+        install_web_static(application, web_dist)
 
     return application
 
