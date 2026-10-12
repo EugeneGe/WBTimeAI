@@ -32,7 +32,25 @@ mkdir -p "${HOME}/.cache/electron" "${HOME}/.cache/electron-builder"
 echo "[build-linux] 仓库根：${REPO_ROOT}"
 echo "[build-linux] 镜像：${IMAGE}"
 
+# 镜像/加速源转发（设计 §11 D-7：内网/受限网络）。仅在设置了对应宿主环境变量时转发：
+#   ELECTRON_MIRROR                    —— electron 二进制镜像
+#   ELECTRON_BUILDER_BINARIES_MIRROR   —— electron-builder 工具（appimage 等）镜像
+#   NPM_CONFIG_REGISTRY                —— npm/pnpm 注册表
+# 用法示例：
+#   ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ \
+#   ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
+#   NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
+#   bash apps/desktop/scripts/build-linux-docker.sh
+ENV_ARGS=()
+for _var in ELECTRON_MIRROR ELECTRON_BUILDER_BINARIES_MIRROR NPM_CONFIG_REGISTRY; do
+  if [ -n "${!_var:-}" ]; then
+    ENV_ARGS+=(-e "${_var}")
+    echo "[build-linux] 转发环境变量：${_var}"
+  fi
+done
+
 docker run --rm \
+  "${ENV_ARGS[@]}" \
   -v "${REPO_ROOT}":/project \
   -w /project \
   -v "${HOME}/.cache/electron":/root/.cache/electron \
