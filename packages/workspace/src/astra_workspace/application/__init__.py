@@ -7,10 +7,21 @@
 ``remote_task_service``（R3 / T2-60）承载**远程 Project / Task / Attempt / Event / Log /
 Diff / Artifact** 用例、scope 校验与事件游标服务；依赖全部经**注入 Protocol**，
 能力包**零** Web / **零** ``astra_runtime`` / **零** ORM（分层 L-2 / L-3）。
+
+``change_review_service``（R3 / T2-61）承载**受限 Diff / 显式 Apply / 显式 Push** 用例、
+基线 / 冲突校验与推送安全（任意 URL / 强推 / 删分支拒绝）；同样零 Web / 零 Runtime / 零 ORM。
 """
 
 from __future__ import annotations
 
+from .change_review_service import (
+    ApplyResult,
+    ChangeReviewService,
+    DiffView,
+    GitCredentialProvider,
+    GitWriteCredential,
+    PushResult,
+)
 from .project_service import (
     AttemptCheckoutResult,
     CloneResult,
@@ -74,4 +85,12 @@ __all__ = [
     "CAPABILITY_ARTIFACT_DOWNLOAD",
     "CAPABILITY_PROJECT_READ",
     "CAPABILITY_PROJECT_CLONE",
+    # R3 / T2-61：变更审阅（Diff / Apply / Push）
+    "ChangeReviewService",
+    "DiffView",
+    "ApplyResult",
+    "PushResult",
+    "GitWriteCredential",
+    "GitCredentialProvider",
 ]
+

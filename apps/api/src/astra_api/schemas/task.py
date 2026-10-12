@@ -28,6 +28,11 @@ __all__ = [
     "DiffFileResponse",
     "TaskDiffResponse",
     "TaskArtifactResponse",
+    # R3 / T2-61
+    "ApplyTaskRequest",
+    "ApplyTaskResponse",
+    "PushTaskRequest",
+    "PushTaskResponse",
 ]
 
 
@@ -186,3 +191,52 @@ class TaskArtifactResponse(BaseModel):
     ref: str
     size: int | None = None
     content_type: str | None = None
+
+
+# -- R3 / T2-61：变更审阅（显式 Apply / 显式 Push） ---------------------------------
+
+
+class ApplyTaskRequest(BaseModel):
+    """Apply 请求（F-R6；``EXECUTE + git.apply``；**不** Push）。"""
+
+    target_ref: str | None = Field(
+        default=None, description="目标分支（缺省取 Project default_branch）"
+    )
+    idempotency_key: str | None = Field(default=None, description="幂等键（可空；审计用）")
+
+
+class ApplyTaskResponse(BaseModel):
+    """Apply 响应（**只**更新服务器 Project 目标分支；**不含**宿主路径 / 凭证）。
+
+    ``already_applied`` 为幂等标记（目标分支**已**含结果提交）。
+    """
+
+    task_id: str
+    target_ref: str
+    base_commit: str | None = None
+    result_commit: str | None = None
+    applied_commit: str | None = None
+    already_applied: bool = False
+
+
+class PushTaskRequest(BaseModel):
+    """Push 请求（F-R7；**独立**权限 ``EXECUTE + git.push``）。
+
+    ``remote`` **仅**接受 ``origin``（**禁**任意 URL；非 ``origin`` → 403）。
+    """
+
+    target_ref: str | None = Field(
+        default=None, description="目标分支（缺省取 Project default_branch）"
+    )
+    remote: str = Field(default="origin", description="远端名（仅 origin 合法）")
+
+
+class PushTaskResponse(BaseModel):
+    """Push 响应（**不含**任何凭证 / 宿主路径）。"""
+
+    task_id: str
+    target_ref: str
+    remote: str = "origin"
+    ref: str = ""
+    pushed: bool = False
+    already_up_to_date: bool = False

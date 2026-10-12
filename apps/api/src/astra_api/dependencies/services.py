@@ -180,7 +180,16 @@ from astra_workflow.run import (
     QueuedRunner,
     ReplayService,
 )
-from astra_workspace import WorkspaceServices, build_workspace_services
+from astra_workspace import (
+    GitService,
+    ProjectStorage,
+    WorkspaceServices,
+    build_workspace_services,
+)
+from astra_workspace.application.change_review_service import (
+    ChangeReviewService,
+    GitWriteCredential,
+)
 from astra_workspace.application.remote_task_service import (
     ACTION_EXECUTE,
     PROJECT_CLONE_TASK_TYPE,
@@ -333,6 +342,8 @@ class AppServices:
     scheduler: SchedulerTick
     # -- R3 / T2-60：远程 Task / Project 用例（scope 校验 + 事件游标服务） -------
     remote_tasks: RemoteTaskService
+    # -- R3 / T2-61：变更审阅（受限 Diff / 显式 Apply / 显式 Push） --------------
+    change_review: ChangeReviewService
 
 
 def build_app_services(providers: Providers) -> AppServices:
@@ -773,15 +784,18 @@ def build_app_services(providers: Providers) -> AppServices:
     # ``astra_runtime`` / **零** ORM；授权 / 审计 / 提交 / 克隆派发 / 事件源**全部经注入适配器**
     # （组合根，C-7 单写者）。A-14：创建 / 取消 / Diff / Download 以 ``EXECUTE`` + capability
     # 细分校验，**不新增** action 枚举；``TASK`` 资源类型仅为字符串（无 DB 枚举迁移）。
+    remote_projects = _SessionScopedProjectRepository(session_factory)
+    remote_authorizer = _RemoteTaskAuthorizer(
+        authorization=identity.authorization,
+        permissions=resource_permission_repository,
+    )
+    remote_audit = _RemoteAuditSink(audit)
     remote_task_service = RemoteTaskService(
         tasks=task_repository,
         task_executions=task_execution_repository,
-        projects=_SessionScopedProjectRepository(session_factory),
-        authorizer=_RemoteTaskAuthorizer(
-            authorization=identity.authorization,
-            permissions=resource_permission_repository,
-        ),
-        audit=_RemoteAuditSink(audit),
+        projects=remote_projects,
+        authorizer=remote_authorizer,
+        audit=remote_audit,
         events=ExecutionTaskEventSource(task_execution_repository),
         submitter=_RemoteTaskSubmitter(
             tasks=task_repository,
@@ -790,6 +804,27 @@ def build_app_services(providers: Providers) -> AppServices:
         clone_dispatcher=_ProjectCloneDispatcher(
             tasks=task_repository,
             task_queue=providers.task_queue,
+        ),
+    )
+
+    # -- R3 / T2-61：变更审阅（受限 Diff / 显式 Apply / 显式 Push） -------------
+    # 分层：能力包 ``astra_workspace.application.ChangeReviewService`` **零** Web / **零**
+    # ``astra_runtime`` / **零** ORM；Git **仅经 Sandbox**（``GitService``）；``checkout_ref``
+    # 经 ``ProjectStorage``（``ManagedWorkspacePaths``）canonical containment 还原（前向硬约束）。
+    # 授权 / 审计复用 T2-60 同实例；写凭证经 ``_ProjectGitCredentialProvider`` **短时**解密。
+    sandbox_provider = providers.sandbox
+    change_review_service = ChangeReviewService(
+        tasks=task_repository,
+        executions=task_execution_repository,
+        projects=remote_projects,
+        git=GitService(sandbox_provider) if sandbox_provider is not None else None,
+        sandbox=sandbox_provider,
+        storage=ProjectStorage(settings.workspace_root),
+        authorizer=remote_authorizer,
+        audit=remote_audit,
+        credentials=_ProjectGitCredentialProvider(
+            projects=remote_projects,
+            decoder=CredentialServiceDecoder(credentials, cipher),
         ),
     )
 
@@ -846,6 +881,8 @@ def build_app_services(providers: Providers) -> AppServices:
         scheduler=scheduler_runner,
         # -- R3 / T2-60（远程 Task / Project 用例）
         remote_tasks=remote_task_service,
+        # -- R3 / T2-61（变更审阅：受限 Diff / 显式 Apply / 显式 Push）
+        change_review=change_review_service,
     )
 
 
@@ -1825,6 +1862,48 @@ class _SessionScopedProjectRepository:
         """列出某 Workspace 下的项目（短时会话内委派）。"""
         with session_scope(self._session_factory) as session:
             return SqlProjectRepository(session).list_by_workspace(workspace_id, scope=scope)
+
+
+class _ProjectGitCredentialProvider:
+    """``GitCredentialProvider`` 适配：从 ``Project.settings`` 读**写凭证引用**并**短时**解密。
+
+    🔴 **L-11（凭证明文不落库 / 日志 / 响应）**：明文仅经 ``CredentialServiceDecoder`` 在**内存**
+       短时解出，**仅**在**独立 Push Sandbox** 会话内以环境变量注入 git push；**不**落审计 / 响应 /
+       日志，**不**注入 Agent Sandbox / 客户端。
+
+    约定引用键（落 ``Project.settings``）：
+
+    - ``git_write_credential_id``：凭证 id（经 ``CredentialServiceDecoder`` 解密得 token）；
+    - ``git_write_username``：用户名（可空）。
+
+    未配置（无凭证 id / 解密失败）→ ``None``（Push 端点据此返回 422，**不静默成功**）。
+    """
+
+    #: 写凭证 id 引用键（``Project.settings``）。
+    SETTINGS_CREDENTIAL_ID_KEY = "git_write_credential_id"
+    #: 写凭证用户名键（``Project.settings``；可空）。
+    SETTINGS_USERNAME_KEY = "git_write_username"
+
+    def __init__(self, *, projects: Any, decoder: CredentialServiceDecoder) -> None:
+        """装配（项目仓储 + 凭证解密器）。"""
+        self._projects = projects
+        self._decoder = decoder
+
+    def write_credentials(self, *, tenant_id: str, project_id: str) -> GitWriteCredential | None:
+        """返回 Project 写凭证（**短时**）；未配置 / 跨租户 → ``None``。"""
+        project = self._projects.get(project_id)
+        if project is None or str(getattr(project, "tenant_id", "") or "") != tenant_id:
+            return None
+        settings = dict(getattr(project, "settings", None) or {})
+        credential_id = settings.get(self.SETTINGS_CREDENTIAL_ID_KEY)
+        if not credential_id:
+            return None
+        try:
+            token = self._decoder.decrypt(str(credential_id))
+        except Exception:  # noqa: BLE001 - 解密失败 → 视为未配置（不静默成功）
+            return None
+        username = str(settings.get(self.SETTINGS_USERNAME_KEY) or "")
+        return GitWriteCredential(username=username, token=token)
 
 
 def get_app_services(request: Request) -> AppServices:

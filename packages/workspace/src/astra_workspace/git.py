@@ -12,6 +12,12 @@
    :meth:`GitService.provision_attempt_checkout`（独立 ``git clone`` + 解析 ``base_commit``）——
    Router / Application Service / Worker **不得**直接启动宿主 Git Shell。单写者链 =
    **T2-58 → T2-61**（T2-61 在本模块追加 Apply / Push 受限实现）。
+
+🔴 **R3 / T2-61（C-4 链第二段）**：追加**受限** Diff / Apply / Push Sandbox 实现——
+   :meth:`GitService.diff_name_status` / :meth:`GitService.merge` /
+   :meth:`GitService.merge_abort` / :meth:`GitService.update_ref` /
+   :meth:`GitService.push_ref`（**永不加** ``--force``；拒删远端分支 / 任意 URL）。
+   :func:`parse_name_status` 解析 ``--name-status`` 输出为 ``(change_type, path)``。
 """
 
 from __future__ import annotations
@@ -25,10 +31,51 @@ from astra_core import DomainError, ErrorCode
 if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期
     from astra_sandbox import ExecResult, SandboxProvider, SandboxSession
 
-__all__ = ["GitService", "AttemptCheckout"]
+__all__ = ["GitService", "AttemptCheckout", "CHANGE_TYPE_LABELS", "parse_name_status"]
 
 #: 默认命令超时（毫秒）。
 DEFAULT_GIT_TIMEOUT_MS = 120_000
+
+#: ``git diff --name-status`` 变更类型族字母 → 归一化标签（T2-61）。
+CHANGE_TYPE_LABELS: Mapping[str, str] = {
+    "A": "added",
+    "M": "modified",
+    "D": "deleted",
+    "R": "renamed",
+    "C": "copied",
+    "T": "typechange",
+    "U": "unmerged",
+}
+
+
+def parse_name_status(output: str) -> list[tuple[str, str]]:
+    """解析 ``git diff --name-status`` 输出为 ``(change_type, path)`` 列表。
+
+    行格式（制表符分隔）：``<CODE>\\t<path>``；重命名 / 复制为 ``<CODE>\\t<old>\\t<new>``
+    （取**末段**为新路径）。``CODE`` 形如 ``A`` / ``M`` / ``D`` / ``R100``（取首字母族）。
+    无法解析的行跳过（容忍空行 / 杂散输出）。
+
+    Args:
+        output: ``git diff --name-status`` 的标准输出。
+
+    Returns:
+        ``(change_type, path)`` 列表（``change_type`` 为归一化标签，未知 → ``modified``）。
+    """
+    changes: list[tuple[str, str]] = []
+    for raw in (output or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        code = parts[0].strip()
+        path = parts[-1].strip()
+        if not code or not path:
+            continue
+        family = code[0].upper()
+        changes.append((CHANGE_TYPE_LABELS.get(family, "modified"), path))
+    return changes
 
 
 @dataclass
@@ -246,6 +293,150 @@ class GitService:
             session, base_ref or "HEAD", cwd=dest, timeout_ms=timeout_ms, env=env
         )
         return AttemptCheckout(clone=clone, base_commit=base_commit)
+
+    # -- 变更审阅：Diff / Apply / Push 受限实现（T2-61 · C-4 链第二段） --------
+    #
+    # 🔴 **仅经 Sandbox**：全部经 :meth:`_git`（**唯一**执行出口）；**禁**宿主直连 git。
+    # 🔴 **限制性 push**：本模块**不提供**强推 / 删远端分支 / 任意 URL 能力——refspec 以
+    #    ``:``（删除）或 ``+``（强推）开头、或 remote 疑似 URL，一律拒绝（``PERMISSION_DENIED``）。
+
+    def diff_name_status(
+        self,
+        session: SandboxSession,
+        base: str,
+        result: str,
+        *,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> ExecResult:
+        """在沙箱内 ``git diff --name-status <base> <result>``（变更文件摘要）。"""
+        return self._git(
+            session,
+            ["diff", "--name-status", base, result],
+            cwd=cwd,
+            timeout_ms=timeout_ms,
+            env=env,
+        )
+
+    def merge_base(
+        self,
+        session: SandboxSession,
+        a: str,
+        b: str,
+        *,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> ExecResult:
+        """在沙箱内 ``git merge-base <a> <b>``（共同祖先）。"""
+        return self._git(session, ["merge-base", a, b], cwd=cwd, timeout_ms=timeout_ms, env=env)
+
+    def fetch_from(
+        self,
+        session: SandboxSession,
+        repo_path: str,
+        ref: str,
+        *,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> ExecResult:
+        """在沙箱内 ``git fetch <repo_path> <ref>``（从本地副本取对象，**非**任意远端 URL）。"""
+        return self._git(
+            session, ["fetch", repo_path, ref], cwd=cwd, timeout_ms=timeout_ms, env=env
+        )
+
+    def merge(
+        self,
+        session: SandboxSession,
+        ref: str,
+        *,
+        no_ff: bool = True,
+        message: str | None = None,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> ExecResult:
+        """在沙箱内合并 ``ref``（默认 ``--no-ff``；可选提交信息）。冲突 → 非零退出码。"""
+        args: list[str] = ["merge"]
+        if no_ff:
+            args.append("--no-ff")
+        if message:
+            args.extend(["-m", message])
+        args.append(ref)
+        return self._git(session, args, cwd=cwd, timeout_ms=timeout_ms, env=env)
+
+    def merge_abort(
+        self,
+        session: SandboxSession,
+        *,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> ExecResult:
+        """在沙箱内 ``git merge --abort``（冲突后回滚合并，**保留原状**）。"""
+        return self._git(session, ["merge", "--abort"], cwd=cwd, timeout_ms=timeout_ms, env=env)
+
+    def update_ref(
+        self,
+        session: SandboxSession,
+        ref: str,
+        sha: str,
+        *,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> ExecResult:
+        """在沙箱内 ``git update-ref <ref> <sha>``（**仅**更新服务端 Project 目标分支）。"""
+        return self._git(session, ["update-ref", ref, sha], cwd=cwd, timeout_ms=timeout_ms, env=env)
+
+    def push_ref(
+        self,
+        session: SandboxSession,
+        *,
+        remote: str,
+        refspec: str,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> ExecResult:
+        """在沙箱内**受限**推送（``git push <remote> <refspec>``，**永不加** ``--force``）。
+
+        Raises:
+            DomainError: ``remote`` 疑似 URL（``scheme://`` / ``@host``）或含 ``--force`` / ``-f``、
+                ``refspec`` 以 ``:``（删分支）或 ``+``（强推）开头 —— ``PERMISSION_DENIED``。
+        """
+        if self._is_remote_url(remote) or "--force" in remote or remote == "-f":
+            raise DomainError(
+                "禁止推送至任意 URL / 强推 remote",
+                code=ErrorCode.PERMISSION_DENIED,
+                data={"field": "remote"},
+            )
+        token = refspec.strip()
+        if not token or token.startswith(":") or token.startswith("+"):
+            raise DomainError(
+                "禁止删除远端分支 / 强推（refspec 不得以 ':' 或 '+' 开头）",
+                code=ErrorCode.PERMISSION_DENIED,
+                data={"field": "refspec"},
+            )
+        if "--force" in refspec or refspec.startswith("-f"):
+            raise DomainError(
+                "禁止强推（force push）",
+                code=ErrorCode.PERMISSION_DENIED,
+                data={"field": "refspec"},
+            )
+        return self._git(
+            session, ["push", remote, refspec], cwd=cwd, timeout_ms=timeout_ms, env=env
+        )
+
+    @staticmethod
+    def _is_remote_url(remote: str) -> bool:
+        """判断 remote 是否疑似**任意 URL**（``scheme://`` / ``user@host:path``）。"""
+        text = (remote or "").strip()
+        if "://" in text:
+            return True
+        return "@" in text
 
     # -- 唯一执行出口 --------------------------------------------------------
 

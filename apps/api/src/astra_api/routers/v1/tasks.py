@@ -1,6 +1,6 @@
-"""``/tasks`` 路由（W6 / T1-29；W10 / T2-49 扩展；R3 / T2-60 扩展远程面）。
+"""``/tasks`` 路由（W6 / T1-29；W10 / T2-49 扩展；R3 / T2-60 扩展远程面；R3 / T2-61 增变更审阅）。
 
-端点（**既有 W10 行为保持不变**；R3 / T2-60 仅**加性**新增远程端点）：
+端点（**既有 W10 / T2-60 行为保持不变**；R3 / T2-61 仅**加性**新增变更审阅端点）：
 
 - ``GET  /tasks``：列表（``task_type`` / ``status`` 过滤 + 分页）；R3 增可选 ``project_id``
   ——提供时走**远程授权**分支（capability ``task.read``；跨范围 → 404）；
@@ -16,10 +16,15 @@
   · ``GET  /tasks/{task_id}/diff``：某 Attempt **受限** Diff（``EXECUTE + git.diff``）；
   · ``GET  /tasks/{task_id}/artifacts``：Artifact 元数据；
   · ``GET  /tasks/{task_id}/artifacts/{name}``：Artifact 下载（**逐项重新鉴权**）。
+- **R3 / T2-61 变更审阅端点**（C-2 链尾；**复用** T2-60 helper，**不改**其签名）：
+  · ``POST /tasks/{task_id}/apply``：显式 Apply（F-R6；``EXECUTE + git.apply``；基线/脏树/冲突 → 409
+    且保留原 Project / Attempt；**只**更新服务器 Project 目标分支，**不** Push）；
+  · ``POST /tasks/{task_id}/push``：显式 Push（F-R7；**独立**权限 ``EXECUTE + git.push``）；
+    须配置写凭证；拒任意 URL / 强推 / 删远端分支）。
 
 Router **只**依赖 ``AppServices``（N-8，经 ``services.tasks`` / ``services.task_executions`` /
-``services.remote_tasks`` 领域 / 应用用例）；**不** import ``astra_workspace`` /
-``astra_database`` / ``sqlalchemy``（A33 / L-7 收紧）。
+``services.remote_tasks`` / ``services.change_review`` 领域 / 应用用例）；**不** import
+``astra_workspace`` / ``astra_database`` / ``sqlalchemy``（A33 / L-7 收紧）。
 """
 
 from __future__ import annotations
@@ -35,7 +40,11 @@ from fastapi.responses import Response, StreamingResponse
 from astra_api.dependencies.auth import CurrentUser
 from astra_api.dependencies.services import AppServices, get_app_services
 from astra_api.schemas import (
+    ApplyTaskRequest,
+    ApplyTaskResponse,
     DiffFileResponse,
+    PushTaskRequest,
+    PushTaskResponse,
     RemoteTaskSubmitRequest,
     RemoteTaskSubmitResponse,
     RemoteTaskViewResponse,
@@ -168,6 +177,19 @@ def _require_remote_service(services: AppServices) -> Any:
             data={"capability": "remote_tasks"},
         )
     return remote
+
+
+def _require_change_review_service(services: AppServices) -> Any:
+    """取变更审阅服务（缺装配 → 结构化 503，不静默）。"""
+    review = getattr(services, "change_review", None)
+    if review is None:
+        raise DomainError(
+            "变更审阅能力未装配",
+            code=ErrorCode.DEPENDENCY_MISSING,
+            status_code=503,
+            data={"capability": "change_review"},
+        )
+    return review
 
 
 @router.get("", response_model=list[TaskResponse], summary="任务列表")
@@ -508,4 +530,68 @@ def download_task_artifact(
         content=download.content,
         media_type=download.content_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
+
+
+# -- R3 / T2-61：变更审阅（显式 Apply / 显式 Push；C-2 链尾；复用 T2-60 helper） ------
+
+
+@router.post(
+    "/{task_id}/apply",
+    response_model=ApplyTaskResponse,
+    summary="显式应用变更（不 Push，F-R6）",
+)
+def apply_task_change(
+    task_id: str,
+    payload: ApplyTaskRequest,
+    user: CurrentUser,
+    services: Annotated[AppServices, Depends(get_app_services)],
+) -> ApplyTaskResponse:
+    """把 Attempt 结果**仅**应用到服务器 Project 目标分支（F-R6；``EXECUTE + git.apply``）。
+
+    **不** Push。跨租户 / 越界 → 404；缺 capability → 403；目标前进 / 脏工作树 / 冲突 → 409
+    （**保留原 Project / Attempt**）；未装配 → 503。
+    """
+    review = _require_change_review_service(services)
+    result = review.apply(_principal(user), task_id, target_ref=payload.target_ref)
+    return ApplyTaskResponse(
+        task_id=result.task_id,
+        target_ref=result.target_ref,
+        base_commit=result.base_commit,
+        result_commit=result.result_commit,
+        applied_commit=result.applied_commit,
+        already_applied=result.already_applied,
+    )
+
+
+@router.post(
+    "/{task_id}/push",
+    response_model=PushTaskResponse,
+    summary="显式推送（独立权限，F-R7）",
+)
+def push_task_change(
+    task_id: str,
+    payload: PushTaskRequest,
+    user: CurrentUser,
+    services: Annotated[AppServices, Depends(get_app_services)],
+) -> PushTaskResponse:
+    """把服务器 Project 目标分支推送到远端（F-R7；**独立**权限 ``EXECUTE + git.push``）。
+
+    跨租户 / 越界 → 404；缺 capability → 403；任意 URL / 强推 / 删分支 → 403；
+    未配置写凭证 → 422；推送被拒 → 409；未装配 → 503。
+    """
+    review = _require_change_review_service(services)
+    result = review.push(
+        _principal(user),
+        task_id,
+        target_ref=payload.target_ref,
+        remote=payload.remote,
+    )
+    return PushTaskResponse(
+        task_id=result.task_id,
+        target_ref=result.target_ref,
+        remote=result.remote,
+        ref=result.ref,
+        pushed=result.pushed,
+        already_up_to_date=result.already_up_to_date,
     )

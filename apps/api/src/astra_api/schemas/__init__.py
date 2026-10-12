@@ -118,7 +118,11 @@ from .skill import (
     UpdateSkillRequest,
 )
 from .task import (
+    ApplyTaskRequest,
+    ApplyTaskResponse,
     DiffFileResponse,
+    PushTaskRequest,
+    PushTaskResponse,
     RemoteTaskSubmitRequest,
     RemoteTaskSubmitResponse,
     RemoteTaskViewResponse,
@@ -219,6 +223,11 @@ __all__ = [
     "DiffFileResponse",
     "TaskDiffResponse",
     "TaskArtifactResponse",
+    # R3 / T2-61：变更审阅（显式 Apply / 显式 Push）
+    "ApplyTaskRequest",
+    "ApplyTaskResponse",
+    "PushTaskRequest",
+    "PushTaskResponse",
     # permission（W3 / T2-14）
     "PermissionCheckResponse",
     # skill / mcp / plugin / audit（W3 / T2-17）

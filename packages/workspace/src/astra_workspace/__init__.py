@@ -13,6 +13,14 @@ W7（T2-37）新增（能力包自含布局，R1）：``Project`` / ``WorkspaceE
 from __future__ import annotations
 
 from .application import AttemptCheckoutResult, CloneResult, ProjectService, TaskDispatcher
+from .application.change_review_service import (
+    ApplyResult,
+    ChangeReviewService,
+    DiffView,
+    GitCredentialProvider,
+    GitWriteCredential,
+    PushResult,
+)
 from .application.remote_task_service import (
     ArtifactView,
     ExecutionTaskEventSource,
@@ -100,4 +108,11 @@ __all__ = [
     "RemoteEventPage",
     "RemoteTaskAuthorizer",
     "ExecutionTaskEventSource",
+    # R3 / T2-61：变更审阅（受限 Diff / 显式 Apply / 显式 Push）
+    "ChangeReviewService",
+    "DiffView",
+    "ApplyResult",
+    "PushResult",
+    "GitWriteCredential",
+    "GitCredentialProvider",
 ]
