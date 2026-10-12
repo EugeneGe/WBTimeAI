@@ -79,6 +79,8 @@ from .defaults import (
     DEFAULT_SKILL_WORKSPACE_DIRS,
     DEFAULT_SSE_HEARTBEAT_SECONDS,
     DEFAULT_VECTOR_SEARCH,
+    DEFAULT_WEB_DIST,
+    DEFAULT_WEB_STATIC_ENABLED,
     DEFAULT_WORKSPACE_ROOT,
     HARD_MAX_ARTIFACT_BYTES,
     HARD_MAX_ARTIFACT_COUNT,
@@ -346,6 +348,14 @@ class Settings(BaseSettings):
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
     cors_origins: list[str] = Field(default_factory=list)
+
+    # -- 前端静态托管（发行形态 A / M2 · WS2） ------------------------------
+    # ``ASTRA_WEB_DIST``：前端构建产物目录（含 ``index.html``）。空 = 按包相对
+    # 路径自动探测 ``apps/web/dist``（仓库 / 镜像内一致，**不硬编码绝对路径**）。
+    web_dist: str = DEFAULT_WEB_DIST
+    # ``ASTRA_WEB_STATIC_ENABLED``：静态托管开关。缺省 ``True``；**仅当**解析到的
+    # 目录存在时才实际挂载 → 缺省（无 dist）/ 开发 / 测试环境**零影响**。
+    web_static_enabled: bool = DEFAULT_WEB_STATIC_ENABLED
 
     # -- 数据库 -------------------------------------------------------------
     database_url: str = DEFAULT_DATABASE_URL

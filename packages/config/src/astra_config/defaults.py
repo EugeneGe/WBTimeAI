@@ -88,6 +88,16 @@ DEFAULT_SANDBOX_EGRESS_PROXY_URL = ""
 #: 可观测：``/metrics`` 开关（§2.7.3）；社区默认关闭，Team 可开。
 DEFAULT_METRICS_ENABLED = False
 
+# -- 前端静态托管（发行形态 A / M2 · WS2） -----------------------------------
+
+#: 前端构建产物目录（含 ``index.html``）。空 = 按包相对路径自动探测
+#: ``apps/web/dist``（仓库 / 镜像内一致，**不硬编码绝对路径**）。
+DEFAULT_WEB_DIST = ""
+
+#: 是否启用「API 同源托管前端静态」。缺省 ``True``：**仅当**解析到的目录存在时
+#: 才实际生效；置 ``False`` 可显式关闭（纯后端部署 / 最小 API 镜像）。
+DEFAULT_WEB_STATIC_ENABLED = True
+
 # -- Runtime / SSE（W6 · T1-31；设计 §2.9 / §2.16） --------------------------
 
 #: Run 级总超时（毫秒，兜底扫描阈值）；与 ``astra_domain.DEFAULT_RUN_TIMEOUT_MS`` 一致。
@@ -310,6 +320,8 @@ __all__ = [
     "DEFAULT_SANDBOX_EGRESS_NETWORK",
     "DEFAULT_SANDBOX_EGRESS_PROXY_URL",
     "DEFAULT_METRICS_ENABLED",
+    "DEFAULT_WEB_DIST",
+    "DEFAULT_WEB_STATIC_ENABLED",
     "DEFAULT_RUN_TIMEOUT_MS",
     "DEFAULT_SSE_HEARTBEAT_SECONDS",
     "DEFAULT_REDIS_URL",
