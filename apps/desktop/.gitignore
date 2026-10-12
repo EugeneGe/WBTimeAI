@@ -1,0 +1,12 @@
+# 桌面壳本地产物（不入库）
+node_modules/
+out/
+renderer/
+release/
+
+# 日志
+*.log
+
+# 覆盖根 .gitignore 的 Python `build/` 规则：electron-builder 的 buildResources
+# 目录（图标等**需入库**的资源）—— 子目录 .gitignore 优先级更高，故重新纳入。
+!build/

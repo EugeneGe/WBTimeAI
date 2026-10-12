@@ -1,0 +1,30 @@
+{
+  "name": "astra-desktop",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Astra AI 桌面壳（Electron）· M2 · WS3（发行形态 B）",
+  "author": "Astra AI Contributors",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "out/main/main.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "sync:renderer": "node scripts/sync-renderer.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "dev": "npm run build && npm run sync:renderer && electron .",
+    "start": "electron .",
+    "dist:dir": "npm run build && npm run sync:renderer && electron-builder --dir",
+    "dist:win": "npm run build && npm run sync:renderer && electron-builder --win nsis",
+    "dist:linux": "npm run build && npm run sync:renderer && electron-builder --linux AppImage deb",
+    "test": "npm run build && node --test out/main/__tests__"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.16.0",
+    "typescript": "^5.6.2"
+  }
+}

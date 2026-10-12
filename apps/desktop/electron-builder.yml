@@ -1,0 +1,57 @@
+# ---------------------------------------------------------------------------
+# Astra AI · 桌面壳打包配置（electron-builder · M2 · WS3）
+#
+# - 产物输出到 release/（不入库）。
+# - files 仅打包运行所需：编译后的主进程 out/** + 构建期同步的 renderer/** + package.json。
+#   （本包 **无** 运行期第三方依赖，依赖仅用于构建；故不必打包 node_modules。）
+# - Win：nsis 安装包（本机可出）；Linux：AppImage + deb（须在 Linux 宿主 / Docker 出）。
+# - 图标：build/icon.ico（Win）/ build/icon.png（Linux）；先占位，T-04 前可替换为正式图标。
+# ---------------------------------------------------------------------------
+appId: com.astraai.desktop
+productName: Astra AI
+copyright: Copyright © 2026 Astra AI Contributors
+
+directories:
+  output: release
+  buildResources: build
+
+# 仅打包运行必需文件；排除 sourcemap 与 TS 源码。
+files:
+  - out/**
+  - renderer/**
+  - package.json
+  - "!**/*.map"
+  - "!**/*.ts"
+
+asar: true
+
+# ---- Windows ---------------------------------------------------------------
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Astra AI
+  artifactName: Astra-AI-Setup-${version}.${ext}
+
+# ---- Linux -----------------------------------------------------------------
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: build/icon.png
+  category: Utility
+  synopsis: Astra AI desktop shell
+  maintainer: Astra AI Contributors
+  artifactName: Astra-AI-${version}.${ext}
+
+# ---- 通用 ------------------------------------------------------------------
+# 说明：v1 不做代码签名（见设计 §11 D-5）；Windows 首次运行会有 SmartScreen 提示。
