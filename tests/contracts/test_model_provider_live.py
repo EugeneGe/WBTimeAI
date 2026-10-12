@@ -265,8 +265,12 @@ def test_live_embeddings(live_provider: Any, live_spec: LiveProviderSpec) -> Non
     try:
         vectors = live_provider.embeddings(texts, model=embed_model)
     except ProviderError as exc:
-        # 服务端「明确不支持」→ 归一化为**非可重试**的明确错误（如实标注，非伪造 / 非静默）。
-        assert exc.retryable is False, "不支持 embeddings 应为非可重试错误"
+        # 仅容忍「服务端**明确**不支持 embeddings」——归一化为**非可重试**的确定性错误
+        # （如 ``MODEL_CAPABILITY_NOT_SUPPORTED`` → ``retryable=False``，如实标注、非静默）。
+        # 🔴 瞬态错误（503 / 429 / timeout → ``retryable=True``）**必须冒泡**，
+        # 不得误判为「不支持」——否则会把网络/服务端抖动伪装成假绿，或反之造成假红。
+        if exc.retryable:
+            raise
         return
 
     assert len(vectors) == len(texts), "embeddings 返回数量应与输入等长"
