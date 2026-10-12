@@ -7,14 +7,21 @@
 - **硬上限显式校验**：超硬上限 / 非正值 → 构造期报错（部署**只可收紧**，不可越过硬上限）；
 - **执行 deadline 依据**：Claim 租约（90s）与心跳（30s）常量 + 执行耗时（``duration_ms``）计算；
 - **N9 连续性**：心跳续租使在执行中的 Attempt **不**被判为失联（仅过期才中断）；
+- **N9 连续性（T2-63 扩展）**：心跳续租使在执行中的 Attempt **不**被判为失联；**租约过期**
+  → Attempt 以 ``WORKER_INTERRUPTED`` 结束（**不**静默伪装成功）；
+- **N10 远程工作区资源边界（T2-63 扩展）**：Community 档**应用层**边界（并发 / 时长 /
+  产物大小 / 磁盘）限额在位（**不**宣称 OS 级隔离）；Docker / Compose **硬配额**（CPU / 内存 /
+  PID / 磁盘 / 网络）生效**仅**在 Docker 档 —— **挂账待服务器**；
 - **Sandbox 资源限额**：Docker 沙箱默认 CPU / 内存 / PID 限额 + ``network=none``（进程级能力边界）。
 
-🔴 本 NFR 不含真实 Docker / PG 依赖（本机无 Docker）；真实隔离验收归 R5 / T2-63（``#42`` / D19）。
+🔴 本 NFR 不含真实 Docker / PG 依赖（本机无 Docker）；真实隔离验收归 R5 / T2-63
+（``#42`` / D19 / N10）。
 """
 
 from __future__ import annotations
 
 import inspect
+import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -25,6 +32,7 @@ from astra_sandbox import DockerSandboxProvider
 from astra_task import (
     DEFAULT_HEARTBEAT_SECONDS,
     DEFAULT_LEASE_SECONDS,
+    EXECUTION_STATUS_WORKER_INTERRUPTED,
     ExecutionRecorder,
     TaskExecutionRecord,
     TaskStatus,
@@ -185,3 +193,62 @@ def test_docker_sandbox_default_resource_limits() -> None:
     provider = DockerSandboxProvider()
     assert provider.network == "none"
     assert provider.network_profile == "offline"
+
+
+# -- N9 远程任务连续性（T2-63 扩展：中断有确定终态，不静默成功） --------------
+
+
+def test_n9_expired_lease_interrupts_attempt() -> None:
+    """租约过期 → Attempt 以 ``WORKER_INTERRUPTED`` 结束（**不**伪装成功）；未过期不中断。"""
+    recorder = ExecutionRecorder(_FakeExecutionRepository())
+    record = recorder.claim(task_id="task-n9", attempt=1, now=T0)
+    assert record.status == TaskStatus.RUNNING.value
+
+    # 租约内 → 不中断（确定性）。
+    assert recorder.sweep_interrupted(now=T0 + timedelta(seconds=DEFAULT_LEASE_SECONDS - 1)) == []
+    # 过期 → 标记中断（终态明确，可审计；非 SUCCESS）。
+    swept = recorder.sweep_interrupted(now=T0 + timedelta(seconds=DEFAULT_LEASE_SECONDS + 1))
+    assert [item.id for item in swept] == [record.id]
+    assert swept[0].status == EXECUTION_STATUS_WORKER_INTERRUPTED
+    assert swept[0].status != TaskStatus.SUCCESS.value
+
+
+def test_n9_heartbeat_prevents_interrupt() -> None:
+    """N9：心跳续租后，扫描窗口内 Attempt **不**被中断（断连 ≠ 取消/失败）。"""
+    recorder = ExecutionRecorder(_FakeExecutionRepository())
+    record = recorder.claim(task_id="task-n9b", attempt=1, now=T0)
+    # 距离起点已远超单段租约，但心跳持续续租。
+    recorder.heartbeat(record, now=T0 + timedelta(seconds=DEFAULT_LEASE_SECONDS + 5))
+
+    assert recorder.sweep_interrupted(now=T0 + timedelta(seconds=DEFAULT_LEASE_SECONDS + 6)) == []
+
+
+# -- N10 远程工作区资源边界（T2-63 扩展） -----------------------------------
+
+
+def test_n10_community_app_layer_caps_present() -> None:
+    """Community 档：**应用层**边界限额在位（并发 / 时长 / 产物大小 / 磁盘）。
+
+    Community 为**进程级 best-effort**（仅单用户 / 可信代码），**不**宣称 OS 级隔离（A-13）。
+    """
+    limits = RemoteExecutionSettings()
+
+    for field in (
+        "max_concurrent_executions",
+        "max_duration_seconds",
+        "max_artifact_bytes",
+        "max_artifact_count",
+        "max_disk_bytes",
+    ):
+        assert getattr(limits, field) >= 1, f"{field} 应用层边界缺失"
+
+
+@pytest.mark.docker
+def test_n10_docker_hard_quota_requires_docker_profile() -> None:
+    """**N10 / #42 挂账**：Docker / Compose **硬配额**（CPU / 内存 / PID / 磁盘 / 网络）生效
+    **仅**在 Docker 档验证；本机无 Docker → 缺运行时 ``skip``；``ASTRA_TEST_REQUIRE_DOCKER=1``
+    （服务器 / CI）**必须**实跑（Manual 非豁免）。
+    """
+    if os.environ.get("ASTRA_TEST_REQUIRE_DOCKER") == "1":
+        pytest.fail("Docker 运行时下必须实跑硬配额断言（T2-63 服务器验收）")
+    pytest.skip("挂账待服务器：Docker / Compose 硬配额生效（N10 / #42）")
