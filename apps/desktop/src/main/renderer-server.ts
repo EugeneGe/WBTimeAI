@@ -2,7 +2,7 @@
 // 内置渲染服务（M2 · WS3 · T-03 · 设计 §3/§10）
 //
 // `bundled` 模式下：壳内 Node http 服务托管内置前端产物（`renderer/`），并把
-// `/api`、`/health`、`/docs`、`/openapi.json`、`/metrics` **同源反代**到后端。
+// `/api`、`/health`、`/docs`、`/redoc`、`/openapi.json`、`/metrics` **同源反代**到后端。
 //
 // 🔴 SSE 关键：反代**逐块 flush、不缓冲、不改写**（透传 `text/event-stream`），
 //    否则 Chat 流式（`/agents/{id}/run`）会卡死。
@@ -26,6 +26,7 @@ const PROXY_PREFIXES: readonly string[] = [
   "/api",
   "/health",
   "/docs",
+  "/redoc",
   "/openapi.json",
   "/metrics",
 ];
@@ -275,6 +276,12 @@ export class RendererServer {
           if (!HOP_BY_HOP_HEADERS.includes(key.toLowerCase())) {
             responseHeaders[key] = value;
           }
+        }
+        // SSE（text/event-stream）：显式禁缓存 / 禁中间层缓冲，保流式逐块下发。
+        const upstreamContentType = String(upstreamRes.headers["content-type"] ?? "");
+        if (upstreamContentType.includes("text/event-stream")) {
+          responseHeaders["cache-control"] = "no-cache";
+          responseHeaders["x-accel-buffering"] = "no";
         }
         res.writeHead(upstreamRes.statusCode ?? 502, responseHeaders);
         // 立即下发响应头：SSE（text/event-stream）据此开始逐块推送。
