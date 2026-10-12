@@ -4,6 +4,12 @@
 取 :class:`~astra_config.providers.Providers`（**唯一装配点**），注册 ``tasks/`` 处理器，
 进入消费循环（``TaskQueue.dequeue() → dispatch → ack()``）。
 
+🔴 **T2-59 启动恢复接线（R5 补正）**：``run_worker`` 在**消费循环开始前**触发
+   :meth:`astra_worker.recovery.LeaseManager.recover_on_startup`——
+   ① 过期 ``RUNNING`` → ``WORKER_INTERRUPTED``（**不**伪装成功 / **不**静默重放）；
+   ② 持久 ``PENDING`` 任务经**注入 dispatch** 重投（``queue.enqueue``）。
+   缺 ``providers.database``（如测试桩）→ **跳过并记 WARNING**（非静默；不阻断启动）。
+
 🔴 本进程**不判断 ``ASTRA_MODE``**（唯一分流点在 ``build_providers``）；执行体 / 队列**正交**：
    仅按注入的 ``providers.task_queue`` 消费（社区 ``InProcess``、Team ``Redis``）。
 """
@@ -60,6 +66,66 @@ def _dispatch(
     return {"ok": True, "handler": handler_key, "result": result}
 
 
+def _build_lease_manager(providers: Any, settings: Settings) -> Any | None:
+    """按 ``Providers`` 装配 :class:`LeaseManager`（T2-59 补正）。
+
+    ``database.session_factory`` 不可用（测试桩 / 极简 Providers）→ ``None``（调用方据此
+    **跳过**启动恢复并记 WARNING，**非静默**）。执行限期额（F8）经 ``settings.remote_execution``
+    注入（可空；缺省 = 不启用，向后兼容）。
+    """
+    database = getattr(providers, "database", None)
+    session_factory = getattr(database, "session_factory", None)
+    if not callable(session_factory):
+        return None
+    from astra_database import SqlTaskExecutionRepository
+    from astra_task import ExecutionRecorder
+
+    from astra_worker.recovery import LeaseManager
+
+    limits = getattr(settings, "remote_execution", None)
+    return LeaseManager(
+        ExecutionRecorder(SqlTaskExecutionRepository(session_factory)),
+        max_concurrent_executions=getattr(limits, "max_concurrent_executions", None),
+        max_artifact_count=getattr(limits, "max_artifact_count", None),
+        max_artifact_bytes=getattr(limits, "max_artifact_bytes", None),
+    )
+
+
+def _recover_on_startup(providers: Any, *, queue: Any, lease_manager: Any | None) -> None:
+    """启动恢复 sweep（T2-59 补正；**消费循环开始前**调用一次）。
+
+    ① 过期 ``RUNNING`` → ``WORKER_INTERRUPTED``；② 持久 ``PENDING`` 经**注入 dispatch** 重投。
+    缺 ``lease_manager``（无 database Provider）→ 记 WARNING 并跳过（非静默，不阻断启动）。
+    """
+    if lease_manager is None:
+        _logger.warning("worker.recovery_skipped", extra={"reason": "no_database_provider"})
+        return
+    from astra_database import SqlTaskRepository
+
+    from astra_worker.tasks import make_message
+
+    task_repository = SqlTaskRepository(providers.database.session_factory)
+
+    def _dispatch(task: Any) -> None:
+        """把持久 ``PENDING`` 任务重新投递到队列（**经注入 dispatch**，非直连）。"""
+        queue.enqueue(
+            make_message(
+                str(getattr(task, "type", "") or ""),
+                dict(getattr(task, "payload", None) or {}),
+                task_id=str(getattr(task, "task_id", "") or ""),
+            )
+        )
+
+    report = lease_manager.recover_on_startup(task_repository=task_repository, dispatch=_dispatch)
+    _logger.info(
+        "worker.recovery_done",
+        extra={
+            "interrupted": len(report.interrupted),
+            "redelivered": len(report.redelivered),
+        },
+    )
+
+
 def run_worker(
     settings: Settings,
     *,
@@ -69,6 +135,9 @@ def run_worker(
     handlers: dict[str, Handler] | None = None,
 ) -> int:
     """启动 Worker 消费循环。
+
+    启动顺序（T2-59 补正）：装配 Providers → 装配租约管理器（注入 handler）→ **启动恢复
+    sweep**（过期 ``RUNNING`` → ``WORKER_INTERRUPTED``；持久 ``PENDING`` 重投）→ 消费循环。
 
     Args:
         settings: 生效配置（经 ``build_providers`` 装配 Providers）。
@@ -89,6 +158,13 @@ def run_worker(
     queue = providers.task_queue
     if queue is None:
         raise RuntimeError("Providers.task_queue 未装配，无法启动 Worker")
+
+    # T2-59 补正：装配租约管理器（供 remote.agent_run handler 使用）并在**消费循环前**
+    # 触发**启动恢复 sweep**（过期 RUNNING → WORKER_INTERRUPTED + PENDING 重投）。
+    lease_manager = _build_lease_manager(providers, settings)
+    if lease_manager is not None:
+        ctx.services["lease_manager"] = lease_manager
+    _recover_on_startup(providers, queue=queue, lease_manager=lease_manager)
 
     processed = 0
     _logger.info("worker.started", extra={"handlers": sorted(registry)})

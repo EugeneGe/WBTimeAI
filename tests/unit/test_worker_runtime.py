@@ -59,6 +59,16 @@ class _FakeProviders:
         self.task_queue = queue
 
 
+class _FakeDbProviders:
+    """带 ``database.session_factory`` 的最小 Providers 桩（供入口接线恢复用例）。"""
+
+    def __init__(self, queue: Any, session_factory: Any) -> None:
+        from types import SimpleNamespace
+
+        self.task_queue = queue
+        self.database = SimpleNamespace(session_factory=session_factory)
+
+
 def test_run_worker_consumes_three_task_types(monkeypatch: pytest.MonkeyPatch) -> None:
     """Worker 消费三类任务（``dequeue → dispatch → ack``）。"""
     queue: InProcessTaskQueue[dict[str, Any]] = InProcessTaskQueue()
@@ -98,3 +108,80 @@ def test_main_help_does_not_crash(
     worker_main.main()
     out = capsys.readouterr().out
     assert "Astra AI Worker" in out
+
+
+# -- T2-59 补正：入口接线启动恢复 sweep（防「定义存在但无调用者」再现） ----------
+
+
+def test_run_worker_triggers_startup_recovery_sweep(
+    monkeypatch: pytest.MonkeyPatch, session_factory: Any
+) -> None:
+    """入口接线：``run_worker`` 启动触发恢复 sweep → 过期 ``RUNNING`` 落 ``WORKER_INTERRUPTED``。"""
+    from datetime import timedelta
+
+    from astra_common.time import utcnow
+    from astra_database import SqlTaskExecutionRepository, SqlTaskRepository
+    from astra_task import EXECUTION_STATUS_WORKER_INTERRUPTED, ExecutionRecorder, Task
+
+    task = SqlTaskRepository(session_factory).add(
+        Task(tenant_id="tenant-t59", type=REMOTE_AGENT_RUN_KEY, execution_mode="QUEUED")
+    )
+    # 种入**过期** RUNNING 执行（租约 = now-1h+90s，已过期）。
+    ExecutionRecorder(SqlTaskExecutionRepository(session_factory)).claim(
+        task_id=task.task_id, attempt=1, now=utcnow() - timedelta(hours=1)
+    )
+
+    queue: InProcessTaskQueue[dict[str, Any]] = InProcessTaskQueue()
+    providers = _FakeDbProviders(queue, session_factory)
+    monkeypatch.setattr(worker_main, "build_providers", lambda settings: providers)
+
+    processed = worker_main.run_worker(object(), stop_when_empty=True, handlers={})
+
+    assert processed == 0
+    persisted = SqlTaskExecutionRepository(session_factory).get_by_attempt(task.task_id, 1)
+    assert persisted is not None
+    assert persisted.status == EXECUTION_STATUS_WORKER_INTERRUPTED, "启动未触发恢复 sweep"
+
+
+def test_run_worker_redelivers_pending_on_startup(
+    monkeypatch: pytest.MonkeyPatch, session_factory: Any
+) -> None:
+    """入口接线：``run_worker`` 启动时把持久 ``PENDING`` 任务**重投**（经 queue.enqueue）。"""
+    from astra_database import SqlTaskRepository
+    from astra_task import Task, TaskStatus
+
+    task = SqlTaskRepository(session_factory).add(
+        Task(
+            tenant_id="tenant-t59b",
+            type=REMOTE_AGENT_RUN_KEY,
+            execution_mode="QUEUED",
+            status=TaskStatus.PENDING,
+        )
+    )
+
+    queue: InProcessTaskQueue[dict[str, Any]] = InProcessTaskQueue()
+    enqueued: list[dict[str, Any]] = []
+    original_enqueue = queue.enqueue
+    monkeypatch.setattr(
+        queue, "enqueue", lambda message: (enqueued.append(message), original_enqueue(message))[1]
+    )
+    providers = _FakeDbProviders(queue, session_factory)
+    monkeypatch.setattr(worker_main, "build_providers", lambda settings: providers)
+
+    worker_main.run_worker(object(), stop_when_empty=True, handlers={})
+
+    assert any(message.get("task_id") == task.task_id for message in enqueued), enqueued
+
+
+def test_run_worker_skips_recovery_without_database(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """缺 ``database`` Provider（测试桩）→ 恢复**跳过**且**非静默**（记 WARNING），循环不崩。"""
+    queue: InProcessTaskQueue[dict[str, Any]] = InProcessTaskQueue()
+    monkeypatch.setattr(worker_main, "build_providers", lambda settings: _FakeProviders(queue))
+
+    with caplog.at_level("WARNING"):
+        processed = worker_main.run_worker(object(), stop_when_empty=True, handlers={})
+
+    assert processed == 0
+    assert any("worker.recovery_skipped" in record.getMessage() for record in caplog.records)
