@@ -29,6 +29,8 @@ def isolated_settings_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> It
     monkeypatch.setenv("ASTRA_MODE", "local")
     monkeypatch.setenv("ASTRA_DATABASE_URL", f"sqlite:///{db_file.as_posix()}")
     monkeypatch.setenv("ASTRA_SECRET_KEY", "test-secret-key-0123456789abcdef-32bytes")
+    # R5 补全轮（F2）：把数据目录隔离到 tmp（storage / secrets / sandbox 落 tmp，避免写开发者家目录）。
+    monkeypatch.setenv("ASTRA_DATA_DIR", str(tmp_path / "astra-data"))
     monkeypatch.setenv("ASTRA_LOG_LEVEL", "WARNING")
     monkeypatch.setenv("ASTRA_LOG_FORMAT", "console")
     monkeypatch.delenv("ASTRA_CONFIG_FILE", raising=False)

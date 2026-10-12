@@ -61,6 +61,9 @@ def test_create_app_assembles_remote_services(client: Any) -> None:
     services = client.app.state.services
     assert getattr(services, "remote_tasks", None) is not None
     assert getattr(services, "change_review", None) is not None
+    # F2/F3（R5A-01）：远程读取侧适配器由**组合根真实装配**（非测试后门注入）。
+    assert services.remote_tasks._artifact_reader is not None  # noqa: SLF001 - 装配断言
+    assert services.remote_tasks._git_refs_provider is not None  # noqa: SLF001 - 装配断言
 
 
 # -- F1（R5A-03）：Compose egress 网络名一致性（静态防回归） ------------------
@@ -89,6 +92,99 @@ def test_compose_egress_network_name_matches_worker_env() -> None:
     assert worker_env["ASTRA_SANDBOX_EGRESS_NETWORK"] == DEFAULT_SANDBOX_EGRESS_NETWORK
     # egress-proxy 双网卡含该命名网络（引用同一 key）。
     assert "sandbox-egress" in compose["services"]["egress-proxy"]["networks"]
+
+
+# -- F3（R5A-01b）：GitRefsProvider 适配（fake sandbox；仅经 Sandbox） ---------
+
+
+def test_parse_for_each_ref_maps_branches_and_tags() -> None:
+    """``parse_for_each_ref``：``refs/heads`` → branch、``refs/tags`` → tag；其余跳过。"""
+    from astra_workspace.git import parse_for_each_ref
+
+    sha_a, sha_b, sha_c = "a" * 40, "b" * 40, "c" * 40
+    output = (
+        f"refs/heads/main|{sha_a}|commit\n"
+        f"refs/tags/v1.0|{sha_b}|tag\n"
+        f"refs/remotes/origin/main|{sha_c}|commit\n"
+        "\n"
+        "garbage-line\n"
+    )
+    assert parse_for_each_ref(output) == [
+        ("main", sha_a, "branch"),
+        ("v1.0", sha_b, "tag"),
+    ]
+
+
+def test_git_refs_provider_maps_and_destroys_session(tmp_path: Path) -> None:
+    """``_SandboxGitRefsProvider``：仅经 Sandbox ``for-each-ref``；映射 + 会话 destroy + 跨租户空。"""
+    from types import SimpleNamespace
+
+    from astra_api.dependencies.services import _SandboxGitRefsProvider
+    from astra_sandbox import ExecResult
+    from astra_workspace import GitService, ProjectStorage
+
+    sha_a, sha_b, sha_c = "a" * 40, "b" * 40, "c" * 40
+
+    class _FakeSandbox:
+        def __init__(self) -> None:
+            self.created: list[object] = []
+            self.destroyed: list[object] = []
+            self.commands: list[list[str]] = []
+
+        def create_session(self, **kwargs: Any) -> object:
+            session = object()
+            self.created.append(session)
+            return session
+
+        def exec(
+            self,
+            session: object,
+            command: Any,
+            *,
+            timeout_ms: int | None = None,
+            env: Any = None,
+            cwd: str | None = None,
+        ) -> ExecResult:
+            self.commands.append(list(command))
+            stdout = (
+                f"refs/heads/main|{sha_a}|commit\n"
+                f"refs/tags/v1.0|{sha_b}|tag\n"
+                f"refs/remotes/origin/main|{sha_c}|commit\n"
+            )
+            return ExecResult(exit_code=0, stdout=stdout)
+
+        def destroy(self, session: object) -> None:
+            self.destroyed.append(session)
+
+    class _FakeProjects:
+        def __init__(self, project: Any) -> None:
+            self._project = project
+
+        def get(self, project_id: str) -> Any:
+            return self._project
+
+    tenant = "tenant-refs"
+    sandbox = _FakeSandbox()
+    provider = _SandboxGitRefsProvider(
+        projects=_FakeProjects(SimpleNamespace(id="proj-1", tenant_id=tenant)),
+        sandbox=sandbox,
+        storage=ProjectStorage(tmp_path / "wsroot"),
+        git_service=GitService(sandbox),
+    )
+
+    refs = provider.refs("proj-1", tenant_id=tenant)
+
+    assert [(item.name, item.commit, item.kind) for item in refs] == [
+        ("main", sha_a, "branch"),
+        ("v1.0", sha_b, "tag"),
+    ]
+    assert sandbox.destroyed, "沙箱会话应被销毁（finally）"
+    assert sandbox.commands and sandbox.commands[0][1] == "for-each-ref"
+
+    # 跨租户 → 空元组（不泄漏存在性），且不新建会话。
+    created_before = len(sandbox.created)
+    assert provider.refs("proj-1", tenant_id="other-tenant") == ()
+    assert len(sandbox.created) == created_before
 
 
 # -- server 档一致性（本地可证：不静默误配） ---------------------------------

@@ -196,11 +196,13 @@ from astra_workspace.application.remote_task_service import (
     REMOTE_TASK_TYPE,
     TASK_RESOURCE_TYPE,
     ExecutionTaskEventSource,
+    GitRefView,
     RemoteAccessDecision,
     RemotePrincipal,
     RemoteTaskService,
     RemoteTaskSpec,
 )
+from astra_workspace.git import parse_for_each_ref
 from astra_workspace.repositories import SqlProjectRepository
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session, sessionmaker
@@ -790,6 +792,11 @@ def build_app_services(providers: Providers) -> AppServices:
         permissions=resource_permission_repository,
     )
     remote_audit = _RemoteAuditSink(audit)
+    # R5 补全轮（F2/F3）：Sandbox / 受管目录 / Git 用例**抽局部变量**，供 RemoteTaskService
+    # （ArtifactReader / GitRefsProvider）与 ChangeReviewService **复用同一实例**（单一裁决点）。
+    sandbox_provider = providers.sandbox
+    project_storage = ProjectStorage(settings.workspace_root)
+    git_service = GitService(sandbox_provider) if sandbox_provider is not None else None
     remote_task_service = RemoteTaskService(
         tasks=task_repository,
         task_executions=task_execution_repository,
@@ -805,6 +812,21 @@ def build_app_services(providers: Providers) -> AppServices:
             tasks=task_repository,
             task_queue=providers.task_queue,
         ),
+        # R5A-01(a) / F2：Artifact 下载经注入 **Storage** 读取器（key 直通；LocalFileStorage 自带
+        # containment）——装配后下载端点可达（此前恒 503）。
+        artifact_reader=_StorageArtifactReader(providers.storage),
+        # R5A-01(b) / F3：Git 引用查询仅经 Sandbox（``GitService.for_each_ref``）；仅当装配
+        # Sandbox 时注入（对齐 change_review 的 ``GitService(sandbox) if sandbox else None`` 体例）。
+        git_refs_provider=(
+            _SandboxGitRefsProvider(
+                projects=remote_projects,
+                sandbox=sandbox_provider,
+                storage=project_storage,
+                git_service=git_service,
+            )
+            if sandbox_provider is not None and git_service is not None
+            else None
+        ),
     )
 
     # -- R3 / T2-61：变更审阅（受限 Diff / 显式 Apply / 显式 Push） -------------
@@ -812,14 +834,13 @@ def build_app_services(providers: Providers) -> AppServices:
     # ``astra_runtime`` / **零** ORM；Git **仅经 Sandbox**（``GitService``）；``checkout_ref``
     # 经 ``ProjectStorage``（``ManagedWorkspacePaths``）canonical containment 还原（前向硬约束）。
     # 授权 / 审计复用 T2-60 同实例；写凭证经 ``_ProjectGitCredentialProvider`` **短时**解密。
-    sandbox_provider = providers.sandbox
     change_review_service = ChangeReviewService(
         tasks=task_repository,
         executions=task_execution_repository,
         projects=remote_projects,
-        git=GitService(sandbox_provider) if sandbox_provider is not None else None,
+        git=git_service,
         sandbox=sandbox_provider,
-        storage=ProjectStorage(settings.workspace_root),
+        storage=project_storage,
         authorizer=remote_authorizer,
         audit=remote_audit,
         credentials=_ProjectGitCredentialProvider(
@@ -1904,6 +1925,75 @@ class _ProjectGitCredentialProvider:
             return None
         username = str(settings.get(self.SETTINGS_USERNAME_KEY) or "")
         return GitWriteCredential(username=username, token=token)
+
+
+# -- R5 补全轮：远程读取侧适配器（F2 ArtifactReader / F3 GitRefsProvider） -------
+
+
+class _StorageArtifactReader:
+    """``ArtifactReader`` 生产适配：经注入 ``Storage`` 读取（key **直通**；F2 / R5A-01a）。
+
+    分层（C-7 单写者）：能力包 ``RemoteTaskService``（``application``，零 ORM / 零 Web）仅依赖
+    ``ArtifactReader`` Protocol；本适配器在**组合根**把受管 ``Storage`` 读取委派出去。
+
+    🔴 **不自行拼路径**：``key`` **直通** ``Storage.get``（``LocalFileStorage`` 自带
+       canonical containment，拒绝绝对路径 / ``..`` 逃逸）；``content_type`` 返回 ``None``，
+       由 ``download_artifact`` 既有 ``or view.content_type or octet-stream`` 兜底。
+    """
+
+    def __init__(self, storage: Any) -> None:
+        """装配（注入 Storage Provider；``None`` 时保持占位——下载端点将结构化 503）。"""
+        self._storage = storage
+
+    def read(self, ref: str) -> tuple[bytes, str | None]:
+        """读取 Artifact 内容，返回 ``(bytes, content_type)``（``content_type`` 恒 ``None``）。"""
+        return self._storage.get(ref), None
+
+
+class _SandboxGitRefsProvider:
+    """``GitRefsProvider`` 生产适配：仅经 Sandbox 执行 ``git for-each-ref``（F3 / R5A-01b）。
+
+    组合根适配：Project 归属校验 → 受管仓库目录（``ProjectStorage``，canonical containment）
+    → 独立 Sandbox 会话内 ``GitService.for_each_ref`` → :func:`parse_for_each_ref` 解析为
+    **不含宿主路径**的 :class:`GitRefView`。
+
+    🔴 **仅经 Sandbox**：Git 命令一律经注入 ``GitService``（→ ``SandboxProvider.exec``）；
+       本适配器**不**直连宿主 Git。
+    🔴 **不泄漏存在性**：Project 未知 / 跨租户 → 返回空元组；命令失败 → 返回空元组（非静默失败
+       由端点 200 + 空列表表达，不抛宿主异常）。
+    """
+
+    def __init__(
+        self,
+        *,
+        projects: Any,
+        sandbox: Any,
+        storage: ProjectStorage,
+        git_service: GitService,
+    ) -> None:
+        """装配（项目仓储 + Sandbox + 受管目录 + Git 用例；均为组合根统一实例）。"""
+        self._projects = projects
+        self._sandbox = sandbox
+        self._storage = storage
+        self._git = git_service
+
+    def refs(self, project_id: str, *, tenant_id: str) -> tuple[GitRefView, ...]:
+        """返回 Project 的 Git 引用（分支 / 标签）；跨租户 / 未知 / 失败 → 空元组。"""
+        project = self._projects.get(project_id)
+        if project is None or str(getattr(project, "tenant_id", "") or "") != tenant_id:
+            return ()
+        repo_dir = self._storage.project_repo_dir(project_id)
+        session = self._sandbox.create_session(tenant_id=tenant_id)
+        try:
+            result = self._git.for_each_ref(session, cwd=str(repo_dir))
+        finally:
+            self._sandbox.destroy(session)
+        if not result.ok:
+            return ()
+        return tuple(
+            GitRefView(name=name, commit=commit, kind=kind)
+            for name, commit, kind in parse_for_each_ref(result.stdout)
+        )
 
 
 def get_app_services(request: Request) -> AppServices:

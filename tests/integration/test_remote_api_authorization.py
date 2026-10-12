@@ -433,7 +433,9 @@ def test_artifact_download_reauthorizes(
     denied = client.get(f"/api/v1/tasks/{task_id}/artifacts/report", headers=permissionless_headers)
     assert denied.status_code == 404, denied.text
 
-    # 授权但未装配读取器（管理员）→ 结构化 503（不 500、不静默空）。
+    # 授权但未装配读取器（显式置空）→ 结构化 503（不 500、不静默空）。
+    # F2 后组合根已**真实装配**读取器 → 覆盖为 ``None`` 验证**未装配**防御分支（随后注入替身 → 200）。
+    _services(client).remote_tasks._artifact_reader = None  # noqa: SLF001
     unassembled = client.get(f"/api/v1/tasks/{task_id}/artifacts/report", headers=auth_headers)
     assert unassembled.status_code == 503, unassembled.text
     assert unassembled.json()["code"] == "DEPENDENCY_MISSING"
@@ -454,6 +456,42 @@ def test_artifact_download_reauthorizes(
     )
     scoped_ok = client.get(f"/api/v1/tasks/{task_id}/artifacts/report", headers=scoped)
     assert scoped_ok.status_code == 200, scoped_ok.text
+
+
+def test_artifact_download_via_real_storage_adapter(
+    client: Any, auth_headers: dict[str, str], session_factory: Any
+) -> None:
+    """F2（R5A-01a）：组合根装配的 ``_StorageArtifactReader`` 经**真实 storage** 取回对象。
+
+    证明下载端点**真实可达**（不依赖测试后门注入读取器）：向组合根 ``providers.storage``
+    put 对象 → seed ``artifact_refs`` 指向该 key → 管理员 ``GET`` → ``200`` + 内容字节一致。
+    """
+    ws = _create_workspace(client, auth_headers, name="dl-real-ws")
+    project = _create_project(client, auth_headers, workspace_id=ws)
+    task_id = _submit_task(client, auth_headers, workspace_id=ws, project_id=project)
+
+    services = _services(client)
+    storage = services.providers.storage
+    assert services.remote_tasks._artifact_reader is not None  # noqa: SLF001 - 组合根装配（非后门）
+
+    key = f"artifacts/{task_id}/report.txt"
+    payload = b"hello-real-artifact"
+    storage.put(key, payload, content_type="text/plain")
+    try:
+        _seed_execution(
+            session_factory,
+            task_id=task_id,
+            attempt=1,
+            checkout_ref="wr_real_adapter",
+            artifact_refs={
+                "report": {"ref": key, "size": len(payload), "content_type": "text/plain"}
+            },
+        )
+        resp = client.get(f"/api/v1/tasks/{task_id}/artifacts/report", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.content == payload
+    finally:
+        storage.delete(key)
 
 
 def test_artifact_metadata_and_diff_hide_host_paths(
@@ -511,7 +549,8 @@ def test_project_clone_and_status(
     )
     assert denied_clone.status_code == 404, denied_clone.text
 
-    # Git ref 查询：未装配 Sandbox → 结构化 503。
+    # Git ref 查询：F3 后组合根已装配 Sandbox GitRefsProvider；显式置空验证**未装配**降级 503。
+    _services(client).remote_tasks._git_refs_provider = None  # noqa: SLF001
     refs = client.get(f"/api/v1/projects/{project}/git/refs", headers=auth_headers)
     assert refs.status_code == 503, refs.text
     assert refs.json()["code"] == "DEPENDENCY_MISSING"

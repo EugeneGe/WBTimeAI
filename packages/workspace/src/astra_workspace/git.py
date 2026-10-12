@@ -31,7 +31,13 @@ from astra_core import DomainError, ErrorCode
 if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期
     from astra_sandbox import ExecResult, SandboxProvider, SandboxSession
 
-__all__ = ["GitService", "AttemptCheckout", "CHANGE_TYPE_LABELS", "parse_name_status"]
+__all__ = [
+    "GitService",
+    "AttemptCheckout",
+    "CHANGE_TYPE_LABELS",
+    "parse_name_status",
+    "parse_for_each_ref",
+]
 
 #: 默认命令超时（毫秒）。
 DEFAULT_GIT_TIMEOUT_MS = 120_000
@@ -76,6 +82,49 @@ def parse_name_status(output: str) -> list[tuple[str, str]]:
         family = code[0].upper()
         changes.append((CHANGE_TYPE_LABELS.get(family, "modified"), path))
     return changes
+
+
+def parse_for_each_ref(output: str) -> list[tuple[str, str, str]]:
+    """解析 ``git for-each-ref --format=%(refname)|%(objectname)|%(objecttype)`` 输出。
+
+    行格式（``|`` 分隔，**2~3 段**）：``<refname>|<oid>[|<objecttype>]``。仅识别：
+
+    - ``refs/heads/*`` → ``(name, oid, "branch")``（``name`` 为去前缀短名）；
+    - ``refs/tags/*``  → ``(name, oid, "tag")``（``name`` 为去前缀短名）；
+    - 其余 refname（``refs/remotes/*`` / ``refs/stash`` …）**跳过**。
+
+    无法解析的行跳过（容忍空行 / 杂散输出）。``objecttype`` 段可选（仅透传用途；本解析不使用）。
+
+    Args:
+        output: ``git for-each-ref`` 的标准输出。
+
+    Returns:
+        ``(name, commit, kind)`` 列表（``kind`` ∈ ``{"branch", "tag"}``）。
+    """
+    refs: list[tuple[str, str, str]] = []
+    for raw in (output or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split("|")
+        if len(parts) < 2:
+            continue
+        refname = parts[0].strip()
+        oid = parts[1].strip()
+        if not refname or not oid:
+            continue
+        if refname.startswith("refs/heads/"):
+            name = refname[len("refs/heads/") :]
+            kind = "branch"
+        elif refname.startswith("refs/tags/"):
+            name = refname[len("refs/tags/") :]
+            kind = "tag"
+        else:
+            continue
+        if not name:
+            continue
+        refs.append((name, oid, kind))
+    return refs
 
 
 @dataclass
@@ -231,6 +280,39 @@ class GitService:
     ) -> ExecResult:
         """在沙箱内 ``git rev-parse <ref>``（取提交哈希）。"""
         return self._git(session, ["rev-parse", ref], cwd=cwd, timeout_ms=timeout_ms, env=env)
+
+    def for_each_ref(
+        self,
+        session: SandboxSession,
+        *,
+        cwd: str | None = None,
+        timeout_ms: int | None = None,
+    ) -> ExecResult:
+        """在沙箱内 ``git for-each-ref`` 列出分支 / 标签（**只读**；F3 / R5A-01b）。
+
+        🔴 **仅经 Sandbox**：与既有方法同构，一律经 :meth:`_git`（唯一执行出口）；**只读**
+        （不改变仓库状态）。输出经 :func:`parse_for_each_ref` 解析为 ``(name, commit, kind)``。
+
+        Args:
+            session: 沙箱会话。
+            cwd: 工作目录（沙箱内路径；通常为 Project 受管仓库目录）。
+            timeout_ms: 命令超时（毫秒）。
+
+        Returns:
+            ``git for-each-ref --format=%(refname)|%(objectname)|%(objecttype) refs/heads refs/tags``
+            的执行结果。
+        """
+        return self._git(
+            session,
+            [
+                "for-each-ref",
+                "--format=%(refname)|%(objectname)|%(objecttype)",
+                "refs/heads",
+                "refs/tags",
+            ],
+            cwd=cwd,
+            timeout_ms=timeout_ms,
+        )
 
     # -- Attempt 独立副本供给（T2-58） --------------------------------------
 
