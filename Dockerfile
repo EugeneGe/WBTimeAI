@@ -13,6 +13,28 @@
 # uv 官方镜像（仅取二进制）。
 FROM ghcr.io/astral-sh/uv:0.12.19 AS uv
 
+# ---- web-builder：构建前端产物（Vite → apps/web/dist） ----------------------
+# 发行形态 A（M2 · WS2）：把前端构建产物并入运行镜像 → API 同源托管 → 社区单容器
+# 打开 :8080 即完整 UI。node 版本对齐仓库根 package.json 的 engines（>=20）。
+FROM node:20-slim AS web-builder
+
+# 与仓库根 package.json 的 packageManager（pnpm@9.15.0）对齐。
+RUN corepack enable
+
+WORKDIR /web
+
+# 先复制工作区清单（最大化层缓存）：锁文件保证可复现安装。
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/web/package.json apps/web/package.json
+
+# --ignore-scripts：规避本仓 esbuild postinstall 的 EBUSY（容器内已知问题）；
+# esbuild 平台二进制由可选依赖（@esbuild/<platform>）提供，无需 postinstall 下载。
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# 复制前端源码并构建（tsc 类型检查 + vite build → apps/web/dist）。
+COPY apps/web ./apps/web
+RUN pnpm --filter @astra/web build
+
 # ---- builder：解析并安装依赖 -------------------------------------------------
 FROM python:3.12-slim AS builder
 COPY --from=uv /uv /uvx /bin/
@@ -49,6 +71,10 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 COPY --from=builder /app /app
+
+# 前端产物（M2 · WS2）：拷入运行镜像 → API 启动即托管 UI（单容器出完整界面）。
+# 目标路径与包相对解析（astra_api.web_static）一致：/app/apps/web/dist。
+COPY --from=web-builder /web/apps/web/dist /app/apps/web/dist
 
 # 非 root 用户；预建 /data 供社区模式 SQLite / 本地存储挂载（命名卷继承该属主）。
 RUN useradd --create-home --uid 10001 astra \

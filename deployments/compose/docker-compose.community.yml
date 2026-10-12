@@ -4,9 +4,14 @@
 # 验收 §3-#4：**一条命令**启动，**零外部中间件**（无 Postgres / Redis / 对象存储）。
 #
 #   docker compose -f deployments/compose/docker-compose.community.yml up --build
-#   后端 http://localhost:8080/health
+#   前端 UI  http://localhost:8080/        ← M2 · WS2：API 同源托管前端静态（单容器出完整 UI）
+#   后端健康 http://localhost:8080/health
 #
 # 语义：ASTRA_MODE=local（SQLite + 进程内能力），与设计 §2.13 对齐。
+#
+# 发行形态 A（M2 · WS2）：镜像内已内置前端构建产物（apps/web/dist），API 启动即托管
+# UI 与 SPA 回退 → **无需**独立前端容器 / 反向代理。默认启用静态托管；如需纯后端镜像
+# 可设 `ASTRA_WEB_STATIC_ENABLED=false`（本编排无需改动，保持单容器）。
 #
 # ---------------------------------------------------------------------------
 # Sandbox 策略（设计 §2.10 / §5 #3；A-5 三档承诺）
