@@ -9,6 +9,7 @@ import { Login } from "@/pages/Login";
 import { Models } from "@/pages/Models";
 import { Projects } from "@/pages/Projects";
 import { Register } from "@/pages/Register";
+import { RemoteTasks } from "@/pages/RemoteTasks";
 import { Settings } from "@/pages/Settings";
 import { AgentStudio } from "@/pages/studio/AgentStudio";
 import { AgentVersions } from "@/pages/studio/AgentVersions";
@@ -56,6 +57,8 @@ export const router = createBrowserRouter([
       // -- Phase 2c / W10（T2-50）：Projects / Tasks（2c 子集）
       { path: "projects", element: <Projects /> },
       { path: "tasks", element: <Tasks /> },
+      // -- Phase 2 / R4（T2-62）：远程工作台（提交 / 跟踪 / 审阅 / Apply / Push）
+      { path: "remote-tasks", element: <RemoteTasks /> },
       // -- Phase 2c / W8（T2-41）：Agent Studio 主框架（左九分区 + 右配置/预览）
       { path: "studio", element: <AgentStudio /> },
       { path: "studio/agents/:agentId", element: <AgentVersions /> },

@@ -8,6 +8,7 @@ import {
   ListChecks,
   LogOut,
   MessagesSquare,
+  Rocket,
   Server,
   Settings as SettingsIcon,
   Sparkles,
@@ -32,6 +33,8 @@ const NAV_ITEMS = [
   // -- Phase 2c / W10（T2-50）：Projects / Tasks
   { to: "/projects", label: "Projects", icon: FolderKanban, permission: null },
   { to: "/tasks", label: "Tasks", icon: ListChecks, permission: null },
+  // -- Phase 2 / R4（T2-62）：远程工作台（Remote Workbench）
+  { to: "/remote-tasks", label: "Remote", icon: Rocket, permission: null },
   // -- Phase 2a / W3（T2-18）：Studio 子集
   { to: "/studio/skills", label: "Skills", icon: Sparkles, permission: null },
   { to: "/studio/mcp", label: "MCP", icon: Server, permission: null },

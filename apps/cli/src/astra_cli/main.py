@@ -20,6 +20,8 @@ from astra_cli.commands.data import data_app
 from astra_cli.commands.doctor import run_doctor
 from astra_cli.commands.init import run_init
 from astra_cli.commands.marketplace import marketplace_app
+from astra_cli.commands.project import project_app
+from astra_cli.commands.remote import remote_app
 from astra_cli.commands.run import DEFAULT_HOST, DEFAULT_PORT, run
 
 __all__ = ["app", "main", "register_command_group", "mount_plugin_commands"]
@@ -54,6 +56,12 @@ register_command_group("marketplace", marketplace_app)
 # （`astra data backup` / `astra data restore`）。
 # 不新增顶级核心命令；`init` / `run` / `doctor` 一字不动。
 register_command_group("data", data_app)
+
+# R4 / T2-62：远程工作台命令走 **D5 核心分组**
+# （`astra remote submit|list|follow|cancel|diff|apply|push`、`astra project clone|status`）。
+# 不新增顶级核心命令；`init` / `run` / `doctor` 一字不动；令牌不进 argv。
+register_command_group("remote", remote_app)
+register_command_group("project", project_app)
 
 
 def _plugins_root() -> Path:

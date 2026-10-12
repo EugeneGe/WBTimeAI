@@ -75,4 +75,13 @@ export const queryKeys = {
   task: (id: string) => ["task", id] as const,
   taskExecutions: (id: string) => ["task", id, "executions"] as const,
   schedules: ["schedules"] as const,
+  // -- R4 / T2-62：远程工作台（Project Clone / 远程 Task / 审阅 / Apply / Push）--
+  remoteTask: (id: string) => ["remote-task", id] as const,
+  remoteAttempts: (id: string) => ["remote-task", id, "attempts"] as const,
+  remoteEvents: (id: string, cursor: string) => ["remote-task", id, "events", cursor] as const,
+  remoteLogs: (id: string) => ["remote-task", id, "logs"] as const,
+  remoteDiff: (id: string, attempt: number) => ["remote-task", id, "diff", attempt] as const,
+  remoteArtifacts: (id: string) => ["remote-task", id, "artifacts"] as const,
+  projectStatus: (id: string) => ["project", id, "status"] as const,
+  projectGitRefs: (id: string) => ["project", id, "git-refs"] as const,
 };
