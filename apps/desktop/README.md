@@ -54,11 +54,40 @@ npm run icons
 # 3) 同步前端产物 → renderer/
 npm run sync:renderer
 
-# 4) 开发运行 / 打包
+# 4) 开发运行 / 打包 / 冒烟
 npm run dev          # 编译 + 同步 + electron .
-npm run dist:dir     # 免安装目录包（便于冒烟）
+npm run dist:dir     # 免安装目录包（便于冒烟）→ release/win-unpacked/
 npm run dist:win     # Windows 安装包 → release/Astra-AI-Setup-<v>.exe
+npm run smoke        # 以 --dir 产物做无交互启动冒烟（断言启动 + 退出码 0）
 ```
+
+## 打包与冒烟（T-04 / T-05）
+
+### Windows（本机可出）
+
+```bash
+cd apps/desktop
+npm run dist:dir     # 免安装目录包：release/win-unpacked/Astra AI.exe
+npm run smoke        # 冒烟：以 ASTRA_DESKTOP_SMOKE=1 启动产物，置窗口就绪标记后自动退出
+npm run dist:win     # nsis 安装包：release/Astra-AI-Setup-<version>.exe
+```
+
+> 冒烟脚本（`scripts/smoke-packaged.mjs`）**不伪造成功**：超时 / 非零退出 / 缺标记
+> 均判失败。主进程在 `ASTRA_DESKTOP_SMOKE=1` 时于窗口就绪后写标记并 `app.quit()`。
+> 首发出包需外网下载 electron 二进制与 electron-builder 资源（nsis / winCodeSign）；
+> 内网受限可设 `ELECTRON_MIRROR` / `ELECTRON_BUILDER_BINARIES_MIRROR`（见设计 §11 D-7）。
+
+### Linux（须在 Linux + Docker 宿主）
+
+```bash
+# 在 Linux 服务器（如内网 192.168.1.3）上，于仓库根执行：
+bash apps/desktop/scripts/build-linux-docker.sh
+# 产物：apps/desktop/release/Astra-AI-<v>.AppImage  +  astra-ai_<v>_amd64.deb
+```
+
+> 本机（Windows）**不能**交叉出 Linux 包（无 Docker/WSL；`service.electron.build` 已停）。
+> 脚本在 `electronuserland/builder` 容器内先构建前端（pnpm）再打包桌面壳（npm）。
+> Linux 包**运行**前提：AppImage 需 FUSE；deb 用系统包管理器安装。
 
 ## 产物
 
@@ -66,7 +95,7 @@ npm run dist:win     # Windows 安装包 → release/Astra-AI-Setup-<v>.exe
 |---|---|---|
 | Windows nsis 安装包 `Astra-AI-Setup-<v>.exe` | `npm run dist:win` | Windows 本机 |
 | 免安装目录包（`release/win-unpacked/`） | `npm run dist:dir` | Windows 本机 |
-| Linux AppImage / deb | `npm run dist:linux` | **须在 Linux 宿主 / Docker**（见下方 T-05） |
+| Linux AppImage / deb | `npm run dist:linux`（或 `scripts/build-linux-docker.sh`） | **须在 Linux 宿主 / Docker** |
 
 > 内网 / 镜像受限时，electron 与 electron-builder 资源可经环境变量走镜像：
 > `ELECTRON_MIRROR`、`ELECTRON_BUILDER_BINARIES_MIRROR`。

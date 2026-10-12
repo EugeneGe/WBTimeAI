@@ -19,6 +19,7 @@
     "dist:dir": "npm run build && npm run sync:renderer && electron-builder --dir",
     "dist:win": "npm run build && npm run sync:renderer && electron-builder --win nsis",
     "dist:linux": "npm run build && npm run sync:renderer && electron-builder --linux AppImage deb",
+    "smoke": "node scripts/smoke-packaged.mjs",
     "test": "npm run build && node --test \"out/**/*.test.js\""
   },
   "devDependencies": {
