@@ -157,7 +157,12 @@ def test_remote_submit_idempotency(client: Any, auth_headers: dict[str, str]) ->
 def test_remote_events_resume_with_cursor(
     client: Any, auth_headers: dict[str, str], session_factory: Any
 ) -> None:
-    """事件续读：不透明 cursor 翻页，第二页 seq **严格大于**第一页（不重不漏）。"""
+    """事件续读：不透明 cursor **续读不重不漏**；``seq`` **页内严格单调**。
+
+    R5Q-04（断言去条件化）：**不再**因续读页为空而**跳过**排序断言；改为无条件断言
+    「两页不重复」+「末页无新事件（续读幂等）**或** 新事件严格晚于基线页」的**析取**，
+    并对续读 cursor **稳定性**（幂等重放锚点）与 ``Last-Event-ID`` 回退**去重**校验。
+    """
     ws_id, project_id = _bootstrap(client, auth_headers, name="events")
     task_id = _submit(client, auth_headers, ws_id=ws_id, project_id=project_id)
     _seed_execution(
@@ -171,24 +176,42 @@ def test_remote_events_resume_with_cursor(
     assert page1.status_code == 200, page1.text
     body1 = _data(page1)
     seqs_1 = [int(e["seq"]) for e in body1["events"]]
-    assert seqs_1 == sorted(seqs_1)
-    assert _wants_cursor(body1)
+
+    # (1) 去条件化：基线页**必非空**（已 seed 2 个 Attempt ⇒ 至少 2 条 ``attempt.started``）。
+    assert seqs_1, "续读基线页不应为空（已 seed 2 个 Attempt）"
+    # (2) 页内**严格**单调递增（无重复、无倒序）—— **无条件**断言。
+    assert all(b > a for a, b in zip(seqs_1, seqs_1[1:])), seqs_1
+    # (3) 强化 cursor 断言（替代近永真的 ``isinstance(str)``）：**非空**不透明句柄、无路径分隔。
+    cursor = body1.get("next_cursor")
+    assert isinstance(cursor, str) and cursor, cursor
+    assert "/" not in cursor and "\\" not in cursor
 
     page2 = client.get(
         f"/api/v1/tasks/{task_id}/events",
         headers=auth_headers,
-        params={"cursor": body1["next_cursor"]},
+        params={"cursor": cursor},
     )
     assert page2.status_code == 200, page2.text
-    seqs_2 = [int(e["seq"]) for e in _data(page2)["events"]]
-    if seqs_1 and seqs_2:
-        assert min(seqs_2) > max(seqs_1)  # 无重复、无倒序
+    body2 = _data(page2)
+    seqs_2 = [int(e["seq"]) for e in body2["events"]]
+    # (4) **无条件**：两页 **不重复**（无重放）。
     assert not (set(seqs_1) & set(seqs_2))
+    # (5) **无条件析取**：末页无新事件（续读幂等）**或** 新事件**严格晚于**基线页（不重不漏）。
+    assert (not seqs_2) or (min(seqs_2) > max(seqs_1)), (seqs_1, seqs_2)
+    # (6) 末页 cursor **稳定**（幂等重放锚点）。
+    assert body2.get("next_cursor") == cursor
 
-
-def _wants_cursor(body: dict[str, Any]) -> bool:
-    """分页体含非空不透明 ``next_cursor``（或已是末页空串）。"""
-    return isinstance(body.get("next_cursor"), str)
+    # (7) ``Last-Event-ID`` 回退：只回放 ``seq > anchor``（去重、不重放、不引入新事件）。
+    anchor = seqs_1[0]
+    replay = client.get(
+        f"/api/v1/tasks/{task_id}/events",
+        headers={**auth_headers, "Last-Event-ID": str(anchor)},
+    )
+    assert replay.status_code == 200, replay.text
+    replay_seqs = [int(e["seq"]) for e in _data(replay)["events"]]
+    assert replay_seqs, "Last-Event-ID 回退不应为空（存在 seq > anchor 的事件）"
+    assert min(replay_seqs) > anchor
+    assert set(replay_seqs).issubset(set(seqs_1))
 
 
 # ---------------------------------------------------------------------------
