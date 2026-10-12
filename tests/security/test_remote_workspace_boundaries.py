@@ -206,6 +206,7 @@ def _build(
     allowed: set[str] | None = None,
     credential: GitWriteCredential | None = None,
     sandbox: _ScriptedSandbox | None = None,
+    authorizer: Any | None = None,
 ) -> tuple[ChangeReviewService, _ScriptedSandbox, _RecordingAudit]:
     sandbox = sandbox or _ScriptedSandbox()
     audit = _RecordingAudit()
@@ -217,7 +218,7 @@ def _build(
         git=GitService(sandbox),
         sandbox=sandbox,
         storage=storage,
-        authorizer=_FakeAuthorizer(allowed or {"git.apply", "git.push", "git.diff"}),
+        authorizer=authorizer or _FakeAuthorizer(allowed or {"git.apply", "git.push", "git.diff"}),
         audit=audit,
         credentials=_FakeCredentials(credential),
     )
@@ -304,6 +305,48 @@ def test_permissionless_read_is_404_not_403(
     resp = client.get(f"/api/v1/tasks/{task_id}/diff", headers=permissionless_headers)
     assert resp.status_code == 404, resp.text
     assert _shell(resp)["code"] == "NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    ("in_scope", "expected_code"),
+    [(True, ErrorCode.PERMISSION_DENIED), (False, ErrorCode.NOT_FOUND)],
+)
+def test_diff_read_authorization_splits_403_vs_404(
+    session_factory: Any,
+    tmp_path: Any,
+    principal: Any,
+    in_scope: bool,
+    expected_code: ErrorCode,
+) -> None:
+    """I-1 对称（F4 补正）：读取 ``git.diff`` —— ``in_scope`` 缺权限 → **403**；跨范围 → **404**。
+
+    锁定补正后 :meth:`ChangeReviewService._authorize` 读取分流**两侧**（防过度修正：
+    不得把「范围内缺 capability」也降级为 404）。
+    """
+
+    class _ScriptedDecisionAuthorizer:
+        """按固定 ``in_scope`` 返回**拒绝**决策（``allowed=False``）的假授权器。"""
+
+        def authorize(
+            self,
+            principal: Any,
+            *,
+            capability: str,
+            resource_type: str = "TASK",
+            resource_id: str | None = None,
+        ) -> RemoteAccessDecision:
+            return RemoteAccessDecision(allowed=False, in_scope=in_scope, reason="test")
+
+    project = _seed_project(session_factory)
+    task_id = _seed_task(session_factory, project_id=project.id)
+    service, _sandbox, _audit = _build(
+        session_factory, tmp_path, authorizer=_ScriptedDecisionAuthorizer()
+    )
+
+    with pytest.raises(DomainError) as excinfo:
+        service.diff(principal, task_id)
+
+    assert excinfo.value.code is expected_code
 
 
 def test_cross_tenant_apply_push_is_404(

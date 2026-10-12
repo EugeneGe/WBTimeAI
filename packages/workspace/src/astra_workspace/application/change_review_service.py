@@ -350,7 +350,11 @@ class ChangeReviewService:
                 （``DEPENDENCY_MISSING``）。
         """
         task = self._require_task(
-            principal, task_id, capability=CAPABILITY_GIT_APPLY, action=TASK_ACTION_APPLY
+            principal,
+            task_id,
+            capability=CAPABILITY_GIT_APPLY,
+            action=TASK_ACTION_APPLY,
+            mutation=True,
         )
         project = self._require_project(principal, task)
         target = self._resolve_target_ref(target_ref, project)
@@ -449,7 +453,11 @@ class ChangeReviewService:
                 未装配 Git / Sandbox / 存储（``DEPENDENCY_MISSING``）。
         """
         task = self._require_task(
-            principal, task_id, capability=CAPABILITY_GIT_PUSH, action=TASK_ACTION_PUSH
+            principal,
+            task_id,
+            capability=CAPABILITY_GIT_PUSH,
+            action=TASK_ACTION_PUSH,
+            mutation=True,
         )
         project = self._require_project(principal, task)
         target = self._resolve_target_ref(target_ref, project)
@@ -555,15 +563,26 @@ class ChangeReviewService:
         *,
         capability: str,
         action: str,
+        mutation: bool = False,
     ) -> Any:
-        """取任务（不存在 / 跨租户 / 非远程 → 404）+ 逐次授权（缺 capability → 403）。"""
+        """取任务（不存在 / 跨租户 / 非远程 → 404）+ 逐次授权。
+
+        读取类（``mutation=False``）：跨范围 → 404 隔离（I-1）；变更类（``mutation=True``）：
+        缺 capability 一律 403（见 :meth:`_authorize`）。
+        """
         task = self._tasks.get(task_id)
         if task is None or str(getattr(task, "tenant_id", "") or "") != principal.tenant_id:
             raise self._not_found("task", task_id)
         project_id = self._task_project_id(task)
         if not project_id:
             raise self._not_found("task", task_id)
-        self._authorize(principal, capability=capability, resource_id=project_id, action=action)
+        self._authorize(
+            principal,
+            capability=capability,
+            resource_id=project_id,
+            action=action,
+            mutation=mutation,
+        )
         return task
 
     def _require_project(self, principal: RemotePrincipal, task: Any) -> Any:
@@ -594,7 +613,8 @@ class ChangeReviewService:
 
         R5 补全轮（F4 / R5A-02）：Diff 读取需在结果提交**尚缺**时**降级**（``available=False`` →
         200），故 ``attempt is None`` 时取**最近一条**（**不**要求 ``result_commit``）；仅**无任何
-        Attempt** 才 404。与 :meth:`_require_attempt`（Apply 用，要求**可比对**）区分，**不**改其语义。
+        Attempt** 才 404。与 :meth:`_require_attempt`（Apply 用，要求**可比对**）区分，
+        **不**改其语义。
 
         Raises:
             DomainError: 无任何 Attempt（``NOT_FOUND``）。
@@ -783,8 +803,19 @@ class ChangeReviewService:
         capability: str,
         resource_id: str | None,
         action: str,
+        mutation: bool = False,
     ) -> None:
-        """逐次校验（A-14；Apply / Push 为**变更**操作 → 缺 capability 一律 403）。"""
+        """逐次校验（A-14）。策略（对齐 ``RemoteTaskService._authorize``）：
+
+        - **变更**操作（``mutation=True``：Apply / Push）→ 缺 capability **一律 403**
+          （不静默 / 不降级为 404）；
+        - **单资源读取**（如 ``git.diff``；``mutation=False``）：``in_scope`` 为真 → **403**；
+          否则 → **404**（统一隔离 I-1，不泄漏存在性）；
+        - 授权通过 → 放行；失败另记**拒绝审计**（``outcome=DENIED``）。
+
+        🔴 R5 补全轮（F4 补正）：``GET /tasks/{id}/diff`` 为**读取**出口（改道 ``diff`` 后仍须
+           维持 I-1 隔离语义）——此前 ``_authorize`` 无条件 403，读取类跨范围会误报 403。
+        """
         decision = self._decide(principal, capability=capability, resource_id=resource_id)
         if decision.allowed:
             return
@@ -795,12 +826,14 @@ class ChangeReviewService:
             outcome=AUDIT_OUTCOME_DENIED,
             metadata={"capability": capability, "reason": decision.reason},
         )
-        raise DomainError(
-            "缺少变更审阅权限",
-            code=ErrorCode.PERMISSION_DENIED,
-            status_code=403,
-            data={"capability": capability},
-        )
+        if mutation or decision.in_scope:
+            raise DomainError(
+                "缺少变更审阅权限",
+                code=ErrorCode.PERMISSION_DENIED,
+                status_code=403,
+                data={"capability": capability},
+            )
+        raise self._not_found("resource", resource_id or "")
 
     def _decide(
         self, principal: RemotePrincipal, *, capability: str, resource_id: str | None
