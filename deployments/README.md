@@ -27,6 +27,9 @@ curl http://localhost:8080/health   # {"status":"ok",...}
 
 - 数据持久化在命名卷 `astra-data`（`/data` 下的 `astra.db` 与本地存储）；
 - **无** Postgres / Redis / 对象存储依赖；
+- **端口绑定默认仅本机**（`127.0.0.1:8080`，最小暴露面，拍 (b)）——同机 `http://localhost:8080` 访问；
+  需**内网**访问时 `export ASTRA_BIND_ADDR=<内网IP>` 再启动（如 `export ASTRA_BIND_ADDR=192.168.1.3`）；
+  **不建议**直接绑 `0.0.0.0`（暴露全部网卡）；
 - `ASTRA_SECRET_KEY` 生产环境务必覆盖（示例默认值仅供本地）。
 
 ## 标准模式

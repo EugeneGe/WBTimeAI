@@ -7,6 +7,10 @@
 #   前端 UI  http://localhost:8080/        ← M2 · WS2：API 同源托管前端静态（单容器出完整 UI）
 #   后端健康 http://localhost:8080/health
 #
+#   端口绑定：**默认仅绑本机 `127.0.0.1`**（最小暴露面，拍 (b)）——同机访问用
+#   `http://localhost:8080`；需**内网**访问时 `export ASTRA_BIND_ADDR=<内网IP>` 再启动
+#   （`ASTRA_BIND_ADDR` 默认 `127.0.0.1`）。**不建议**直接绑 `0.0.0.0`（暴露全部网卡）。
+#
 # 语义：ASTRA_MODE=local（SQLite + 进程内能力），与设计 §2.13 对齐。
 #
 # 发行形态 A（M2 · WS2）：镜像内已内置前端构建产物（apps/web/dist），API 启动即托管
@@ -49,7 +53,9 @@ services:
       # 沙箱镜像基线（仅当切换为 docker provider 时使用）。
       ASTRA_SANDBOX_IMAGE: python:3.12-slim
     ports:
-      - "8080:8080"
+      # 端口收紧（拍 (b)）：默认**仅绑内网 127.0.0.1**（最安全）；需内网访问时用
+      # `ASTRA_BIND_ADDR=<内网IP>` 覆盖（如 `192.168.1.3`）。**不要**绑 `0.0.0.0`。
+      - "${ASTRA_BIND_ADDR:-127.0.0.1}:8080:8080"
     volumes:
       - astra-data:/data
       # （高级选项，默认关闭）如需 Docker 沙箱且接受风险，取消下一行注释：
