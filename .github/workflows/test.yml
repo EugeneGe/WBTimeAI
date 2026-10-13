@@ -62,7 +62,19 @@ jobs:
         run: uv run pytest tests/unit/test_config_mode_branch.py -q
 
       - name: Pytest (unit + integration；NFR 基线见 nightly nfr.yml)
-        run: uv run pytest -q -o tmp_path_retention_policy=all --ignore=tests/nfr
+        run: |
+          uv run pytest -q -o tmp_path_retention_policy=all --ignore=tests/nfr \
+            --cov-report=term-missing --cov-report=xml:coverage.xml
+
+      # J-4（V0.4.1）：产出并归档覆盖率报告（**仅报数、不设门**，见裁定 §4 J-4）。
+      # `--cov=packages --cov=apps` 已并入 `pyproject.toml` 的 addopts；此处只加报告格式。
+      # `if-no-files-found: error`：报告缺失即红，防「报告未产出」被静默吞掉（非假绿）。
+      - name: Upload coverage report (J-4)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          if-no-files-found: error
 
   scans:
     name: Scans (layering / open-source / credential / ID / D4)

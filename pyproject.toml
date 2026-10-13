@@ -102,13 +102,18 @@ dev = [
     "ruff>=0.6.0",
     "black>=24.10.0",
     "mypy>=1.13.0",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # 默认排除真实联调用例（provider_live）；显式 `-m provider_live` 会在命令行覆盖此值。
 # 未配置凭证的 Provider 由用例内 pytest.skip 兜底，故 CI 永绿。
-addopts = "-q -m 'not provider_live'"
+#
+# J-4（V0.4.1）：接入覆盖率基线（`pytest-cov`）。**范围限定 `packages/` 与 `apps/`**
+# （业务源码），不统计 `tests/` / `scripts/`（避免虚高与拖慢，见裁定 §4 J-4）。
+# **按 (a) 仅报数、不设门**：不配置 `--cov-fail-under`，覆盖率回退不会使 CI 变红。
+addopts = "-q -m 'not provider_live' --cov=packages --cov=apps"
 filterwarnings = ["ignore::DeprecationWarning"]
 markers = [
     "contracts: Provider 契约套件（stub + 录制回放，默认运行）",
