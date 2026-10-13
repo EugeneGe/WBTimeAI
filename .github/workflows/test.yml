@@ -102,6 +102,13 @@ jobs:
       - name: Discipline scan (layering / open-source / credential)
         run: uv run python scripts/scan_discipline.py
 
+      # J-2（V0.4.1）：manual 验收证据归档校验（设计 §13.1「无证据不得通过」）。
+      # 口径：声称通过但「证据缺失 / 引用不存在 / 0 字节」→ 违规（退出码非 0）；「显式未留证」= 已披露。
+      # 🔴 docs 为**独立仓**（主仓 CI 无 docs 素材）：脚本对「素材未挂载」**明示提示并跳过**
+      #   （退出码 0，非假绿；不写 `|| true`）。docs 存在时（含本地 / docs 仓 CI）真校验。
+      - name: Manual evidence archive check (J-2)
+        run: uv run python scripts/check_manual_evidence.py --root .
+
   postgres-smoke:
     name: PostgreSQL smoke
     runs-on: ubuntu-latest
