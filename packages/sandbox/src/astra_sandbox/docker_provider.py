@@ -230,6 +230,10 @@ class DockerSandboxProvider:
                 duration_ms=duration_ms,
                 timed_out=True,
             )
+        # 非超时路径：``_run`` 捕获的异常**原样向上传播**（保持 ``exec_run`` 既有语义，
+        # **不静默降级**为 ``exit_code=1``）；仅超时（kill）路径返回 ``timed_out`` 结果。
+        if "error" in outcome:
+            raise outcome["error"]
         result = outcome.get("result")
         exit_code = int(getattr(result, "exit_code", 1) or 0)
         stdout_bytes, stderr_bytes = self._split_output(getattr(result, "output", None))
