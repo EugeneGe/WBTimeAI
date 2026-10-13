@@ -299,8 +299,8 @@ class GitService:
             timeout_ms: 命令超时（毫秒）。
 
         Returns:
-            ``git for-each-ref --format=%(refname)|%(objectname)|%(objecttype) refs/heads refs/tags``
-            的执行结果。
+            ``git for-each-ref --format=%(refname)|%(objectname)|%(objecttype)``
+            ``refs/heads refs/tags`` 的执行结果。
         """
         return self._git(
             session,

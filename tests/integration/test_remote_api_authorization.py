@@ -190,7 +190,9 @@ class _FakeDiffGit:
 
 
 def _valid_checkout_ref(execution_id: str) -> str:
-    """构造一个**可服务端还原**的不透明 ``checkout_ref``（供 ChangeReviewService containment 解析）。"""
+    """构造一个**可服务端还原**的不透明 ``checkout_ref``（供 ChangeReviewService
+    containment 解析）。
+    """
     from astra_config import get_settings
     from astra_workspace import ProjectStorage
 
@@ -464,7 +466,7 @@ def test_artifact_download_reauthorizes(
     assert denied.status_code == 404, denied.text
 
     # 授权但未装配读取器（显式置空）→ 结构化 503（不 500、不静默空）。
-    # F2 后组合根已**真实装配**读取器 → 覆盖为 ``None`` 验证**未装配**防御分支（随后注入替身 → 200）。
+    # F2 后组合根已**真实装配**读取器 → 覆盖为 ``None`` 验证**未装配**防御分支（注入替身 → 200）。
     _services(client).remote_tasks._artifact_reader = None  # noqa: SLF001
     unassembled = client.get(f"/api/v1/tasks/{task_id}/artifacts/report", headers=auth_headers)
     assert unassembled.status_code == 503, unassembled.text
@@ -575,7 +577,9 @@ def test_task_diff_reaches_change_review_service(
         checkout_ref=_valid_checkout_ref("exec-diff-real"),
     )
 
-    _services(client).change_review._git = _FakeDiffGit("M\tapp.py\nA\tsrc/new.py\n")  # noqa: SLF001
+    _services(client).change_review._git = _FakeDiffGit(
+        "M\tapp.py\nA\tsrc/new.py\n"
+    )  # noqa: SLF001
     resp = client.get(f"/api/v1/tasks/{task_id}/diff", headers=auth_headers)
     assert resp.status_code == 200, resp.text
     body = _shell_data(resp)

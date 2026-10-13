@@ -44,9 +44,9 @@ def test_community_profile_assembles_concrete_core_providers(isolated_settings_e
     for slot in _CORE_SLOTS:
         provider = getattr(providers, slot)
         assert provider is not None, f"{slot} 未装配"
-        assert not isinstance(provider, _UNSUPPORTED), (
-            f"{slot} 落入 UnsupportedXxx 占位：{type(provider)!r}"
-        )
+        assert not isinstance(
+            provider, _UNSUPPORTED
+        ), f"{slot} 落入 UnsupportedXxx 占位：{type(provider)!r}"
 
 
 def test_community_profile_uses_sqlite_database(isolated_settings_env: Any) -> None:
@@ -72,13 +72,13 @@ def test_create_app_assembles_remote_services(client: Any) -> None:
 def test_compose_egress_network_name_matches_worker_env() -> None:
     """🔴 Compose 的 ``sandbox-egress`` 网络**显式命名**，且与 worker 注入名 / 默认常量一致。
 
-    R5A-03：compose 默认把网络命名为 ``<project>_sandbox-egress``（本例 ``astra-ai_sandbox-egress``），
+    R5A-03：compose 默认把网络命名为 ``<project>_sandbox-egress``（本例
+    ``astra-ai_sandbox-egress``），
     而 worker 经 ``ASTRA_SANDBOX_EGRESS_NETWORK`` 注入的是字面 ``astra-sandbox-egress`` ——
     二者不一致时干净 ``docker compose up`` 下 allowlisted 沙箱接入失败。本静态测试锁定：
     网络 ``name`` / worker env / ``astra_config.defaults`` 三者同值。
     """
     import yaml
-
     from astra_config.defaults import DEFAULT_SANDBOX_EGRESS_NETWORK
 
     compose_path = Path(__file__).resolve().parents[2] / "docker-compose.yml"
@@ -116,7 +116,9 @@ def test_parse_for_each_ref_maps_branches_and_tags() -> None:
 
 
 def test_git_refs_provider_maps_and_destroys_session(tmp_path: Path) -> None:
-    """``_SandboxGitRefsProvider``：仅经 Sandbox ``for-each-ref``；映射 + 会话 destroy + 跨租户空。"""
+    """``_SandboxGitRefsProvider``：仅经 Sandbox ``for-each-ref``；映射 + 会话 destroy +
+    跨租户空。
+    """
     from types import SimpleNamespace
 
     from astra_api.dependencies.services import _SandboxGitRefsProvider

@@ -226,8 +226,11 @@ _EQUIV_PROBES: list[tuple[str, str, dict[str, Any]]] = [
     ("GET", "/redoc", {}),
     ("GET", "/api/v1/does-not-exist", {}),
     ("GET", "/api/v1/runs/00000000-0000-0000-0000-000000000000/events", {}),
-    ("GET", "/api/v1/runs/00000000-0000-0000-0000-000000000000/events",
-     {"headers": {"accept": "text/event-stream"}}),
+    (
+        "GET",
+        "/api/v1/runs/00000000-0000-0000-0000-000000000000/events",
+        {"headers": {"accept": "text/event-stream"}},
+    ),
     ("POST", "/api/v1/does-not-exist", {}),
     ("GET", "/metrics", {}),
 ]
@@ -241,9 +244,10 @@ def test_equivalence_static_on_vs_off(
     归一化 ``request_id``（每请求唯一、与静态托管无关）；本组**不含** ``GET /``
     ——该路径本就是「静态开 → 200 HTML」的**预期新增行为**，不属于「既有语义」。
     """
-    with _client(
-        isolated_settings_env, monkeypatch, dist=make_web_dist(tmp_path, name="on")
-    ) as on, _client(isolated_settings_env, monkeypatch, dist=None) as off:
+    with (
+        _client(isolated_settings_env, monkeypatch, dist=make_web_dist(tmp_path, name="on")) as on,
+        _client(isolated_settings_env, monkeypatch, dist=None) as off,
+    ):
         diffs: list[str] = []
         for method, path, kw in _EQUIV_PROBES:
             r_on = on.request(method, path, **kw)

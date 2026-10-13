@@ -68,7 +68,9 @@ def test_positive_binding_injects_endpoint_and_secret() -> None:
     handler = RecordingHandler(content="hi-from-model")
     prototype = OpenAIProvider(client=build_recording_client(handler), api_key=None)
     row = make_row(
-        tenant_id="t1", provider_type="openai", endpoint="https://tenant.example/v1",
+        tenant_id="t1",
+        provider_type="openai",
+        endpoint="https://tenant.example/v1",
         credential_id="cred-1",
     )
     _, decoder, audit, router = _router_for("openai", prototype, [row])
@@ -93,9 +95,7 @@ def test_positive_binding_injects_endpoint_and_secret() -> None:
 
 def test_positive_empty_endpoint_falls_back_to_prototype_default() -> None:
     prototype = OpenAIProvider(client=build_recording_client(RecordingHandler()), api_key=None)
-    row = make_row(
-        tenant_id="t1", provider_type="openai", endpoint=None, credential_id="cred-1"
-    )
+    row = make_row(tenant_id="t1", provider_type="openai", endpoint=None, credential_id="cred-1")
     _, _, _, router = _router_for("openai", prototype, [row])
 
     provider, _, _ = router.resolve(ModelConfig(provider="openai", model="m"), tenant_id="t1")
@@ -105,7 +105,9 @@ def test_positive_empty_endpoint_falls_back_to_prototype_default() -> None:
 def test_positive_ollama_without_credential_gets_none_key() -> None:
     prototype = OllamaProvider(client=build_recording_client(RecordingHandler()))
     row = make_row(
-        tenant_id="t1", provider_type="ollama", endpoint="http://host.docker:11434",
+        tenant_id="t1",
+        provider_type="ollama",
+        endpoint="http://host.docker:11434",
         credential_id=None,
     )
     _, decoder, _, router = _router_for("ollama", prototype, [row])
@@ -118,12 +120,18 @@ def test_positive_ollama_without_credential_gets_none_key() -> None:
 
 def test_multi_row_same_type_picks_oldest_active() -> None:
     older = make_row(
-        tenant_id="t1", provider_type="openai", endpoint="https://old.example/v1",
-        credential_id="c-old", created_at=datetime(2020, 1, 1, tzinfo=UTC),
+        tenant_id="t1",
+        provider_type="openai",
+        endpoint="https://old.example/v1",
+        credential_id="c-old",
+        created_at=datetime(2020, 1, 1, tzinfo=UTC),
     )
     newer = make_row(
-        tenant_id="t1", provider_type="openai", endpoint="https://new.example/v1",
-        credential_id="c-new", created_at=datetime(2021, 1, 1, tzinfo=UTC),
+        tenant_id="t1",
+        provider_type="openai",
+        endpoint="https://new.example/v1",
+        credential_id="c-new",
+        created_at=datetime(2021, 1, 1, tzinfo=UTC),
     )
     prototype = OpenAIProvider(client=build_recording_client(RecordingHandler()), api_key=None)
     # 注入顺序故意「新在前」，验证按 (created_at, id) 而非插入顺序选取。
@@ -150,7 +158,9 @@ def test_negative_missing_tenant_row() -> None:
 def test_negative_requires_key_without_credential() -> None:
     prototype = OpenAIProvider(client=build_recording_client(RecordingHandler()), api_key=None)
     row = make_row(
-        tenant_id="t1", provider_type="openai", endpoint="https://t.example/v1",
+        tenant_id="t1",
+        provider_type="openai",
+        endpoint="https://t.example/v1",
         credential_id=None,
     )
     _, _, _, router = _router_for("openai", prototype, [row])
@@ -164,7 +174,9 @@ def test_negative_requires_key_without_credential() -> None:
 def test_negative_invalid_endpoint() -> None:
     prototype = OpenAIProvider(client=build_recording_client(RecordingHandler()), api_key=None)
     row = make_row(
-        tenant_id="t1", provider_type="openai", endpoint="ftp://not-http/v1",
+        tenant_id="t1",
+        provider_type="openai",
+        endpoint="ftp://not-http/v1",
         credential_id="cred-1",
     )
     _, _, _, router = _router_for("openai", prototype, [row])
@@ -188,7 +200,9 @@ def test_negative_unregistered_provider() -> None:
 def test_negative_cross_tenant_row_not_used() -> None:
     prototype = OpenAIProvider(client=build_recording_client(RecordingHandler()), api_key=None)
     row = make_row(
-        tenant_id="other-tenant", provider_type="openai", endpoint="https://t.example/v1",
+        tenant_id="other-tenant",
+        provider_type="openai",
+        endpoint="https://t.example/v1",
         credential_id="cred-1",
     )
     _, _, _, router = _router_for("openai", prototype, [row])
@@ -201,8 +215,11 @@ def test_negative_cross_tenant_row_not_used() -> None:
 def test_negative_disabled_row_filtered() -> None:
     prototype = OpenAIProvider(client=build_recording_client(RecordingHandler()), api_key=None)
     row = make_row(
-        tenant_id="t1", provider_type="openai", endpoint="https://t.example/v1",
-        credential_id="cred-1", status=MODEL_PROVIDER_STATUS_DISABLED,
+        tenant_id="t1",
+        provider_type="openai",
+        endpoint="https://t.example/v1",
+        credential_id="cred-1",
+        status=MODEL_PROVIDER_STATUS_DISABLED,
     )
     _, _, _, router = _router_for("openai", prototype, [row])
 
@@ -218,7 +235,9 @@ def test_plaintext_not_echoed_anywhere(caplog: pytest.LogCaptureFixture) -> None
     handler = RecordingHandler()
     prototype = OpenAIProvider(client=build_recording_client(handler), api_key=None)
     row = make_row(
-        tenant_id="t1", provider_type="openai", endpoint="https://t.example/v1",
+        tenant_id="t1",
+        provider_type="openai",
+        endpoint="https://t.example/v1",
         credential_id="cred-1",
     )
     _, _, _, router = _router_for("openai", prototype, [row])
@@ -262,7 +281,9 @@ def test_stub_prototype_bypasses_binding() -> None:
 def test_no_tenant_id_is_phase1_behavior() -> None:
     prototype = OpenAIProvider(client=build_recording_client(RecordingHandler()), api_key=None)
     row = make_row(
-        tenant_id="t1", provider_type="openai", endpoint="https://t.example/v1",
+        tenant_id="t1",
+        provider_type="openai",
+        endpoint="https://t.example/v1",
         credential_id="cred-1",
     )
     repository, decoder, _, router = _router_for("openai", prototype, [row])
@@ -290,7 +311,9 @@ def test_unbound_router_without_resolver_keeps_default() -> None:
 def test_decrypt_audit_action_written() -> None:
     prototype = OpenAIProvider(client=build_recording_client(RecordingHandler()), api_key=None)
     row = make_row(
-        tenant_id="t1", provider_type="openai", endpoint="https://t.example/v1",
+        tenant_id="t1",
+        provider_type="openai",
+        endpoint="https://t.example/v1",
         credential_id="cred-1",
     )
     _, _, audit, router = _router_for("openai", prototype, [row])

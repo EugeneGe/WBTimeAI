@@ -172,9 +172,7 @@ class LeaseManager:
                         "limit": self.max_concurrent_executions,
                     },
                 )
-                return ClaimOutcome(
-                    claimed=False, record=None, reason=REASON_CONCURRENCY_LIMITED
-                )
+                return ClaimOutcome(claimed=False, record=None, reason=REASON_CONCURRENCY_LIMITED)
         try:
             record = self.recorder.claim(
                 task_id=task_id,

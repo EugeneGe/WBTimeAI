@@ -180,7 +180,9 @@ def test_remote_events_resume_with_cursor(
     # (1) 去条件化：基线页**必非空**（已 seed 2 个 Attempt ⇒ 至少 2 条 ``attempt.started``）。
     assert seqs_1, "续读基线页不应为空（已 seed 2 个 Attempt）"
     # (2) 页内**严格**单调递增（无重复、无倒序）—— **无条件**断言。
-    assert all(b > a for a, b in zip(seqs_1, seqs_1[1:])), seqs_1
+    # ``seqs_1[1:]`` 刻意丢弃首元素 → 两序列**必然不等长**（差 1）→ 显式 ``strict=False``：
+    # 保持原「相邻对」语义（``strict=True`` 会因长度不等抛 ``ValueError``，属行为变化）。
+    assert all(b > a for a, b in zip(seqs_1, seqs_1[1:], strict=False)), seqs_1
     # (3) 强化 cursor 断言（替代近永真的 ``isinstance(str)``）：**非空**不透明句柄、无路径分隔。
     cursor = body1.get("next_cursor")
     assert isinstance(cursor, str) and cursor, cursor

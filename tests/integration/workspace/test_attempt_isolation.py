@@ -258,7 +258,12 @@ def test_environment_digest_excludes_authorization_and_bearer() -> None:
 
     with_creds = compute_environment_digest(
         runtime={"python": "3.12"},
-        config={"AUTHORIZATION": "Bearer leak", "BEARER": "leak", "TOKEN": "leak", "SECRET": "leak"},
+        config={
+            "AUTHORIZATION": "Bearer leak",
+            "BEARER": "leak",
+            "TOKEN": "leak",
+            "SECRET": "leak",
+        },
     )
     without_creds = compute_environment_digest(runtime={"python": "3.12"}, config={})
     assert with_creds == without_creds

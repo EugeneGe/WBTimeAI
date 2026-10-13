@@ -469,10 +469,11 @@ def get_task_diff(
 ) -> TaskDiffResponse:
     """返回某 Attempt 的**受限** Diff（``EXECUTE + git.diff``；不 Apply / 不 Push）。
 
-    🔴 **R5 补全轮（F4 / R5A-02）裁定**：远程 API 的 Diff **唯一出口** = ``ChangeReviewService.diff``
-       （经 Sandbox、真实文件摘要 + 逐次授权审计）；``available=False``（缺 ``base/result`` 提交）
-       → **200 降级**（``files=[]``，不报错）。此前误接占位 ``RemoteTaskService.get_diff``（恒
-       ``files=[]``）——现统一至变更审阅服务的真实出口。
+    🔴 **R5 补全轮（F4 / R5A-02）裁定**：远程 API 的 Diff **唯一出口** =
+    ``ChangeReviewService.diff``（经 Sandbox、真实文件摘要 + 逐次授权审计）；
+    ``available=False``（缺 ``base/result`` 提交）→ **200 降级**（``files=[]``，不报错）。
+    此前误接占位 ``RemoteTaskService.get_diff``（恒 ``files=[]``）——
+    现统一至变更审阅服务的真实出口。
     """
     review = _require_change_review_service(services)
     diff = review.diff(_principal(user), task_id, attempt=attempt)

@@ -232,7 +232,8 @@ def test_0018_rollback_then_upgrade_roundtrip_sqlite() -> None:
 
 @pytest.mark.skipif(_PG_URL is None and not _REQUIRE_PG, reason="未配置 ASTRA_TEST_PG_URL")
 def test_0018_rollback_postgres_preserves_workspace() -> None:
-    """PostgreSQL（权威方言）：``upgrade head`` → ``downgrade 0017`` → 加性列 / 索引消失、唯一约束在。
+    """PostgreSQL（权威方言）：``upgrade head`` → ``downgrade 0017`` → 加性列 / 索引消失、
+    唯一约束在。
 
     本机无 PG → 门控 ``skip``（**不**虚报）；服务器面回滚验收随 T2-64 原口径执行。
     """

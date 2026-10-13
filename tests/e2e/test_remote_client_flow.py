@@ -250,7 +250,7 @@ def test_remote_diff_read_degrades_without_host_paths(
 ) -> None:
     """``remote diff`` 命中冻结读取路径 ``/tasks/{id}/diff``；经 ``ChangeReviewService.diff``
     （注入 fake git）→ **200 + available 标志**；输出**不含**宿主路径 / 令牌。"""
-    # F4：Diff 出口 = ChangeReviewService.diff（经 Sandbox）；注入 fake git（本地面确定性，不触宿主）。
+    # F4：Diff 出口 = ChangeReviewService.diff（经 Sandbox）；注入 fake git（确定性，不触宿主）。
     client.app.state.services.change_review._git = _FakeDiffGit("M\tapp.py\n")  # noqa: SLF001
     result = cli_harness["runner"].invoke(app, ["remote", "diff", cli_harness["task_id"]])
     assert f"/api/v1/tasks/{cli_harness['task_id']}/diff" in cli_harness["transport"].paths()

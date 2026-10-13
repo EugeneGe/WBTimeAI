@@ -90,18 +90,14 @@ class RecordingHandler:
         self._payload = json.dumps(
             {
                 "model": "mock-model",
-                "choices": [
-                    {"message": {"content": content}, "finish_reason": "stop"}
-                ],
+                "choices": [{"message": {"content": content}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
             }
         )
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
-        return httpx.Response(
-            200, text=self._payload, headers={"content-type": "application/json"}
-        )
+        return httpx.Response(200, text=self._payload, headers={"content-type": "application/json"})
 
 
 def build_recording_client(handler: RecordingHandler) -> httpx.Client:

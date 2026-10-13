@@ -472,8 +472,7 @@ def test_claim_without_concurrency_cap_is_unlimited() -> None:
     manager = LeaseManager(ExecutionRecorder(_FakeExecutionRepository()))
 
     assert all(
-        manager.claim(task_id=f"task-u{index}", attempt=1, now=T0).claimed
-        for index in range(5)
+        manager.claim(task_id=f"task-u{index}", attempt=1, now=T0).claimed for index in range(5)
     )
 
 
@@ -557,9 +556,7 @@ def test_handler_returns_concurrency_limited_status() -> None:
 
 def test_artifact_limit_rejects_and_fails_terminal() -> None:
     """F8d：artifact 数量超上限 → 拒绝落库 + 稳定失败终态 + 抛 ``RESOURCE_LIMIT_EXCEEDED``。"""
-    manager = LeaseManager(
-        ExecutionRecorder(_FakeExecutionRepository()), max_artifact_count=1
-    )
+    manager = LeaseManager(ExecutionRecorder(_FakeExecutionRepository()), max_artifact_count=1)
     record = manager.claim(task_id="task-a1", attempt=1, now=T0).record
     assert record is not None
 
@@ -577,9 +574,7 @@ def test_artifact_limit_rejects_and_fails_terminal() -> None:
 
 def test_artifact_size_limit_rejects() -> None:
     """F8d：artifact 累计字节超上限 → 拒绝落库（稳定失败）。"""
-    manager = LeaseManager(
-        ExecutionRecorder(_FakeExecutionRepository()), max_artifact_bytes=10
-    )
+    manager = LeaseManager(ExecutionRecorder(_FakeExecutionRepository()), max_artifact_bytes=10)
     record = manager.claim(task_id="task-a2", attempt=1, now=T0).record
     assert record is not None
 
