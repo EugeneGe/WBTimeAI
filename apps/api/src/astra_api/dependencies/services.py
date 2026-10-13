@@ -12,6 +12,7 @@ W6 / T1-31 扩展：新增 ``agent`` / ``conversation`` / ``run`` / ``agent_run`
 
 from __future__ import annotations
 
+import builtins
 import json
 import logging
 from collections.abc import Callable, Mapping
@@ -1964,6 +1965,10 @@ class _SessionScopedProjectRepository:
     零 ORM / 零 Web）仅依赖 ``astra_workspace.domain.ProjectRepository`` Protocol；本适配器在
     **组合根**以 ``session_scope`` 打开短时会话并委派，使能力包与 ORM 会话生命周期彻底解耦。
     返回的 ``Project`` 为**纯数据类**（域实体，脱离会话后仍可安全读取）。
+
+    🔴 **完整实现 ``ProjectRepository`` Protocol 契约**（P2.6 基线修复）：远程服务**只读**
+    （``get`` / ``list_by_workspace``）；``add`` / ``list`` / ``update`` / ``delete`` 为满足
+    Protocol **结构化契合**而提供（同经短时会话委派），**无调用者**、不改变既有行为。
     """
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
@@ -1975,7 +1980,29 @@ class _SessionScopedProjectRepository:
         with session_scope(self._session_factory) as session:
             return SqlProjectRepository(session).get(project_id)
 
-    def list_by_workspace(self, workspace_id: str, *, scope: Any | None = None) -> list[Any]:
+    def add(self, entity: Any) -> Any:
+        """新增项目（短时会话内委派；满足 ``ProjectRepository`` Protocol 契约）。"""
+        with session_scope(self._session_factory) as session:
+            return SqlProjectRepository(session).add(entity)
+
+    def list(self, scope: Any | None = None, **filters: Any) -> builtins.list[Any]:
+        """按等值条件列出项目（短时会话内委派；满足 Protocol 契约）。"""
+        with session_scope(self._session_factory) as session:
+            return SqlProjectRepository(session).list(scope=scope, **filters)
+
+    def update(self, entity: Any) -> Any:
+        """更新项目（短时会话内委派；满足 ``ProjectRepository`` Protocol 契约）。"""
+        with session_scope(self._session_factory) as session:
+            return SqlProjectRepository(session).update(entity)
+
+    def delete(self, entity: Any) -> None:
+        """删除项目（短时会话内委派；满足 ``ProjectRepository`` Protocol 契约）。"""
+        with session_scope(self._session_factory) as session:
+            SqlProjectRepository(session).delete(entity)
+
+    def list_by_workspace(
+        self, workspace_id: str, *, scope: Any | None = None
+    ) -> builtins.list[Any]:
         """列出某 Workspace 下的项目（短时会话内委派）。"""
         with session_scope(self._session_factory) as session:
             return SqlProjectRepository(session).list_by_workspace(workspace_id, scope=scope)

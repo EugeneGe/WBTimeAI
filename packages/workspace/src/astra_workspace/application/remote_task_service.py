@@ -37,11 +37,9 @@ from astra_domain import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期
-    from astra_domain.repositories import (
-        ProjectRepository,
-        TaskExecutionRepository,
-        TaskRepository,
-    )
+    from astra_domain.repositories import TaskExecutionRepository, TaskRepository
+
+    from astra_workspace.domain import ProjectRepository
 
 __all__ = [
     # 常量
@@ -415,8 +413,12 @@ class DiffProvider(Protocol):
 class ArtifactReader(Protocol):
     """Artifact 内容读取器（经 ``Storage``；缺省 → 结构化 503）。"""
 
-    def read(self, ref: str) -> tuple[bytes, str]:
-        """读取 Artifact 内容，返回 ``(bytes, content_type)``。"""
+    def read(self, ref: str) -> tuple[bytes, str | None]:
+        """读取 Artifact 内容，返回 ``(bytes, content_type)``。
+
+        ``content_type`` 可为 ``None``（如 ``_StorageArtifactReader`` 恒返回 ``None``）；
+        调用方经 ``content_type or view.content_type or "application/octet-stream"`` 兜底链回退。
+        """
         ...
 
 

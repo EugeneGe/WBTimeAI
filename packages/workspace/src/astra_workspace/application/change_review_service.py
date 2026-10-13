@@ -50,12 +50,10 @@ from .remote_task_service import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期
-    from astra_domain.repositories import (
-        ProjectRepository,
-        TaskExecutionRepository,
-        TaskRepository,
-    )
+    from astra_domain.repositories import TaskExecutionRepository, TaskRepository
     from astra_sandbox import SandboxProvider, SandboxSession
+
+    from astra_workspace.domain import ProjectRepository
 
     from ..git import GitService
     from ..project_storage import ProjectStorage
