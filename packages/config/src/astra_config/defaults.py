@@ -281,6 +281,18 @@ HARD_MAX_ARTIFACT_BYTES = 16 * 1024**3
 #: **硬上限**：单次执行 Artifact 数量（1000；部署不可逾越）。
 HARD_MAX_ARTIFACT_COUNT = 1000
 
+#: 并发受限**留守重派**默认次数上限（A-1；防无限循环；默认 3 次）。
+DEFAULT_REMOTE_MAX_REDISPATCH_ATTEMPTS = 3
+
+#: **硬上限**：并发受限留守重派次数（A-1；部署不可逾越；10 次）。
+HARD_MAX_REDISPATCH_ATTEMPTS = 10
+
+#: 磁盘占用上限是否**强制执行**（A-3；默认 ``True`` = 超 ``max_disk_bytes`` 即终止）。
+DEFAULT_REMOTE_DISK_ENFORCE = True
+
+#: 磁盘**告警水位**比例（A-3；``used_bytes > ratio * max_disk_bytes`` → 告警事件；默认 0.8）。
+DEFAULT_REMOTE_DISK_HIGH_WATERMARK_RATIO = 0.8
+
 
 # -- Feature Flag（T0-21 / 决策 D7） -----------------------------------------
 
@@ -375,4 +387,9 @@ __all__ = [
     "HARD_MAX_DISK_BYTES",
     "HARD_MAX_ARTIFACT_BYTES",
     "HARD_MAX_ARTIFACT_COUNT",
+    # A 组（V0.4.1）：留守重派 / 磁盘强制 + 水位
+    "DEFAULT_REMOTE_MAX_REDISPATCH_ATTEMPTS",
+    "HARD_MAX_REDISPATCH_ATTEMPTS",
+    "DEFAULT_REMOTE_DISK_ENFORCE",
+    "DEFAULT_REMOTE_DISK_HIGH_WATERMARK_RATIO",
 ]

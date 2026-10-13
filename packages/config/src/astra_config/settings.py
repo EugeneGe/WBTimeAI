@@ -49,12 +49,15 @@ from .defaults import (
     DEFAULT_PORT,
     DEFAULT_REDIS_URL,
     DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+    DEFAULT_REMOTE_DISK_ENFORCE,
+    DEFAULT_REMOTE_DISK_HIGH_WATERMARK_RATIO,
     DEFAULT_REMOTE_MAX_ARTIFACT_BYTES,
     DEFAULT_REMOTE_MAX_ARTIFACT_COUNT,
     DEFAULT_REMOTE_MAX_CONCURRENT_EXECUTIONS,
     DEFAULT_REMOTE_MAX_DISK_BYTES,
     DEFAULT_REMOTE_MAX_DURATION_SECONDS,
     DEFAULT_REMOTE_MAX_PENDING_PER_USER,
+    DEFAULT_REMOTE_MAX_REDISPATCH_ATTEMPTS,
     DEFAULT_RETENTION_AGENT_EVENT_DAYS,
     DEFAULT_RETENTION_AUDIT_LOG_DAYS,
     DEFAULT_RETENTION_BATCH_SIZE,
@@ -88,6 +91,7 @@ from .defaults import (
     HARD_MAX_DISK_BYTES,
     HARD_MAX_DURATION_SECONDS,
     HARD_MAX_PENDING_PER_USER,
+    HARD_MAX_REDISPATCH_ATTEMPTS,
 )
 
 __all__ = [
@@ -281,6 +285,12 @@ class RemoteExecutionSettings(BaseModel):
         max_disk_bytes: 单次执行磁盘占用上限（默认 8 GiB；硬上限 64 GiB）。
         max_artifact_bytes: 单次执行 Artifact 累计字节上限（默认 4 GiB；硬上限 16 GiB）。
         max_artifact_count: 单次执行 Artifact 数量上限（默认 200；硬上限 1000）。
+        max_redispatch_attempts: 并发受限**留守重派**次数上限（A-1；默认 3；硬上限 10）；
+            防「并发位长期不释放」导致无限循环。
+        disk_enforce: 磁盘占用上限是否**强制执行**（A-3；默认 ``True``）。为 ``True`` 时
+            执行期统计 workspace 占用，超 ``max_disk_bytes`` 即终止（``RESOURCE_LIMIT_EXCEEDED``）。
+        disk_high_watermark_ratio: 磁盘**告警水位**比例（A-3；默认 0.8，``(0, 1]``）；
+            ``used_bytes > ratio * max_disk_bytes`` → 告警事件（**不**终止）。
     """
 
     max_concurrent_executions: int = DEFAULT_REMOTE_MAX_CONCURRENT_EXECUTIONS
@@ -289,6 +299,9 @@ class RemoteExecutionSettings(BaseModel):
     max_disk_bytes: int = DEFAULT_REMOTE_MAX_DISK_BYTES
     max_artifact_bytes: int = DEFAULT_REMOTE_MAX_ARTIFACT_BYTES
     max_artifact_count: int = DEFAULT_REMOTE_MAX_ARTIFACT_COUNT
+    max_redispatch_attempts: int = DEFAULT_REMOTE_MAX_REDISPATCH_ATTEMPTS
+    disk_enforce: bool = DEFAULT_REMOTE_DISK_ENFORCE
+    disk_high_watermark_ratio: float = DEFAULT_REMOTE_DISK_HIGH_WATERMARK_RATIO
 
     @model_validator(mode="after")
     def _enforce_hard_ceilings(self) -> RemoteExecutionSettings:
@@ -298,7 +311,7 @@ class RemoteExecutionSettings(BaseModel):
             校验通过的自身（pydantic v2 ``mode="after"`` 语义）。
 
         Raises:
-            ValueError: 任一字段 ``<= 0`` 或超过对应硬上限。
+            ValueError: 任一整数字段 ``<= 0`` / 超过对应硬上限，或水位比例不在 ``(0, 1]``。
         """
         ceilings: dict[str, int] = {
             "max_concurrent_executions": HARD_MAX_CONCURRENT_EXECUTIONS,
@@ -307,6 +320,7 @@ class RemoteExecutionSettings(BaseModel):
             "max_disk_bytes": HARD_MAX_DISK_BYTES,
             "max_artifact_bytes": HARD_MAX_ARTIFACT_BYTES,
             "max_artifact_count": HARD_MAX_ARTIFACT_COUNT,
+            "max_redispatch_attempts": HARD_MAX_REDISPATCH_ATTEMPTS,
         }
         for name, ceiling in ceilings.items():
             value = getattr(self, name)
@@ -317,6 +331,12 @@ class RemoteExecutionSettings(BaseModel):
                     f"remote_execution.{name}={value} 超过硬上限 {ceiling}"
                     "（部署只可收紧，不可越过硬上限）"
                 )
+        # A-3：磁盘水位比例为 ``(0, 1]``（0 = 关闭水位；> 1 无意义）。
+        ratio = self.disk_high_watermark_ratio
+        if not (0.0 < ratio <= 1.0):
+            raise ValueError(
+                f"remote_execution.disk_high_watermark_ratio 必须在 (0, 1]，实际 {ratio}"
+            )
         return self
 
 

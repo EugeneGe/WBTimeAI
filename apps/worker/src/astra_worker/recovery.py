@@ -113,6 +113,11 @@ class LeaseManager:
             **缺省 ``None`` = 不启用**该检查，向后兼容）。
         max_artifact_count: 单次执行 artifact 数量上限（可空；R5 补全轮 F8d）。
         max_artifact_bytes: 单次执行 artifact 累计字节上限（可空；R5 补全轮 F8d）。
+        max_disk_bytes: 单次执行 workspace 磁盘占用上限（可空；A-3 磁盘强制；缺省 ``None`` =
+            不启用磁盘判定）。
+        disk_enforce: 是否**强制**执行磁盘上限（A-3；默认 ``True``；``False`` 时仅告警不终止）。
+        disk_high_watermark_ratio: 磁盘告警水位比例（A-3；可空；``used > ratio * max_disk_bytes``
+            → 告警事件，**不**终止）。
         clock: 时钟（可注入 fake clock）。
     """
 
@@ -122,6 +127,9 @@ class LeaseManager:
     max_concurrent_executions: int | None = None
     max_artifact_count: int | None = None
     max_artifact_bytes: int | None = None
+    max_disk_bytes: int | None = None
+    disk_enforce: bool = True
+    disk_high_watermark_ratio: float | None = None
     clock: Callable[[], datetime] = field(default=utcnow)
 
     # -- Claim --------------------------------------------------------------
@@ -315,6 +323,146 @@ class LeaseManager:
     ) -> TaskExecutionRecord:
         """把执行记录置 ``FAILED``（**非静默**：写错误信息），持久化并返回。"""
         return self.finish(record, status=TaskStatus.FAILED.value, error=error, now=now)
+
+    # -- 执行中强制打断 / 取消（A-2） ----------------------------------------
+
+    def interrupt(
+        self,
+        record: TaskExecutionRecord,
+        *,
+        reason: str,
+        now: datetime | None = None,
+    ) -> TaskExecutionRecord:
+        """**执行中强制打断**：把 ``RUNNING`` 记录以 ``WORKER_INTERRUPTED`` 结束（**非静默**）。
+
+        A-2：用于「超 ``max_duration_seconds``」或「worker 侧显式中断」——终态为
+        :data:`astra_task.EXECUTION_STATUS_WORKER_INTERRUPTED`（**不**伪装成功），
+        写 ``reason`` 为 ``error`` 并落 ``finished_at``（据此**回收租约 / 释放资源位**：
+        记录离开 ``RUNNING`` 后不再计入 :meth:`_count_active` 活跃数）。
+
+        Args:
+            record: 待中断的执行记录（须为当前 ``RUNNING``）。
+            reason: 中断原因（写入 ``error``；如 ``deadline_exceeded`` / ``interrupted``）。
+            now: 当前时刻（可空；测试可注入 fake clock）。
+
+        Returns:
+            以 ``WORKER_INTERRUPTED`` 结束并持久化的记录。
+        """
+        ts = now if now is not None else self.clock()
+        updated = self.recorder.mark_interrupted(record, now=ts, error=reason)
+        _logger.warning(
+            "worker.interrupted",
+            extra={
+                "handler": "remote.agent_run",
+                "task_id": record.task_id,
+                "attempt": record.attempt,
+                "execution_id": record.id,
+                "reason": reason,
+            },
+        )
+        return updated
+
+    def cancel(
+        self,
+        record: TaskExecutionRecord,
+        *,
+        reason: str,
+        now: datetime | None = None,
+    ) -> TaskExecutionRecord:
+        """**显式取消**：把 ``RUNNING`` 记录以 ``CANCELLED`` 结束（**非静默**；设计 §2.9.1）。
+
+        取消与「失联中断」语义区分：显式取消落 ``CANCELLED``（终态），
+        ``sweep_interrupted`` **不**再扫描（已非 ``RUNNING``），**不**伪装成功。
+        """
+        ts = now if now is not None else self.clock()
+        updated = self.recorder.mark_cancelled(record, now=ts, error=reason)
+        _logger.warning(
+            "worker.cancelled",
+            extra={
+                "handler": "remote.agent_run",
+                "task_id": record.task_id,
+                "attempt": record.attempt,
+                "execution_id": record.id,
+                "reason": reason,
+            },
+        )
+        return updated
+
+    # -- 磁盘占用强制 + 水位告警（A-3） --------------------------------------
+
+    def enforce_disk(
+        self,
+        record: TaskExecutionRecord,
+        *,
+        used_bytes: int,
+        now: datetime | None = None,
+    ) -> int:
+        """执行期**磁盘占用**强制 + 水位告警（A-3；**不伪造**）。
+
+        - ``max_disk_bytes`` 已配置且 ``disk_enforce`` 为真、``used_bytes > max_disk_bytes`` →
+          拒绝（以稳定失败终态 ``FAILED`` + ``RESOURCE_LIMIT_EXCEEDED`` 收尾）并**抛**
+          :class:`DomainError`（``RESOURCE_LIMIT_EXCEEDED`` → 429，**非静默**）；
+        - 否则若配置了 ``disk_high_watermark_ratio`` 且 ``used_bytes > ratio * max_disk_bytes``
+          → 记 WARNING **告警事件**（``worker.disk_high_watermark``），**不**终止。
+
+        恰在上限内（``== max_disk_bytes``）**通过**（仅 ``>`` 判超；零误杀）。
+
+        Args:
+            record: 当前执行记录（超限时以其落失败终态）。
+            used_bytes: 本次统计到的 workspace 占用字节数。
+            now: 当前时刻（可空）。
+
+        Returns:
+            ``used_bytes``（透传，便于调用方记录）。
+
+        Raises:
+            DomainError: ``used_bytes > max_disk_bytes`` 且强制启用（``RESOURCE_LIMIT_EXCEEDED``）。
+        """
+        ts = now if now is not None else self.clock()
+        limit = self.max_disk_bytes
+        if limit is not None and limit > 0:
+            if self.disk_enforce and used_bytes > limit:
+                self.recorder.finish(
+                    record,
+                    status=TaskStatus.FAILED.value,
+                    error=(
+                        f"{ErrorCode.RESOURCE_LIMIT_EXCEEDED}: workspace 磁盘占用 {used_bytes} "
+                        f"超过上限 {limit}"
+                    ),
+                    finished_at=ts,
+                )
+                _logger.warning(
+                    "worker.disk_limit_exceeded",
+                    extra={
+                        "handler": "remote.agent_run",
+                        "task_id": record.task_id,
+                        "attempt": record.attempt,
+                        "execution_id": record.id,
+                        "used_bytes": used_bytes,
+                        "limit": limit,
+                    },
+                )
+                raise DomainError(
+                    "远程执行 workspace 磁盘占用超限（终止执行）",
+                    code=ErrorCode.RESOURCE_LIMIT_EXCEEDED,
+                    status_code=429,
+                    data={"scope": "disk", "used_bytes": used_bytes, "max_disk_bytes": limit},
+                )
+            ratio = self.disk_high_watermark_ratio
+            if ratio is not None and used_bytes > ratio * limit:
+                _logger.warning(
+                    "worker.disk_high_watermark",
+                    extra={
+                        "handler": "remote.agent_run",
+                        "task_id": record.task_id,
+                        "attempt": record.attempt,
+                        "execution_id": record.id,
+                        "used_bytes": used_bytes,
+                        "watermark_bytes": int(ratio * limit),
+                        "ratio": ratio,
+                    },
+                )
+        return used_bytes
 
     # -- 启动扫描 / 恢复 -----------------------------------------------------
 

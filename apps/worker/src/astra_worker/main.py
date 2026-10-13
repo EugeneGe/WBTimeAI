@@ -88,7 +88,30 @@ def _build_lease_manager(providers: Any, settings: Settings) -> Any | None:
         max_concurrent_executions=getattr(limits, "max_concurrent_executions", None),
         max_artifact_count=getattr(limits, "max_artifact_count", None),
         max_artifact_bytes=getattr(limits, "max_artifact_bytes", None),
+        max_disk_bytes=getattr(limits, "max_disk_bytes", None),
+        disk_enforce=bool(getattr(limits, "disk_enforce", True)),
+        disk_high_watermark_ratio=getattr(limits, "disk_high_watermark_ratio", None),
     )
+
+
+def _dir_size_bytes(root: str) -> int:
+    """**尽力而为**统计目录占用字节数（A-3；目录不存在 / 无权限 → 已统计部分）。
+
+    仅统计常规文件，错误逐项忽略（探测失败**不**中断执行；超限判定仍以统计数据为准）。
+    空路径 → ``0``（避免误遍历当前目录）。
+    """
+    import os
+
+    if not root:
+        return 0
+    total = 0
+    for dirpath, _dirnames, filenames in os.walk(root, onerror=lambda _err: None):
+        for name in filenames:
+            try:
+                total += os.path.getsize(os.path.join(dirpath, name))
+            except OSError:
+                continue
+    return total
 
 
 def _recover_on_startup(providers: Any, *, queue: Any, lease_manager: Any | None) -> None:
@@ -164,6 +187,24 @@ def run_worker(
     lease_manager = _build_lease_manager(providers, settings)
     if lease_manager is not None:
         ctx.services["lease_manager"] = lease_manager
+
+    # A 组（V0.4.1）约定注入（均可缺省 = 不启用；契约见 remote_agent_run 处理器 docstring）：
+    #   - A-1 留守重派：``redispatch`` 回调 + 有界次数上限；
+    #   - A-2 中段打断：``max_duration_seconds``（运行中超时长 → WORKER_INTERRUPTED）；
+    #   - A-3 磁盘统计：``workspace_disk_usage``（尽力而为统计 workspace 占用字节）。
+    limits = getattr(settings, "remote_execution", None)
+    ctx.services["max_redispatch_attempts"] = getattr(limits, "max_redispatch_attempts", None)
+    ctx.services["max_duration_seconds"] = getattr(limits, "max_duration_seconds", None)
+
+    def _redispatch(queued_message: dict[str, Any]) -> None:
+        """A-1：把留守消息**重新入队**（择机重派；节奏由队列 / 消费循环决定）。"""
+        queue.enqueue(queued_message)
+
+    ctx.services["redispatch"] = _redispatch
+    ctx.services["workspace_disk_usage"] = lambda _payload: _dir_size_bytes(
+        str(getattr(settings, "workspace_root", "") or "")
+    )
+
     _recover_on_startup(providers, queue=queue, lease_manager=lease_manager)
 
     processed = 0
