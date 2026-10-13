@@ -170,7 +170,7 @@ jobs:
         run: |
           export ASTRA_DATABASE_URL="$ASTRA_TEST_PG_URL"
           uv run alembic upgrade head
-          uv run python scripts/ci_check_migration_drift.py
+          uv run python scripts/check_migration_drift.py
           uv run alembic downgrade base
 
       # W10 / T2-51（加性）· P2.7-A：PG 权威侧迁移 head 守卫——**动态**断言「恰好单 head」并打印 head 名

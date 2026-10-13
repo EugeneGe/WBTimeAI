@@ -8,12 +8,15 @@
 #      ② 危险动作默认 dry-run（rm -rf / git push --force / 越界写）——复用 I-P1-10 套件实测。
 #   1. **迁移回滚（双引擎）**：
 #      SQLite 实跑；PG 受 `ASTRA_TEST_PG_URL` 门控（A17：本机无 PG 运行时 → CI nightly 实跑）。
-#      链路：`upgrade head →（check 零漂移 @head）→ downgrade 0002 →（断言 15 张表消失）
-#            → upgrade head →（check 零漂移 @head，往返干净）`。
+#      链路：`upgrade head →（check @head：标准档零漂移 / 降级档已知差异白名单）
+#            → downgrade 0002 →（断言 15 张表消失）→ upgrade head →（check @head，往返干净）`。
 #
 # 说明（对齐 CI 迁移 job）：`alembic check` 在**非 head** 修订下按设计报
 #   "Target database is not up to date"（非零）；故「零漂移」断言于 **head** 执行，
 #   而 `downgrade 0002` 之后的 `alembic check` **如实报非 head** 亦作为回滚状态的负向佐证。
+#   正断言经 `scripts/check_migration_drift.py`（**降级感知**）：标准档（带 vector）→ 零漂移；
+#   plain 档（无 vector 扩展，0013/0014 **设计内降级**为 jsonb）→ 放行**恰好 2 项**已知差异
+#   （embedding.vector / memory.vector），多 1 项即 fail。负向断言与其余逻辑不变。
 #
 # 退出码：全绿 0；任一断言失败非零（防假绿，不用 `|| true`）。
 # ---------------------------------------------------------------------------
@@ -106,8 +109,8 @@ drill() {  # $1=mode $2=db_url $3=label
   uv run alembic upgrade head
   check_tables "${url}" present "${label}@head"
 
-  log "[${label}] alembic check @head（零漂移）"
-  uv run alembic check
+  log "[${label}] alembic check @head（标准档零漂移 / 降级档已知差异白名单）"
+  uv run python scripts/check_migration_drift.py
 
   log "[${label}] alembic downgrade 0002"
   uv run alembic downgrade 0002
@@ -120,10 +123,10 @@ drill() {  # $1=mode $2=db_url $3=label
   fi
   log "  ✓ 0002 下 alembic check 如实报非 head（符合预期）"
 
-  log "[${label}] 复位：upgrade head → check（往返干净）"
+  log "[${label}] 复位：upgrade head → check（往返干净；标准档零漂移 / 降级档已知差异白名单）"
   uv run alembic upgrade head
   check_tables "${url}" present "${label}@head-restored"
-  uv run alembic check
+  uv run python scripts/check_migration_drift.py
 }
 
 # 环境基线（本地/SQLite 演练）。

@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
-"""PostgreSQL smoke（plain 档）迁移漂移断言（**降级感知**）。
+"""迁移漂移**降级感知**断言（自包含：内部运行 ``alembic check`` 并按三态判定）。
 
 依据（H-1：不改设计；本脚本只修**断言口径**）
 --------------------------------------------
-CI「PostgreSQL smoke」job 使用 **plain ``postgres:16``**（无 ``vector`` 扩展、无 pgvector
-Python 包）。此时 0013/0014 迁移走**设计内降级路径**：``CREATE EXTENSION vector`` 失败 →
-WARNING → 向量列型退化为 ``jsonb``。于是 ``alembic check``（模型侧 ``VectorType`` vs DB 侧
-``jsonb``）**必然**报 2 项 ``modify_type`` 漂移（``embedding.vector`` / ``memory.vector``）并
-非零退出。
+多处 CI/nightly 断言以「裸 ``alembic check`` 零漂移」为准，隐含前提是**标准档（带 vector
+扩展）**。但在 **plain ``postgres:16``**（无 ``vector`` 扩展、无 pgvector 包）下，0013/0014
+迁移走**设计内降级路径**：``CREATE EXTENSION vector`` 失败 → WARNING → 向量列型退化为
+``jsonb``。于是 ``alembic check``（模型侧 ``VectorType`` vs DB 侧 ``jsonb``）**必然**报 2 项
+``modify_type`` 漂移（``embedding.vector`` / ``memory.vector``，``jsonb`` → ``VectorType``）
+并非零退出。原口径在该档**不成立** → 属**测试断言口径缺陷**，非产品缺陷。
 
-CI 原口径「裸 ``alembic check`` 零漂移」在**降级档**不成立 → 属**测试断言口径缺陷**，非产品
-缺陷。标准档（pgvector）零漂移已由同 workflow 的「PostgreSQL (pgvector) migration +
-knowledge」job 经其 ``alembic check`` **完整覆盖**；本 job 的定位是 **plain 档（降级形态）冒烟**。
+标准档（pgvector）零漂移由「PostgreSQL (pgvector) migration + knowledge」job 经其
+``alembic check`` **完整覆盖**；plain 档（降级形态）冒烟与回滚演练则用**本脚本**统一断言。
 
 判定口径（严格白名单，禁假绿）
 ------------------------------
-- ``alembic check`` rc == 0 → PASS（零漂移）；
+- ``alembic check`` rc == 0 → PASS（**标准档零漂移**，或 SQLite 等零漂移档）；
 - rc != 0 且漂移明细**恰好**为已知 2 项 ``modify_type``（``embedding.vector`` 与
-  ``memory.vector``，``jsonb`` → ``VectorType``）且**无任何其他** upgrade operations → PASS；
-- 其余任何情形（多 1 项差异 / 少项 / 异项 / 解析失败 / 非漂移类非零退出）→ FAIL（打印完整
-  原文，rc=1）。
+  ``memory.vector``，``jsonb`` → ``VectorType``）且**无任何其他** upgrade operations
+  → PASS（**降级档已知差异白名单**）；
+- 其余任何情形（多 1 项 / 少项 / 异项 / 解析失败 / 非漂移类非零退出）→ FAIL（打印完整原文，rc=1）。
 
 **不可放宽**：白名单**严格恰好 2 项**；多 1 项即 fail；不得写成「含这 2 项即过」；不使用
 ``|| true`` / 无条件跳过。
 
 用法
 ----
-在线（CI）：本脚本自行调用 ``python -m alembic check`` 并判定::
+在线（CI，自包含）：本脚本自行调用 ``python -m alembic check``（继承当前环境变量，如
+``ASTRA_DATABASE_URL`` / ``ASTRA_MODE``）并判定::
 
-    uv run python scripts/ci_check_migration_drift.py
+    uv run python scripts/check_migration_drift.py
 
-离线（自测，不需 PG）：给定 rc 与合成输出::
+离线（合成输入自测，不需 PG；**经文件**，不使用 stdin）::
 
-    python scripts/ci_check_migration_drift.py --rc 255 --input-file <path>
-    cat <path> | python scripts/ci_check_migration_drift.py --rc 255
+    python scripts/check_migration_drift.py --rc 255 --input-file <path>
 """
 
 from __future__ import annotations
@@ -191,7 +191,7 @@ def is_known_downgrade_drift(operations: list[tuple[str, list[str]]]) -> bool:
 def evaluate(rc: int, output: str) -> int:
     """按判定口径返回退出码：``0``=PASS / ``1``=FAIL。"""
     if rc == 0:
-        print("[ci-drift] PASS：alembic check 零漂移（rc=0）。")
+        print("[ci-drift] PASS：alembic check 零漂移（rc=0，标准档 / 零漂移档）。")
         return 0
     payload = extract_drift_payload(output)
     if payload is None:
@@ -220,7 +220,7 @@ def evaluate(rc: int, output: str) -> int:
 
 
 def _run_alembic_check() -> tuple[int, str]:
-    """调用 ``python -m alembic check``，返回 ``(退出码, 合并输出)``。"""
+    """调用 ``python -m alembic check``（继承当前环境），返回 ``(退出码, 合并输出)``。"""
     proc = subprocess.run(
         [sys.executable, "-m", "alembic", "check"],
         capture_output=True,
@@ -231,23 +231,25 @@ def _run_alembic_check() -> tuple[int, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI 入口。在线：自跑 ``alembic check``；离线：``--rc`` + ``--input-file``/stdin。"""
+    """CLI 入口。在线：自跑 ``alembic check``；离线自测：``--rc`` + ``--input-file``（文件）。"""
     parser = argparse.ArgumentParser(
-        description="PostgreSQL smoke（plain 档）迁移漂移断言（降级感知，严格白名单）。"
+        description="迁移漂移降级感知断言（严格白名单，自包含运行 alembic check）。"
     )
     parser.add_argument(
-        "--rc", type=int, default=None, help="离线自测：直接给定 alembic check 退出码。"
+        "--rc",
+        type=int,
+        default=None,
+        help="离线自测：直接给定 alembic check 退出码（需配 --input-file）。",
     )
     parser.add_argument(
-        "--input-file", default=None, help="离线自测：从文件读取合成输出（缺省读 stdin）。"
+        "--input-file", default=None, help="离线自测：从文件读取合成输出（不使用 stdin）。"
     )
     args = parser.parse_args(argv)
 
-    if args.rc is not None:
-        if args.input_file:
-            output = Path(args.input_file).read_text(encoding="utf-8")
-        else:
-            output = sys.stdin.read()
+    if args.rc is not None or args.input_file is not None:
+        if args.rc is None or args.input_file is None:
+            parser.error("离线自测需同时提供 --rc 与 --input-file。")
+        output = Path(args.input_file).read_text(encoding="utf-8")
         return evaluate(args.rc, output)
 
     rc, output = _run_alembic_check()
