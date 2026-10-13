@@ -129,12 +129,20 @@ def test_lifecycle_files_and_destroy_idempotent(live_provider: Any) -> None:
 
 
 def test_exec_output_and_exit_code(live_provider: Any) -> None:
+    """``exec`` 透传退出码 / stdout（解释器按 provider 解析）。
+
+    测试意图＝「``exec`` 返回 exit_code / stdout 语义」，**非**「宿主解释器路径」。docker 参数在
+    **容器内**执行——宿主 ``sys.executable``（``/…/.venv/bin/python``）在容器中不存在 → ``OCI
+    runtime exec failed … no such file or directory`` → exit 127；故 docker 用镜像内可用的
+    ``python``，``local_process`` / ``fake``（宿主执行）保持 ``sys.executable``。
+    """
+    python = "python" if live_provider.kind == "docker" else sys.executable
     session = live_provider.create_session()
-    ok = live_provider.exec(session, [sys.executable, "-c", "print('hello')"])
+    ok = live_provider.exec(session, [python, "-c", "print('hello')"])
     assert ok.exit_code == 0
     assert "hello" in ok.stdout
 
-    failed = live_provider.exec(session, [sys.executable, "-c", "import sys; sys.exit(3)"])
+    failed = live_provider.exec(session, [python, "-c", "import sys; sys.exit(3)"])
     assert failed.exit_code == 3
     live_provider.destroy(session)
 

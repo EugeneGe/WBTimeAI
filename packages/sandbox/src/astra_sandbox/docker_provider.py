@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import io
 import tarfile
+import threading
+import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -24,6 +26,7 @@ from astra_domain import (
 )
 
 from .base import ExecResult
+from .local_process_provider import TIMEOUT_EXIT_CODE
 from .network import (
     DEFAULT_EGRESS_NETWORK,
     NETWORK_OFFLINE,
@@ -176,7 +179,13 @@ class DockerSandboxProvider:
         env: Mapping[str, str] | None = None,
         cwd: str | None = None,
     ) -> ExecResult:
-        """在容器内执行命令（``exec_run``），退出码透传。"""
+        """在容器内执行命令（``exec_run``）；退出码透传，**超时强制终止**（A-5 / I-P1-20）。
+
+        Docker ``exec_run`` 为**阻塞**调用且无内建超时；此处以**工作线程 + 等待超时**实现：
+        超 ``timeout_ms``（缺省 ``default_timeout_ms``）未完成 → ``container.kill()`` 强制终止
+        （容器**专用于本会话**，终止即终止该 exec）→ 返回 ``exit_code=124`` / ``timed_out=True``
+        （约定对齐 :class:`ExecResult` 与 ``LocalProcessSandboxProvider``）。
+        """
         container = self._containers.get(session.id)
         if container is None:
             raise DomainError(
@@ -186,19 +195,49 @@ class DockerSandboxProvider:
             )
         argv = command if isinstance(command, str) else [str(part) for part in command]
         environment = {str(k): str(v) for k, v in (env or {}).items()}
-        result = container.exec_run(
-            cmd=argv,
-            workdir=cwd or session.workdir,
-            environment=environment or None,
-            demux=True,
+        timeout_s = max(
+            (timeout_ms if timeout_ms is not None else self._default_timeout_ms) / 1000.0,
+            0.0,
         )
+
+        outcome: dict[str, Any] = {}
+
+        def _run() -> None:
+            try:
+                outcome["result"] = container.exec_run(
+                    cmd=argv,
+                    workdir=cwd or session.workdir,
+                    environment=environment or None,
+                    demux=True,
+                )
+            except Exception as exc:  # noqa: BLE001 - 容器被终止等异常经 outcome 传回调用方
+                outcome["error"] = exc
+
+        start = time.monotonic()
+        worker = threading.Thread(target=_run, daemon=True)
+        worker.start()
+        worker.join(timeout_s)
+        duration_ms = int((time.monotonic() - start) * 1000)
+        if worker.is_alive():
+            try:
+                container.kill()
+            except Exception:  # noqa: BLE001 - 已停止 / 已移除视为已达终止目的（幂等）
+                pass
+            return ExecResult(
+                exit_code=TIMEOUT_EXIT_CODE,
+                stdout="",
+                stderr="",
+                duration_ms=duration_ms,
+                timed_out=True,
+            )
+        result = outcome.get("result")
         exit_code = int(getattr(result, "exit_code", 1) or 0)
         stdout_bytes, stderr_bytes = self._split_output(getattr(result, "output", None))
         return ExecResult(
             exit_code=exit_code,
             stdout=self._truncate(stdout_bytes.decode("utf-8", errors="replace")),
             stderr=self._truncate(stderr_bytes.decode("utf-8", errors="replace")),
-            duration_ms=0,
+            duration_ms=duration_ms,
             timed_out=False,
         )
 
