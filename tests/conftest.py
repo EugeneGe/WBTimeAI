@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+from tests._env_readiness import require_flag
 
 
 @pytest.fixture(scope="session")
@@ -14,8 +15,9 @@ def docker_required() -> bool:
     """``ASTRA_TEST_REQUIRE_DOCKER=1`` 强开关（防假绿，总纲 §13.3）。
 
     为真时，若本机无 Docker 运行时，Docker 隔离测试**必须 fail**（不得静默 skip）。
+    开关读取统一收敛至 :func:`tests._env_readiness.require_flag`（J-3）。
     """
-    return os.environ.get("ASTRA_TEST_REQUIRE_DOCKER") == "1"
+    return require_flag("DOCKER")
 
 
 @pytest.fixture()
@@ -29,7 +31,7 @@ def isolated_settings_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> It
     monkeypatch.setenv("ASTRA_MODE", "local")
     monkeypatch.setenv("ASTRA_DATABASE_URL", f"sqlite:///{db_file.as_posix()}")
     monkeypatch.setenv("ASTRA_SECRET_KEY", "test-secret-key-0123456789abcdef-32bytes")
-    # R5 补全轮（F2）：把数据目录隔离到 tmp（storage / secrets / sandbox 落 tmp，避免写开发者家目录）。
+    # R5 补全轮（F2）：数据目录隔离到 tmp（storage / secrets / sandbox 落 tmp，避免写家目录）。
     monkeypatch.setenv("ASTRA_DATA_DIR", str(tmp_path / "astra-data"))
     monkeypatch.setenv("ASTRA_LOG_LEVEL", "WARNING")
     monkeypatch.setenv("ASTRA_LOG_FORMAT", "console")

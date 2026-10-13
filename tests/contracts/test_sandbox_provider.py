@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from typing import Any
 
@@ -22,10 +21,12 @@ from astra_sandbox import (
 )
 from astra_sandbox.base import SandboxProvider
 
+from tests._env_readiness import ensure_available, require_flag
+
 pytestmark = pytest.mark.contracts
 
 _HAS_DOCKER = docker_available()
-_REQUIRE_DOCKER = os.environ.get("ASTRA_TEST_REQUIRE_DOCKER") == "1"
+_REQUIRE_DOCKER = require_flag("DOCKER")  # 统一收敛至 tests._env_readiness（J-3）
 
 
 class FakeSandboxProvider:
@@ -136,3 +137,25 @@ def test_exec_output_and_exit_code(live_provider: Any) -> None:
     failed = live_provider.exec(session, [sys.executable, "-c", "import sys; sys.exit(3)"])
     assert failed.exit_code == 3
     live_provider.destroy(session)
+
+
+# -- J-3：环境门控语义（开关开 + 不可达 → fail；未设 → skip） ------------------
+
+
+def test_require_docker_gate_fails_when_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**开关开 + Docker 不可达 → fail（非 skip）**；防假绿（设计 §13.3）。"""
+    monkeypatch.setenv("ASTRA_TEST_REQUIRE_DOCKER", "1")
+    with pytest.raises(pytest.fail.Exception):
+        ensure_available("DOCKER", available=False, reason="Docker 运行时不可达")
+
+
+def test_docker_gate_skips_when_not_required(monkeypatch: pytest.MonkeyPatch) -> None:
+    """未设开关 + Docker 不可达 → skip（保持既有语义，零行为回归）。"""
+    monkeypatch.delenv("ASTRA_TEST_REQUIRE_DOCKER", raising=False)
+    with pytest.raises(pytest.skip.Exception):
+        ensure_available("DOCKER", available=False, reason="本机无 Docker 运行时")
+
+
+def test_gate_is_noop_when_available() -> None:
+    """探针可用 → 门控不抛（直接放行）。"""
+    ensure_available("DOCKER", available=True, reason="不应触发")

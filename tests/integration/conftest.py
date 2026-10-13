@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import os
 
+from tests._env_readiness import should_collect
+
 collect_ignore: list[str] = []
 
-if not os.environ.get("ASTRA_TEST_PG_URL") and os.environ.get("ASTRA_TEST_REQUIRE_PG") != "1":
+if not should_collect("PG", probe_available=bool(os.environ.get("ASTRA_TEST_PG_URL"))):
     collect_ignore.append("test_postgres_smoke.py")
