@@ -58,5 +58,10 @@ else
   exit 1
 fi
 
+# J-1 装配可达性冒烟（V0.4.1）：astra doctor 自检（含 registry_wiring 注册表接线项）。
+# 退出码非 0 即整体失败（脚本已 `set -euo pipefail`；不得 `|| true`）。
+echo "[smoke] astra doctor（本地自检，含注册表接线 registry_wiring）"
+uv run astra doctor
+
 echo "[smoke] 社区冒烟通过（无 Docker / 无 Redis 仍可运行）"
 exit 0

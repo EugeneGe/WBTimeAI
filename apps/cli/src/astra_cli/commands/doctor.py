@@ -63,19 +63,31 @@ class DoctorReport:
 
 
 def _collect_checks() -> list[CheckResult]:
-    """依序执行全部自检项，返回结果列表。"""
+    """依序执行全部自检项，返回结果列表。
+
+    J-1：``capabilities`` / ``registry_wiring`` **共享同一次** ``build_providers`` 装配
+    （装配成本高），避免 ``doctor`` 重复装配拖慢自检。
+    """
     config_outcome, settings = doctor_checks.load_settings()
-    outcomes = [
-        config_outcome,
-        doctor_checks.check_database(settings),
-        doctor_checks.check_migrations(settings),
-        doctor_checks.check_directories(settings),
-        doctor_checks.check_dependencies(),
-        doctor_checks.check_docker(settings),
-        doctor_checks.check_provider(settings),
-        doctor_checks.check_worker(settings),
-        doctor_checks.check_capabilities(settings),
-    ]
+    providers: object | None = None
+    if settings is not None:
+        providers, _error = doctor_checks.build_providers_for_checks(settings)
+    try:
+        outcomes = [
+            config_outcome,
+            doctor_checks.check_database(settings),
+            doctor_checks.check_migrations(settings),
+            doctor_checks.check_directories(settings),
+            doctor_checks.check_dependencies(),
+            doctor_checks.check_docker(settings),
+            doctor_checks.check_provider(settings),
+            doctor_checks.check_worker(settings),
+            doctor_checks.check_capabilities(settings, providers=providers),
+            doctor_checks.check_registry_wiring(settings, providers=providers),
+        ]
+    finally:
+        if providers is not None:
+            doctor_checks.dispose_providers(providers)
     return [
         CheckResult(name=name, status=status, detail=detail) for name, status, detail in outcomes
     ]

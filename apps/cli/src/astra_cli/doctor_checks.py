@@ -35,6 +35,10 @@ __all__ = [
     "check_provider",
     "check_worker",
     "check_capabilities",
+    "check_registry_wiring",
+    "evaluate_registry_wiring",
+    "build_providers_for_checks",
+    "dispose_providers",
 ]
 
 #: 自检状态。
@@ -42,6 +46,18 @@ CheckStatus = Literal["ok", "fail", "skip"]
 
 #: 单项自检结果三元组。
 CheckOutcome = tuple[str, CheckStatus, str]
+
+# -- J-1 装配可达性（registry_wiring）----------------------------------------
+#: **必填且非空**的注册表槽位（config 装配期即应填充；空即「注册表未接线」）。
+#: 依据：V0.4.1 · J-1（R5A-01 同型：注册点未接线 → 产品恒降级）。
+_REQUIRED_NONEMPTY_REGISTRIES: tuple[str, ...] = ("model_registry", "tool_registry")
+
+#: **结构就位即可**的注册表槽位（启动 / 发现期由组合根填充，装配期可空，属**正常态**）。
+#: 🔴 local 社区模式（无 Docker / dist）下技能 / MCP 目录可缺 → 空注册表**不得**判 FAIL。
+_OPTIONAL_REGISTRIES: tuple[str, ...] = ("skill_registry", "mcp_registry")
+
+#: 占位实现类**名前缀**（`UnsupportedXxx` 型；「恒空 / 恒抛却报可用」的非静默降级占位）。
+_PLACEHOLDER_CLASS_PREFIXES: tuple[str, ...] = ("Unsupported", "Placeholder")
 
 
 def load_settings() -> tuple[CheckOutcome, Settings | None]:
@@ -331,7 +347,46 @@ def _describe_capabilities(providers: object, settings: Settings | None) -> tupl
     return unsupported, "; ".join(parts)
 
 
-def check_capabilities(settings: Settings | None) -> CheckOutcome:
+# -- 共享装配（capabilities / registry_wiring 复用一次 build_providers）-------
+# 说明：``build_providers`` 属组合根装配，成本较高；``astra doctor`` 内两项自检
+# （capabilities / registry_wiring）**共享同一次装配**，避免重复装配拖慢自检。
+
+
+def build_providers_for_checks(settings: Settings) -> tuple[object | None, str | None]:
+    """构建 ``Providers``（供 capabilities / registry_wiring 共享）。
+
+    Args:
+        settings: 生效配置。
+
+    Returns:
+        ``(providers | None, error | None)``——成功 ``(providers, None)``；
+        失败 ``(None, message)``（**不抛异常**，由调用方转自检结论）。
+    """
+    try:
+        from astra_config.providers import build_providers
+    except Exception as exc:  # noqa: BLE001 - doctor 需捕获所有异常并汇报
+        return None, f"astra_config 不可用：{type(exc).__name__}: {exc}"
+    try:
+        return build_providers(settings), None
+    except Exception as exc:  # noqa: BLE001 - 装配失败即 capability 错误（明确报错）
+        return None, f"Provider 装配失败：{type(exc).__name__}: {exc}"
+
+
+def dispose_providers(providers: object) -> None:
+    """释放 ``Providers`` 持有的数据库引擎（**不泄漏连接**；失败不影响自检结论）。"""
+    database = getattr(providers, "database", None)
+    engine = getattr(database, "engine", None)
+    dispose = getattr(engine, "dispose", None)
+    if callable(dispose):
+        try:
+            dispose()
+        except Exception:  # noqa: BLE001 - 释放失败不影响自检结论
+            pass
+
+
+def check_capabilities(
+    settings: Settings | None, *, providers: object | None = None
+) -> CheckOutcome:
     """检查 9：Server Provider 能力闭环（T2-54；设计 §2.8.1）。
 
     以**实际装配**为准（复用 ``build_providers``），报告 SQLite/PostgreSQL（DB）、
@@ -350,31 +405,17 @@ def check_capabilities(settings: Settings | None) -> CheckOutcome:
     """
     if settings is None:
         return ("capabilities", "skip", "配置未加载，跳过")
-    try:
-        from astra_config.providers import build_providers
-    except Exception as exc:  # noqa: BLE001 - doctor 需捕获所有异常并汇报
-        return ("capabilities", "fail", f"astra_config 不可用：{type(exc).__name__}: {exc}")
-
-    try:
-        providers = build_providers(settings)
-    except Exception as exc:  # noqa: BLE001 - 装配失败即 capability 错误（明确报错）
-        return (
-            "capabilities",
-            "fail",
-            f"Provider 装配失败：{type(exc).__name__}: {exc}",
-        )
+    owned = providers is None
+    if owned:
+        providers, error = build_providers_for_checks(settings)
+        if providers is None:
+            return ("capabilities", "fail", error or "Provider 装配失败")
 
     try:
         unsupported, detail = _describe_capabilities(providers, settings)
     finally:
-        database = getattr(providers, "database", None)
-        engine = getattr(database, "engine", None)
-        dispose = getattr(engine, "dispose", None)
-        if callable(dispose):
-            try:
-                dispose()
-            except Exception:  # noqa: BLE001 - 释放失败不影响自检结论
-                pass
+        if owned:
+            dispose_providers(providers)
 
     if unsupported:
         return (
@@ -383,3 +424,141 @@ def check_capabilities(settings: Settings | None) -> CheckOutcome:
             f"检测到 Unsupported 占位（server 不应装配为占位）：{', '.join(unsupported)}；{detail}",
         )
     return ("capabilities", "ok", detail)
+
+
+# -- J-1 装配可达性（registry_wiring）----------------------------------------
+
+
+def _registry_size(obj: object) -> int | None:
+    """探测注册表**条目数**（结构断言，**非**运行时伪探针）。
+
+    依次尝试 ``names()`` / ``list()`` / ``all()``（注册表公开 API），回退 ``len()``；
+    均不可量化 → ``None``（如：该槽位并非集合型注册表）。
+    """
+    for attr in ("names", "list", "all"):
+        member = getattr(obj, attr, None)
+        if callable(member):
+            try:
+                return len(list(member()))
+            except Exception:  # noqa: BLE001 - 探测失败即尝试下一 API
+                continue
+    if hasattr(obj, "__len__"):
+        try:
+            return len(obj)
+        except Exception:  # noqa: BLE001
+            return None
+    return None
+
+
+def _is_placeholder(obj: object) -> bool:
+    """是否为**占位实现**（``UnsupportedXxx`` / ``PlaceholderXxx`` 型）。"""
+    return type(obj).__name__.startswith(_PLACEHOLDER_CLASS_PREFIXES)
+
+
+def _declares_available(obj: object) -> bool:
+    """对象是否**自称可用**（``available`` / ``is_available`` 布尔真）。
+
+    「出口非占位」维度：恒空 / 恒 ``None`` 的实现**不得**报 ``available=true``
+    （R5A-02 型：占位恒空却报可用）。此处仅做**结构读取**，不引入运行时探针。
+    """
+    for attr in ("available", "is_available"):
+        if not hasattr(obj, attr):
+            continue
+        member = getattr(obj, attr, None)
+        if callable(member):
+            try:
+                member = member()
+            except Exception:  # noqa: BLE001 - 读取失败视为未声明可用
+                return False
+        return bool(member)
+    return False
+
+
+def evaluate_registry_wiring(providers: object) -> tuple[list[str], str]:
+    """按装配结构评估注册表接线（纯函数，供单测直接构造 ``Providers`` 调用）。
+
+    断言：
+    1. **注册表非空**——``model_registry`` / ``tool_registry``（装配期应填充）不得为空；
+       ``skill_registry`` / ``mcp_registry`` 结构就位即可（装配期可空的**正常态**）；
+    2. **出口非占位**——槽位不得为 ``UnsupportedXxx`` 占位；恒空实现不得自称 ``available``。
+
+    Args:
+        providers: :class:`astra_config.providers.Providers`（或同结构桩）。
+
+    Returns:
+        ``(problems, detail)``——``problems`` 为问题描述列表（空 = 通过）；
+        ``detail`` 为面向人的结构描述串。
+    """
+    problems: list[str] = []
+    parts: list[str] = []
+    for name in (*_REQUIRED_NONEMPTY_REGISTRIES, *_OPTIONAL_REGISTRIES):
+        required = name in _REQUIRED_NONEMPTY_REGISTRIES
+        obj = getattr(providers, name, None)
+        if obj is None:
+            if required:
+                problems.append(f"{name}=未装配")
+                parts.append(f"{name}=none")
+            else:
+                parts.append(f"{name}=none(可选)")
+            continue
+        if _is_placeholder(obj):
+            problems.append(f"{name}=占位({type(obj).__name__})")
+            parts.append(f"{name}=placeholder")
+            continue
+        size = _registry_size(obj)
+        if size is None:
+            parts.append(f"{name}={type(obj).__name__}")
+            continue
+        parts.append(f"{name}={size}")
+        if size == 0:
+            if required:
+                problems.append(f"{name}=空注册表")
+            if _declares_available(obj):
+                problems.append(f"{name}=自称 available 但为空")
+    return problems, "; ".join(parts)
+
+
+def check_registry_wiring(
+    settings: Settings | None, *, providers: object | None = None
+) -> CheckOutcome:
+    """检查 10：注册表接线（J-1；设计 §13.3 防假绿 / R5A-01·R5A-02）。
+
+    以**实际装配**为准（复用 ``build_providers``），断言注册表**非空** + **出口非占位**：
+
+    - ``model_registry`` / ``tool_registry``：装配期应填充 → 为空即 ``fail``；
+    - ``skill_registry`` / ``mcp_registry``：启动 / 发现期由组合根填充，**装配期可空**
+      （🔴 local 社区模式无 Docker / dist 时为**正常态**，**不得**判 ``fail``）；
+    - 任一注册表槽位若为 ``UnsupportedXxx`` 占位、或**恒空却自称** ``available`` → ``fail``。
+
+    🔴 本项**只装配 + 检视结构**，不触发任何 Task 执行；详情**不含**任何凭证明文。
+    仅 ``fail`` / ``skip`` 会偏离既有全 ``ok`` 基线；normal-local 下应为 ``ok``。
+
+    Args:
+        settings: 生效配置。
+        providers: 可选**预装配**的 ``Providers``（由 :func:`commands.doctor._collect_checks`
+            与 ``check_capabilities`` **共享同一次装配**；``None`` 时自行装配并释放）。
+
+    Returns:
+        ``("registry_wiring", status, detail)``。
+    """
+    if settings is None:
+        return ("registry_wiring", "skip", "配置未加载，跳过")
+    owned = providers is None
+    if owned:
+        providers, error = build_providers_for_checks(settings)
+        if providers is None:
+            return ("registry_wiring", "fail", error or "Provider 装配失败")
+
+    try:
+        problems, detail = evaluate_registry_wiring(providers)
+    finally:
+        if owned:
+            dispose_providers(providers)
+
+    if problems:
+        return (
+            "registry_wiring",
+            "fail",
+            f"注册表接线异常：{', '.join(problems)}；{detail}",
+        )
+    return ("registry_wiring", "ok", detail)

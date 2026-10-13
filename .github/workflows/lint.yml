@@ -47,6 +47,11 @@ jobs:
       - name: Mypy (type check)
         run: uv run mypy packages apps
 
+      # J-1 装配可达性门禁（V0.4.1）：注册点 / 槽位覆盖 / 孤儿 sweep 三扫描。
+      # PR **必绿**：不得 continue-on-error / `|| true`（总纲 §13.3 防假绿）。
+      - name: Wiring scan (registry / slots / orphan sweeps)
+        run: uv run python scripts/scan_wiring.py
+
   frontend-lint:
     name: Frontend lint (eslint + prettier + tsc)
     runs-on: ubuntu-latest
