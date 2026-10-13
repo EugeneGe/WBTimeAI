@@ -49,9 +49,7 @@ describe("useRemoteTasks hooks（补覆盖）", () => {
 
   it("useProjectGitRefs 命中 GET /projects/{id}/git/refs", async () => {
     server.use(
-      http.get("/api/v1/projects/:projectId/git/refs", () =>
-        shell([{ name: "refs/heads/main" }]),
-      ),
+      http.get("/api/v1/projects/:projectId/git/refs", () => shell([{ name: "refs/heads/main" }])),
     );
 
     const { result } = renderHook(() => useProjectGitRefs("p1"), { wrapper });
