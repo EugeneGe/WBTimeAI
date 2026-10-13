@@ -29,11 +29,11 @@
 在线（CI，自包含）：本脚本自行调用 ``python -m alembic check``（继承当前环境变量，如
 ``ASTRA_DATABASE_URL`` / ``ASTRA_MODE``）并判定::
 
-    uv run python scripts/check_migration_drift.py
+    uv run python scripts/ci_check_migration_drift.py
 
 离线（合成输入自测，不需 PG；**经文件**，不使用 stdin）::
 
-    python scripts/check_migration_drift.py --rc 255 --input-file <path>
+    python scripts/ci_check_migration_drift.py --rc 255 --input-file <path>
 """
 
 from __future__ import annotations
