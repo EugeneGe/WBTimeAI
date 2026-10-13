@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -64,15 +65,20 @@ def test_init_is_idempotent(cli_env: Path) -> None:
 def test_run_help_lists_options(cli_env: Path) -> None:
     """``run --help`` 列出 ``--host`` / ``--port`` / ``--reload``（三选项断言保留）。
 
-    固定渲染宽度（``COLUMNS``）：Typer/Rich 在**非 tty** 下按终端宽度折行；CI 环境宽度偏窄
-    （观测到 ``COLUMNS`` 缺失 / 极小时帮助被折行，``--host`` 不复现为子串）。注入足够宽的
-    ``COLUMNS`` 使断言稳定——仅固定渲染宽度，不删 / 不弱化任何选项断言。
+    **真因**：CI 上 Typer/Rich 走**样式化渲染**（强制颜色 / tty），会把选项名拆成**多个 ANSI
+    segment**（如 ``\\x1b[1;36m-\\x1b[0m\\x1b[1;36m-host\\x1b[0m``）→ 原始输出中
+    ``"--host" not in output``。故断言前**剥离 ANSI 转义序列**再匹配（仅去着色，**不**删 /
+    **不**弱化任何选项断言）。
+
+    第二层防御：注入足够宽的 ``COLUMNS`` —— Typer/Rich 在非 tty 下按终端宽度折行，极端窄宽亦
+    可使选项名折行；固定宽度使渲染稳定。
     """
     result = CliRunner().invoke(app, ["run", "--help"], env={"COLUMNS": "200", "LINES": "50"})
     assert result.exit_code == 0
-    assert "--host" in result.output
-    assert "--port" in result.output
-    assert "--reload" in result.output
+    plain = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", result.output)
+    assert "--host" in plain
+    assert "--port" in plain
+    assert "--reload" in plain
 
 
 def test_doctor_passes_after_init(cli_env: Path) -> None:
