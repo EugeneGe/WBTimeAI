@@ -283,3 +283,35 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # G-2（V0.4.1）：桌面壳 renderer-server 的 SSE / `/redoc` 单测进常规回归。
+  # desktop 为**独立 npm 栈**（不在 pnpm workspace / 非 Python 包）→ 单独 job。
+  # 🔴 防假绿：`node --test` 失败即 job 红（不得 continue-on-error / `|| true`）。
+  desktop-test:
+    name: Desktop shell (tsc + node --test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      # `--ignore-scripts`：跳过 `electron` 的二进制下载（仅运行期需要；tsc 类型检查
+      # 用 npm 包内 `.d.ts`，`node --test` 仅依赖 `node:` 内建——均不需要该二进制）。
+      - name: Install (npm ci, ignore scripts)
+        working-directory: apps/desktop
+        run: npm ci --ignore-scripts
+
+      - name: Build (tsc)
+        working-directory: apps/desktop
+        run: npm run build
+
+      - name: Test (node --test)
+        working-directory: apps/desktop
+        run: node --test "out/**/*.test.js"
