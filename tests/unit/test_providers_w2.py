@@ -44,20 +44,32 @@ def test_local_storage_does_not_create_dir(local_settings: Settings) -> None:
         providers.database.engine.dispose()
 
 
-def test_server_uses_real_providers(local_settings: Settings) -> None:
+def test_server_uses_real_providers(
+    local_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """server 模式（Community 基础档）装配**真实** Provider，**非** ``UnsupportedXxx``。
 
     T2-54：``ASTRA_MODE=server`` 不得因模式本身把 storage / event_bus / task_queue /
     scheduler 装配成占位；未配置 Redis → 进程内队列 + 本地调度器（可运行闭环）。
+
+    依据：本用例验证 server 模式**装配类型**，**不引入 DB 连接依赖**——``_build_memory_store``
+    会经 ``resolve_memory_vector_capability`` 连库查 ``pg_extension``（设计内**确定性**能力探测，
+    非 try/except 推断）；此处用假 PG URL 且无 PG → 会 ``Connection refused``。故隔离该探测
+    （monkeypatch 令其返回 ``None``，装配位保留），装配类型断言保持**完整**；探测行为由
+    memory / knowledge 专属用例覆盖。
     """
     try:
         import psycopg  # noqa: F401
     except ImportError:
         pytest.skip("psycopg 未安装，跳过 server 模式装配用例")
 
+    import astra_config.providers as providers_module
     from astra_event import LocalEventBus
     from astra_storage import LocalFileStorage
     from astra_task import InProcessTaskQueue, LocalScheduler
+
+    # 隔离 memory 能力探测的 DB 连接（本用例不验证该探测；见 docstring）。
+    monkeypatch.setattr(providers_module, "_build_memory_store", lambda *a, **k: None)
 
     server_settings = Settings(
         mode="server",

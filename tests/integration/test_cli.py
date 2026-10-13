@@ -62,7 +62,13 @@ def test_init_is_idempotent(cli_env: Path) -> None:
 
 
 def test_run_help_lists_options(cli_env: Path) -> None:
-    result = CliRunner().invoke(app, ["run", "--help"])
+    """``run --help`` 列出 ``--host`` / ``--port`` / ``--reload``（三选项断言保留）。
+
+    固定渲染宽度（``COLUMNS``）：Typer/Rich 在**非 tty** 下按终端宽度折行；CI 环境宽度偏窄
+    （观测到 ``COLUMNS`` 缺失 / 极小时帮助被折行，``--host`` 不复现为子串）。注入足够宽的
+    ``COLUMNS`` 使断言稳定——仅固定渲染宽度，不删 / 不弱化任何选项断言。
+    """
+    result = CliRunner().invoke(app, ["run", "--help"], env={"COLUMNS": "200", "LINES": "50"})
     assert result.exit_code == 0
     assert "--host" in result.output
     assert "--port" in result.output
