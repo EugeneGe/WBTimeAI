@@ -158,14 +158,19 @@ jobs:
       - name: Sync workspace (locked, incl. postgres extra)
         run: uv sync --locked --all-packages --all-extras
 
-      - name: PostgreSQL migration roundtrip (double-engine, upgrade -> check -> downgrade)
+      # plain 档（降级形态）冒烟：本 job 用 plain postgres:16（无 vector 扩展 / 无 pgvector 包），
+      # 0013/0014 走**设计内降级路径**（列型 jsonb）→ `alembic check` 必然报 embedding.vector /
+      # memory.vector 两项 modify_type 漂移。故此处以**降级感知**断言（严格白名单：恰好这 2 项
+      # 已知差异才放行，多 1 项即 fail）替代裸零漂移判定。标准档（pgvector）的**零漂移**由
+      # 同 workflow 的「PostgreSQL (pgvector) migration + knowledge」job 完整覆盖。
+      - name: PostgreSQL migration roundtrip (plain 档冒烟：upgrade -> 降级感知 check -> downgrade)
         env:
           ASTRA_MODE: server
           ASTRA_SECRET_KEY: ci-secret-key-0123456789abcdef-32bytes
         run: |
           export ASTRA_DATABASE_URL="$ASTRA_TEST_PG_URL"
           uv run alembic upgrade head
-          uv run alembic check
+          uv run python scripts/ci_check_migration_drift.py
           uv run alembic downgrade base
 
       # W10 / T2-51（加性）· P2.7-A：PG 权威侧迁移 head 守卫——**动态**断言「恰好单 head」并打印 head 名
