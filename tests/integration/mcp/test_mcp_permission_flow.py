@@ -362,8 +362,15 @@ def test_sync_registers_tool_rows(tmp_path: Path) -> None:
         engine.dispose()
 
 
-def test_sync_skips_builtin_name_conflict(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_sync_skips_builtin_name_conflict(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """内置已占用同名 → **跳过注册** MCP 同名项 + 结构化 ``WARNING``（R10）。"""
+    # P2.7-B：显式隔离 logger——in-process ``alembic fileConfig`` 会把既有 logger 置
+    # ``disabled=True``（跨用例顺序依赖污染），monkeypatch 自动还原；**不削弱断言强度**。
+    _logger = logging.getLogger("astra_mcp.registry")
+    monkeypatch.setattr(_logger, "disabled", False)
+    monkeypatch.setattr(_logger, "propagate", True)
     factory, engine = build_session_factory(tmp_path / "mcp_conflict.db")
     try:
         client = _FakeMCPClient(specs=_specs())

@@ -52,11 +52,14 @@ jobs:
           uv run alembic check
           uv run alembic downgrade base
 
-      # W10 / T2-51（加性）：SQLite 侧迁移 head 守卫——断言 head 覆盖 0017（双引擎冒烟之 SQLite 路）。
-      - name: Migration head guard (SQLite, expect 0017_phase2_evaluation)
+      # W10 / T2-51（加性）· P2.7-A：SQLite 侧迁移 head 守卫——**动态**断言「恰好单 head」并打印 head 名
+      # （不再硬编 revision，后续新增迁移无需改本 YAML；对齐设计 C-4「陈测试漂移断言治理」）。
+      - name: Migration head guard (SQLite, single head)
         run: |
           export ASTRA_DATABASE_URL="sqlite:///$(pwd)/ci_migration.db"
-          uv run alembic heads | grep -q "0017_phase2_evaluation"
+          heads="$(uv run alembic heads)"
+          echo "$heads"
+          [ "$(echo "$heads" | grep -c '(head)')" -eq 1 ] || { echo "::error::expected exactly 1 alembic head, got: $heads"; exit 1; }
 
       - name: D4 guard (mode branch only in providers.py)
         run: uv run pytest tests/unit/test_config_mode_branch.py -q
@@ -165,14 +168,17 @@ jobs:
           uv run alembic check
           uv run alembic downgrade base
 
-      # W10 / T2-51（加性）：PG 权威侧迁移 head 守卫（双引擎冒烟之 PG 路；alembic check 口径）。
-      - name: PostgreSQL migration head guard (expect 0017_phase2_evaluation)
+      # W10 / T2-51（加性）· P2.7-A：PG 权威侧迁移 head 守卫——**动态**断言「恰好单 head」并打印 head 名
+      # （不再硬编 revision；双引擎冒烟之 PG 路，alembic check 口径）。
+      - name: PostgreSQL migration head guard (single head)
         env:
           ASTRA_MODE: server
           ASTRA_SECRET_KEY: ci-secret-key-0123456789abcdef-32bytes
         run: |
           export ASTRA_DATABASE_URL="$ASTRA_TEST_PG_URL"
-          uv run alembic heads | grep -q "0017_phase2_evaluation"
+          heads="$(uv run alembic heads)"
+          echo "$heads"
+          [ "$(echo "$heads" | grep -c '(head)')" -eq 1 ] || { echo "::error::expected exactly 1 alembic head, got: $heads"; exit 1; }
 
       - name: PostgreSQL smoke test
         run: uv run pytest tests/integration/test_postgres_smoke.py -q -ra

@@ -12,6 +12,7 @@ import json
 import logging
 from pathlib import Path
 
+import pytest
 from astra_application.dto.audit import AuditRecordDTO
 from astra_application.services import (
     AUDIT_WRITE_FAILURE_TOTAL,
@@ -77,8 +78,15 @@ def test_audit_normal_write_persists_masked(session_factory, tmp_path: Path) -> 
         )
 
 
-def test_audit_sink_failure_falls_back_to_spool(tmp_path: Path, caplog: object) -> None:
+def test_audit_sink_failure_falls_back_to_spool(
+    tmp_path: Path, caplog: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """② 写库抛异常 → 降级本地落盘 + 告警日志 + 业务不中断。"""
+    # P2.7-B：显式隔离 logger——in-process ``alembic fileConfig`` 会把既有 logger 置
+    # ``disabled=True``（跨用例顺序依赖污染），monkeypatch 自动还原；**不削弱断言强度**。
+    _logger = logging.getLogger("astra_application.services.audit_service")
+    monkeypatch.setattr(_logger, "disabled", False)
+    monkeypatch.setattr(_logger, "propagate", True)
     spool = AuditSpool(tmp_path / "spool")
     service = AuditService(sink=_BoomSink(), spool=spool)
 
@@ -95,8 +103,14 @@ def test_audit_sink_failure_falls_back_to_spool(tmp_path: Path, caplog: object) 
     assert warnings, "应产生告警日志"
 
 
-def test_audit_total_failure_logs_error_and_counts(tmp_path: Path, caplog: object) -> None:
+def test_audit_total_failure_logs_error_and_counts(
+    tmp_path: Path, caplog: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """③ 落盘也失败 → ERROR 日志（含 request_id/trace_id）+ 计数。"""
+    # P2.7-B：显式隔离 logger（同 ②，防跨用例 ``disabled=True`` 污染）。
+    _logger = logging.getLogger("astra_application.services.audit_service")
+    monkeypatch.setattr(_logger, "disabled", False)
+    monkeypatch.setattr(_logger, "propagate", True)
     metrics = _RecordingMetrics()
     service = AuditService(
         sink=_BoomSink(),

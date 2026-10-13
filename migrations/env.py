@@ -18,9 +18,14 @@ from astra_database.engine import create_engine_from_settings
 # Alembic Config 对象
 config = context.config
 
-# 日志配置（alembic.ini 已定义 logging 段）
+# 日志配置（alembic.ini 已定义 logging 段）。
+# 🔴 P2.7-B：显式 `disable_existing_loggers=False`。`logging.config.fileConfig` 默认
+#   ``disable_existing_loggers=True``，会把**进程内既有 logger 全部置 ``disabled=True``**
+#   （含 App logger）。当 alembic 在**进程内**运行（如 pytest 内 `command.upgrade`、或
+#   `astra init` 之类的 in-process 迁移）时，会把 App / 业务 logger 静默禁用，导致后续
+#   日志（含 ``caplog``）被丢弃。此处仅配置 alembic / sqlalchemy / root，**不触碰 App logger**。
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # 目标元数据（供 autogenerate）
 target_metadata = Base.metadata

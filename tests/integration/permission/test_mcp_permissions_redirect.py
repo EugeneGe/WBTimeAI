@@ -217,10 +217,19 @@ def test_grant_redirects_write_to_resource_permission(
 
 
 def test_unmapped_mcp_tool_is_fail_closed_and_roundtrips(
-    client: Any, auth_headers: dict[str, str], caplog: pytest.LogCaptureFixture
+    client: Any,
+    auth_headers: dict[str, str],
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``mcp_tool_id`` 未同步进 ``tool`` 表 → fail-closed（不写运行期判定源）+ 告警 + 契约往返。"""
     import logging
+
+    # P2.7-B：显式隔离 logger——in-process ``alembic fileConfig`` 会把既有 logger 置
+    # ``disabled=True``（跨用例顺序依赖污染），monkeypatch 自动还原；**不削弱断言强度**。
+    _logger = logging.getLogger("astra_mcp.services")
+    monkeypatch.setattr(_logger, "disabled", False)
+    monkeypatch.setattr(_logger, "propagate", True)
 
     factory = _session_factory(client)
     agent_id = _create_agent(client, auth_headers)
