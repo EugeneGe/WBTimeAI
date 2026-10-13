@@ -57,6 +57,17 @@ COPY deployments ./deployments
 
 RUN uv sync --locked --no-dev --all-packages --all-extras
 
+# ---- B-1（V0.4.1）：部署档补齐 **pgvector Python 包** ----------------------------
+# 背景：`astra-database[postgres]` 仅含 `psycopg`（架构裁定：pgvector **不入库依赖**，
+#   CI 权威面仅在 `postgres-pgvector` job 经 `uv run --with pgvector` 注入），导致**部署镜像**
+#   缺 pgvector → `VectorType` 退化为 `JSON`、`0013/0014` 不建 HNSW、PG 权威 `alembic check`
+#   报假漂移（R5 S-4）。
+# 处置（择优：**部署档补安装**）：在 `uv sync` 之后向项目 venv 显式安装 pgvector（纯 Python，
+#   无编译）→ 权威 PG 部署下 `vector(d)` 列型 + HNSW 索引**实际建成**。
+# 说明：`--locked` 的 `uv.lock` **不扩容**（不改工作区依赖解析）；pgvector 为**运行期附加包**，
+#   版本下限对齐 CI 注入口径。
+RUN uv pip install --python /app/.venv 'pgvector>=0.3.0'
+
 # ---- runtime：精简运行镜像 --------------------------------------------------
 FROM python:3.12-slim AS runtime
 COPY --from=uv /uv /uvx /bin/
