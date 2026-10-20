@@ -1,0 +1,99 @@
+// 由 scripts/gen-drizzle-schema.mjs 生成 —— **禁止手改**；改 oracle 后重跑生成器。
+// oracle ①: contracts/schema.v0018.pg.normalized.json（schema v0018，结构权威）
+// oracle ②: contracts/db/type-map.csv（列类型权威，禁手填）
+// 领域：tool · 表数 4
+
+import { boolean, foreignKey, index, integer, jsonb, pgTable, text, timestamp, type ForeignKeyBuilder, type IndexBuilder, type UniqueConstraintBuilder, unique, uuid, varchar } from "drizzle-orm/pg-core";
+
+/** 第三参数返回类型：显式钉死以断开互引用表的类型环（见 T1-03 D-03）。 */
+type ExtraConfig = Record<string, ForeignKeyBuilder | IndexBuilder | UniqueConstraintBuilder>;
+import * as agentNS from "./agent.js";
+import * as conversationNS from "./conversation.js";
+import * as identityNS from "./identity.js";
+
+export const tool = pgTable("tool", {
+  id: uuid("id").notNull().primaryKey(),
+  tenant_id: uuid("tenant_id"),
+  organization_id: uuid("organization_id"),
+  name: varchar("name", { length: 100 }).notNull(),
+  display_name: varchar("display_name", { length: 255 }).notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 100 }).notNull(),
+  source: varchar("source", { length: 50 }).notNull(),
+  input_schema: jsonb("input_schema"),
+  output_schema: jsonb("output_schema"),
+  requires_sandbox: boolean("requires_sandbox").notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
+  tool_ref: jsonb("tool_ref"),
+}, (t): ExtraConfig => ({
+    ix_tool_name: index("ix_tool_name").on(t.name),
+    ix_tool_organization_id: index("ix_tool_organization_id").on(t.organization_id),
+    ix_tool_tenant_id: index("ix_tool_tenant_id").on(t.tenant_id),
+    fk_tool_0: foreignKey({ columns: [t.organization_id], foreignColumns: [identityNS.organization.id] }),
+    fk_tool_1: foreignKey({ columns: [t.tenant_id], foreignColumns: [identityNS.tenant.id] }),
+  })
+);
+
+export const tool_version = pgTable("tool_version", {
+  id: uuid("id").notNull().primaryKey(),
+  tool_id: uuid("tool_id").notNull(),
+  version: varchar("version", { length: 50 }).notNull(),
+  spec: jsonb("spec").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t): ExtraConfig => ({
+    ix_tool_version_tool_id: index("ix_tool_version_tool_id").on(t.tool_id),
+    fk_tool_version_0: foreignKey({ columns: [t.tool_id], foreignColumns: [tool.id] }),
+  })
+);
+
+export const tool_call = pgTable("tool_call", {
+  id: uuid("id").notNull().primaryKey(),
+  run_id: uuid("run_id").notNull(),
+  tool_id: uuid("tool_id"),
+  tool_name: varchar("tool_name", { length: 255 }).notNull(),
+  tool_type: varchar("tool_type", { length: 30 }).notNull(),
+  tool_ref: jsonb("tool_ref"),
+  attempt: integer("attempt").notNull(),
+  trace_id: varchar("trace_id", { length: 64 }),
+  span_id: varchar("span_id", { length: 64 }),
+  input: jsonb("input"),
+  output: jsonb("output"),
+  status: varchar("status", { length: 50 }).notNull(),
+  duration_ms: integer("duration_ms"),
+  sandbox_session_id: uuid("sandbox_session_id"),
+  error: text("error"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t): ExtraConfig => ({
+    ix_tool_call_run_id: index("ix_tool_call_run_id").on(t.run_id),
+    ix_tool_call_sandbox_session_id: index("ix_tool_call_sandbox_session_id").on(t.sandbox_session_id),
+    ix_tool_call_status: index("ix_tool_call_status").on(t.status),
+    ix_tool_call_tool_id: index("ix_tool_call_tool_id").on(t.tool_id),
+    fk_tool_call_0: foreignKey({ columns: [t.run_id], foreignColumns: [agentNS.agent_run.id] }),
+    fk_tool_call_1: foreignKey({ columns: [t.sandbox_session_id], foreignColumns: [conversationNS.sandbox_session.id] }),
+    fk_tool_call_2: foreignKey({ columns: [t.tool_id], foreignColumns: [tool.id] }),
+  })
+);
+
+export const tool_permission = pgTable("tool_permission", {
+  id: uuid("id").notNull().primaryKey(),
+  tenant_id: uuid("tenant_id").notNull(),
+  agent_id: uuid("agent_id"),
+  agent_version_id: uuid("agent_version_id"),
+  tool_id: uuid("tool_id").notNull(),
+  action: varchar("action", { length: 50 }).notNull(),
+  effect: varchar("effect", { length: 20 }).notNull(),
+  scope: jsonb("scope"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t): ExtraConfig => ({
+    ix_tool_permission_agent_id: index("ix_tool_permission_agent_id").on(t.agent_id),
+    ix_tool_permission_agent_version_id: index("ix_tool_permission_agent_version_id").on(t.agent_version_id),
+    ix_tool_permission_tenant_id: index("ix_tool_permission_tenant_id").on(t.tenant_id),
+    ix_tool_permission_tool_id: index("ix_tool_permission_tool_id").on(t.tool_id),
+    uq_tool_permission_agent_tool_action: unique("uq_tool_permission_agent_tool_action").on(t.agent_id, t.tool_id, t.action),
+    fk_tool_permission_0: foreignKey({ columns: [t.agent_id], foreignColumns: [agentNS.agent.id] }),
+    fk_tool_permission_1: foreignKey({ columns: [t.agent_version_id], foreignColumns: [agentNS.agent_version.id] }),
+    fk_tool_permission_2: foreignKey({ columns: [t.tenant_id], foreignColumns: [identityNS.tenant.id] }),
+    fk_tool_permission_3: foreignKey({ columns: [t.tool_id], foreignColumns: [tool.id] }),
+  })
+);
