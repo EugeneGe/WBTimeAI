@@ -1,0 +1,58 @@
+# ---- Node / TypeScript ----
+node_modules/
+dist/
+build/
+out/
+*.tsbuildinfo
+.turbo/
+.eslintcache
+coverage/
+.vitest/
+
+# ---- 包管理 ----
+pnpm-debug.log*
+npm-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# ---- 环境与密钥（绝不入库）----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ---- 构建产物 / 运行时数据 ----
+release/
+*.exe
+*.msi
+*.AppImage
+*.deb
+*.dmg
+*.zip
+!.gitkeep
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+data/
+logs/
+*.log
+
+# ---- 编辑器 / 系统 ----
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 本地临时 ----
+.tmp/
+.cache/
+*.local
+
+# ---- 双仓约定：docs 走独立私有仓、.workbuddy 为本地项目数据 ----
+docs/
+.workbuddy/
