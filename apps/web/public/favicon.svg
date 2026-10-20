@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="g_ai" gradientUnits="userSpaceOnUse" x1="120" y1="120" x2="904" y2="904">
+      <stop offset="0" stop-color="#F7C45A"/>
+      <stop offset="1" stop-color="#E0A024"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#g_ai)"/>
+  <g transform="translate(92.2 92.2) scale(0.82)">
+    <path d="M272 256 Q 512 148 752 256" fill="none" stroke="#FFFFFF" stroke-width="68" stroke-linecap="round"/>
+    <path d="M168 876 Q 512 720 856 876" fill="none" stroke="#FFFFFF" stroke-width="68" stroke-linecap="round"/>
+    <path d="M512 212 A 334 334 0 0 1 512 824 A 622 622 0 0 0 512 212 Z" fill="#FFFFFF"/>
+  </g>
+</svg>

@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+ * D-UI 体验优化波 · WS-F · token 层（DU-4）
+ *
+ * 色源真相：`docs/设计/阶段设计/D-UI体验优化波/design.css`（axis 色板 hex）
+ * —— 本文件为全站**唯一色值落点**（HSL 写值，沿用 `hsl(var(--x))` 体系）。
+ * 亮色在 `:root`，暗色在 `.dark`（`darkMode: "class"`，main 于 <html> 切换 class）。
+ * 旧 shadcn 蓝已全量替换为 axis 墨蓝/序金；旧色 grep 归零为 DU-4 验收断言。
+ * --------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    /* 基础画布 */
+    --background: 0 0% 100%; /* #FFFFFF */
+    --foreground: 223 17% 24%; /* #333948 墨青 */
+
+    /* 卡片 / 浮层 */
+    --card: 0 0% 100%;
+    --card-foreground: 223 17% 24%; /* #333948 墨青 */
+    --popover: 0 0% 100%;
+    --popover-foreground: 223 17% 24%;
+
+    /* 主色：墨蓝 #17325C（暗色翻转序金） */
+    --primary: 216 60% 23%; /* #17325C */
+    --primary-foreground: 0 0% 100%; /* #FFFFFF */
+
+    /* 次级 / 中性 */
+    --secondary: 214 50% 95%; /* #EAF0F8 雾蓝 */
+    --secondary-foreground: 223 17% 24%; /* #333948 */
+    --muted: 214 50% 95%; /* #EAF0F8 */
+    --muted-foreground: 222 14% 41%; /* #5A6478 */
+
+    /* 强调 / 焦点环：序金 #F5B941（明暗同值） */
+    --accent: 40 90% 61%; /* #F5B941 */
+    --accent-foreground: 216 60% 23%; /* #17325C（金底深字） */
+    --ring: 40 90% 61%; /* #F5B941 */
+
+    /* 语义态 */
+    --destructive: 353 42% 46%; /* #A84452 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 150 25% 39%; /* #4A7C63 */
+    --success-foreground: 0 0% 100%; /* #FFFFFF */
+    --warning: 38 75% 51%; /* #E0A024 */
+    --warning-foreground: 0 0% 100%; /* #FFFFFF */
+
+    /* 结构线 / 输入 */
+    --border: 219 25% 87%; /* #D5DBE6 */
+    --input: 219 25% 87%; /* #D5DBE6 */
+
+    /* 页面底色（最外层基调，默认外观 #F3F5F9 浅灰蓝） */
+    --page: 220 33% 96%; /* #F3F5F9 */
+
+    /* 圆角：控件 8 */
+    --radius: 8px;
+  }
+
+  .dark {
+    --background: 222 43% 10%; /* #0F1626 */
+    --foreground: 219 44% 94%; /* #E8EDF6 */
+
+    --card: 220 42% 18%; /* #1A2740 */
+    --card-foreground: 219 44% 94%; /* #E8EDF6 */
+    --popover: 220 42% 18%;
+    --popover-foreground: 219 44% 94%;
+
+    /* 暗色主色翻转：序金 #F5B941 作 primary，深字纳墨蓝 */
+    --primary: 40 90% 61%; /* #F5B941 */
+    --primary-foreground: 216 60% 23%; /* #17325C */
+
+    --secondary: 220 42% 18%; /* #1A2740 */
+    --secondary-foreground: 219 44% 94%;
+    --muted: 220 42% 18%; /* #1A2740 */
+    --muted-foreground: 219 30% 72%; /* #9FB2D1 */
+
+    --accent: 40 90% 61%; /* #F5B941 */
+    --accent-foreground: 216 60% 23%; /* #17325C */
+    --ring: 40 90% 61%; /* #F5B941 */
+
+    --destructive: 353 45% 60%; /* #C86A76 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 150 24% 49%; /* #5F9A7B */
+    --success-foreground: 0 0% 100%; /* #FFFFFF */
+    --warning: 40 90% 61%; /* #F5B941 */
+    --warning-foreground: 216 60% 23%; /* #17325C（金底深字，保对比度） */
+
+    --border: 221 37% 26%; /* #2A3A5C */
+    --input: 221 37% 26%; /* #2A3A5C */
+
+    --page: 222 51% 9%; /* #0B1222 */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    /* 最外层底色统一走 --page（默认浅灰蓝基调） */
+    @apply bg-page text-foreground;
+    margin: 0;
+    min-height: 100vh;
+    /* 字体栈：Segoe UI Variable → 微软雅黑 → system-ui（零引入成本） */
+    font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+}

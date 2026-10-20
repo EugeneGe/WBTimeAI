@@ -28,3 +28,10 @@
 #    否则 `*.md` / `*.json` / `*.csv` 会覆盖掉本规则。
 # `-text -eol`：既不做文本规范化，也不设任何 eol 约束（彻底按字节处理）。
 contracts/** -text -eol
+
+# ---- 前端原样迁入（V0.1.0 · T1-01）：⑤-a 要求与归档**逐字节**等同 ----
+# ⑤-a 的承重证据是 `git hash-object` 逐文件比对（243 个文件与 _old 全等）。
+# 若不做本保护，`core.autocrlf=true` 会让这些 LF 文件在下次检出时变成 CRLF，
+# 于是"字节全等"在重新 clone 后立刻失效 —— 本机绿、CI/他人红（假绿同型）。
+# 与 `contracts/**` 同理：**按原始字节入库与检出**。
+apps/web/src/** -text -eol
