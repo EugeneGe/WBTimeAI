@@ -1,0 +1,112 @@
+// ---------------------------------------------------------------------------
+// WBTimeAI · 前端错误码（V0.1.0 · T1-01）
+//
+// 本文件由 scripts/gen_frontend_baseline.py 从 contracts/errors.json 派生，
+// **禁止手改**：手改即与冻结契约脱钩。改契约 → 重跑 deriver。
+//
+// 数据源 = contracts/errors.json（contract_version=3）
+// 实测条数 = 30（len(codes)，非人工填写）
+// ---------------------------------------------------------------------------
+
+export const ERROR_CODES = {
+  AUTH_ACCOUNT_LOCKED: "AUTH_ACCOUNT_LOCKED",
+  AUTH_INVALID_CREDENTIALS: "AUTH_INVALID_CREDENTIALS",
+  AUTH_TOKEN_EXPIRED: "AUTH_TOKEN_EXPIRED",
+  AUTH_TOKEN_INVALID: "AUTH_TOKEN_INVALID",
+  AUTH_TOKEN_REVOKED: "AUTH_TOKEN_REVOKED",
+  CONFIGURATION_ERROR: "CONFIGURATION_ERROR",
+  CONFLICT: "CONFLICT",
+  CONTEXT_LENGTH_EXCEEDED: "CONTEXT_LENGTH_EXCEEDED",
+  CREDENTIAL_NOT_FOUND: "CREDENTIAL_NOT_FOUND",
+  DEPENDENCY_MISSING: "DEPENDENCY_MISSING",
+  EVENT_CURSOR_EXPIRED: "EVENT_CURSOR_EXPIRED",
+  HEARTBEAT_TIMEOUT: "HEARTBEAT_TIMEOUT",
+  IDEMPOTENCY_KEY_REUSE: "IDEMPOTENCY_KEY_REUSE",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
+  MAX_ITERATIONS: "MAX_ITERATIONS",
+  METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
+  NOT_FOUND: "NOT_FOUND",
+  NOT_IMPLEMENTED: "NOT_IMPLEMENTED",
+  ORGANIZATION_NOT_FOUND: "ORGANIZATION_NOT_FOUND",
+  PERMISSION_DENIED: "PERMISSION_DENIED",
+  RESOURCE_LIMIT_EXCEEDED: "RESOURCE_LIMIT_EXCEEDED",
+  TASK_NOT_FOUND: "TASK_NOT_FOUND",
+  TENANT_NOT_FOUND: "TENANT_NOT_FOUND",
+  TOOL_TIMEOUT: "TOOL_TIMEOUT",
+  UNAUTHORIZED: "UNAUTHORIZED",
+  UNKNOWN: "UNKNOWN",
+  USER_ALREADY_EXISTS: "USER_ALREADY_EXISTS",
+  USER_NOT_FOUND: "USER_NOT_FOUND",
+  VALIDATION_ERROR: "VALIDATION_ERROR",
+  WORKSPACE_NOT_FOUND: "WORKSPACE_NOT_FOUND",
+} as const;
+
+export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+
+/** HTTP 状态码映射。取契约的 http_status；契约内部不一致的码单独标注。 */
+export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
+  AUTH_ACCOUNT_LOCKED: 423,
+  AUTH_INVALID_CREDENTIALS: 401,
+  AUTH_TOKEN_EXPIRED: 401,
+  AUTH_TOKEN_INVALID: 401,
+  AUTH_TOKEN_REVOKED: 401,
+  CONFIGURATION_ERROR: 422,
+  CONFLICT: 409,
+  CONTEXT_LENGTH_EXCEEDED: 422,
+  CREDENTIAL_NOT_FOUND: 404,
+  DEPENDENCY_MISSING: 503,
+  EVENT_CURSOR_EXPIRED: 410,
+  HEARTBEAT_TIMEOUT: 500,
+  IDEMPOTENCY_KEY_REUSE: 409,
+  INTERNAL_ERROR: 500,
+  MAX_ITERATIONS: 422,
+  METHOD_NOT_ALLOWED: 405,
+  NOT_FOUND: 404,
+  NOT_IMPLEMENTED: 501,
+  ORGANIZATION_NOT_FOUND: 404,
+  PERMISSION_DENIED: 403,
+  RESOURCE_LIMIT_EXCEEDED: 429,
+  TASK_NOT_FOUND: 404,
+  TENANT_NOT_FOUND: 404,
+  TOOL_TIMEOUT: 504,
+  UNAUTHORIZED: 401,
+  UNKNOWN: 500,
+  USER_ALREADY_EXISTS: 409,
+  USER_NOT_FOUND: 404,
+  VALIDATION_ERROR: 422,
+  WORKSPACE_NOT_FOUND: 404,
+};
+
+/** 中文描述（契约 ``description``；缺失时回落为空串，不编造文案）。 */
+export const ERROR_DESCRIPTION: Record<ErrorCode, string> = {
+  AUTH_ACCOUNT_LOCKED: "账号已锁定。",
+  AUTH_INVALID_CREDENTIALS: "登录凭证（用户名 / 密码等）错误。",
+  AUTH_TOKEN_EXPIRED: "访问令牌已过期。",
+  AUTH_TOKEN_INVALID: "访问令牌非法（签名 / 格式错误）。",
+  AUTH_TOKEN_REVOKED: "访问令牌已撤销。",
+  CONFIGURATION_ERROR: "配置非法或缺失。",
+  CONFLICT: "资源状态冲突（版本、唯一性等）。",
+  CONTEXT_LENGTH_EXCEEDED: "上下文长度超出模型窗口。",
+  CREDENTIAL_NOT_FOUND: "凭证记录不存在。",
+  DEPENDENCY_MISSING: "可选依赖 / 能力未装配；非静默降级，须显式上报。状态由 call-site 决定：8 处显式 503，2 处未传 status_code 的构造点回落 500（见 http_status_uniform=false）。",
+  EVENT_CURSOR_EXPIRED: "事件续读游标已过期（引用序号低于保留窗口低水位）。",
+  HEARTBEAT_TIMEOUT: "心跳超时（执行端失联）。",
+  IDEMPOTENCY_KEY_REUSE: "幂等键复用但请求内容不一致。",
+  INTERNAL_ERROR: "服务端未预期错误，由兜底异常处理器产出。",
+  MAX_ITERATIONS: "Agent 迭代次数达到上限。",
+  METHOD_NOT_ALLOWED: "HTTP 方法不被该路径允许。",
+  NOT_FOUND: "资源不存在。",
+  NOT_IMPLEMENTED: "功能尚未实现（骨架路由占位、Feature Flag 降级）。",
+  ORGANIZATION_NOT_FOUND: "组织不存在。",
+  PERMISSION_DENIED: "已认证但权限不足。",
+  RESOURCE_LIMIT_EXCEEDED: "执行期资源限额超限（并行度 / 产物 / 等待队列）。",
+  TASK_NOT_FOUND: "任务不存在。",
+  TENANT_NOT_FOUND: "租户不存在。",
+  TOOL_TIMEOUT: "工具调用超时。",
+  UNAUTHORIZED: "未认证或凭证缺失 / 无效。",
+  UNKNOWN: "未分类错误的兜底码（框架层 HTTPException 无对应码时回落）。",
+  USER_ALREADY_EXISTS: "用户已存在（唯一性冲突）。",
+  USER_NOT_FOUND: "用户不存在。",
+  VALIDATION_ERROR: "请求参数 / 数据校验失败；FastAPI RequestValidationError 亦映射到此码。",
+  WORKSPACE_NOT_FOUND: "工作空间不存在。",
+};

@@ -1,0 +1,1206 @@
+{
+  "source": "数据源 = contracts/openapi.v1.frozen.json",
+  "normalized_by": "scripts/gen_frontend_baseline.py",
+  "openapi": "3.1.0",
+  "info": {
+    "title": "WBTimeAI",
+    "version": "0.4.8"
+  },
+  "counts": {
+    "paths": 100,
+    "operations": 134,
+    "schemas": 116
+  },
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/agent-studio/marketplace/export",
+      "operationId": "export_resource_api_v1_agent_studio_marketplace_export_get",
+      "tags": [
+        "marketplace"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agent-studio/marketplace/import",
+      "operationId": "import_package_api_v1_agent_studio_marketplace_import_post",
+      "tags": [
+        "marketplace"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agents",
+      "operationId": "list_agents_api_v1_agents_get",
+      "tags": [
+        "agents"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agents",
+      "operationId": "create_agent_api_v1_agents_post",
+      "tags": [
+        "agents"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agents/{agent_id}",
+      "operationId": "get_agent_api_v1_agents__agent_id__get",
+      "tags": [
+        "agents"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/agents/{agent_id}",
+      "operationId": "update_agent_api_v1_agents__agent_id__put",
+      "tags": [
+        "agents"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agents/{agent_id}/publish",
+      "operationId": "publish_agent_api_v1_agents__agent_id__publish_post",
+      "tags": [
+        "agents"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agents/{agent_id}/run",
+      "operationId": "run_agent_api_v1_agents__agent_id__run_post",
+      "tags": [
+        "agents"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agents/{agent_id}/versions",
+      "operationId": "list_versions_api_v1_agents__agent_id__versions_get",
+      "tags": [
+        "agents"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/approvals",
+      "operationId": "list_approvals_api_v1_approvals_get",
+      "tags": [
+        "approvals"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/approvals/{approval_id}",
+      "operationId": "get_approval_api_v1_approvals__approval_id__get",
+      "tags": [
+        "approvals"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/approvals/{approval_id}/approve",
+      "operationId": "approve_approval_api_v1_approvals__approval_id__approve_post",
+      "tags": [
+        "approvals"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/approvals/{approval_id}/reject",
+      "operationId": "reject_approval_api_v1_approvals__approval_id__reject_post",
+      "tags": [
+        "approvals"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/audit",
+      "operationId": "list_audit_api_v1_audit_get",
+      "tags": [
+        "audit"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "operationId": "login_api_v1_auth_login_post",
+      "tags": [
+        "auth"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "operationId": "logout_api_v1_auth_logout_post",
+      "tags": [
+        "auth"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/refresh",
+      "operationId": "refresh_api_v1_auth_refresh_post",
+      "tags": [
+        "auth"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "operationId": "register_api_v1_auth_register_post",
+      "tags": [
+        "auth"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations",
+      "operationId": "list_conversations_api_v1_conversations_get",
+      "tags": [
+        "conversations"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations",
+      "operationId": "create_conversation_api_v1_conversations_post",
+      "tags": [
+        "conversations"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/{conversation_id}",
+      "operationId": "get_conversation_api_v1_conversations__conversation_id__get",
+      "tags": [
+        "conversations"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/conversations/{conversation_id}",
+      "operationId": "update_conversation_api_v1_conversations__conversation_id__put",
+      "tags": [
+        "conversations"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/{conversation_id}/messages",
+      "operationId": "list_messages_api_v1_conversations__conversation_id__messages_get",
+      "tags": [
+        "conversations"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/evaluation/datasets",
+      "operationId": "list_datasets_api_v1_evaluation_datasets_get",
+      "tags": [
+        "evaluation"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/evaluation/datasets",
+      "operationId": "create_dataset_api_v1_evaluation_datasets_post",
+      "tags": [
+        "evaluation"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/evaluation/datasets/{dataset_id}",
+      "operationId": "get_dataset_api_v1_evaluation_datasets__dataset_id__get",
+      "tags": [
+        "evaluation"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/evaluation/datasets/{dataset_id}/cases",
+      "operationId": "import_cases_api_v1_evaluation_datasets__dataset_id__cases_post",
+      "tags": [
+        "evaluation"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/evaluation/datasets/{dataset_id}/publish",
+      "operationId": "publish_dataset_api_v1_evaluation_datasets__dataset_id__publish_post",
+      "tags": [
+        "evaluation"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/evaluation/runs",
+      "operationId": "start_run_api_v1_evaluation_runs_post",
+      "tags": [
+        "evaluation"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/evaluation/runs/{run_id}",
+      "operationId": "get_run_api_v1_evaluation_runs__run_id__get",
+      "tags": [
+        "evaluation"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/evaluation/runs/{run_id}/compare",
+      "operationId": "compare_runs_api_v1_evaluation_runs__run_id__compare_get",
+      "tags": [
+        "evaluation"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/knowledge/bases",
+      "operationId": "list_knowledge_bases_api_v1_knowledge_bases_get",
+      "tags": [
+        "knowledge"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/knowledge/bases",
+      "operationId": "create_knowledge_base_api_v1_knowledge_bases_post",
+      "tags": [
+        "knowledge"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/knowledge/bases/{knowledge_base_id}",
+      "operationId": "delete_knowledge_base_api_v1_knowledge_bases__knowledge_base_id__delete",
+      "tags": [
+        "knowledge"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/knowledge/bases/{knowledge_base_id}",
+      "operationId": "get_knowledge_base_api_v1_knowledge_bases__knowledge_base_id__get",
+      "tags": [
+        "knowledge"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/knowledge/bases/{knowledge_base_id}",
+      "operationId": "update_knowledge_base_api_v1_knowledge_bases__knowledge_base_id__patch",
+      "tags": [
+        "knowledge"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/knowledge/bases/{knowledge_base_id}/documents",
+      "operationId": "list_documents_api_v1_knowledge_bases__knowledge_base_id__documents_get",
+      "tags": [
+        "knowledge"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/knowledge/bases/{knowledge_base_id}/documents",
+      "operationId": "create_document_api_v1_knowledge_bases__knowledge_base_id__documents_post",
+      "tags": [
+        "knowledge"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/knowledge/search",
+      "operationId": "search_knowledge_api_v1_knowledge_search_post",
+      "tags": [
+        "knowledge"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/mcp/permissions",
+      "operationId": "list_permissions_api_v1_mcp_permissions_get",
+      "tags": [
+        "mcp"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/mcp/permissions",
+      "operationId": "create_permission_api_v1_mcp_permissions_post",
+      "tags": [
+        "mcp"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/mcp/servers",
+      "operationId": "list_servers_api_v1_mcp_servers_get",
+      "tags": [
+        "mcp"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/mcp/servers",
+      "operationId": "register_server_api_v1_mcp_servers_post",
+      "tags": [
+        "mcp"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/mcp/servers/{server_id}",
+      "operationId": "delete_server_api_v1_mcp_servers__server_id__delete",
+      "tags": [
+        "mcp"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/mcp/servers/{server_id}",
+      "operationId": "get_server_api_v1_mcp_servers__server_id__get",
+      "tags": [
+        "mcp"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/mcp/servers/{server_id}/discover",
+      "operationId": "discover_tools_api_v1_mcp_servers__server_id__discover_post",
+      "tags": [
+        "mcp"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/mcp/tools",
+      "operationId": "list_tools_api_v1_mcp_tools_get",
+      "tags": [
+        "mcp"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory",
+      "operationId": "list_memories_api_v1_memory_get",
+      "tags": [
+        "memory"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/memory/{memory_id}",
+      "operationId": "delete_memory_api_v1_memory__memory_id__delete",
+      "tags": [
+        "memory"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/models/credentials",
+      "operationId": "list_credentials_api_v1_models_credentials_get",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/models/credentials",
+      "operationId": "save_credential_api_v1_models_credentials_post",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/models/credentials/{credential_id}",
+      "operationId": "delete_credential_api_v1_models_credentials__credential_id__delete",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/models/providers",
+      "operationId": "list_providers_api_v1_models_providers_get",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/models/providers",
+      "operationId": "register_provider_api_v1_models_providers_post",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/models/providers/{provider_id}",
+      "operationId": "disable_provider_api_v1_models_providers__provider_id__delete",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/models/providers/{provider_id}",
+      "operationId": "get_provider_api_v1_models_providers__provider_id__get",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/models/providers/{provider_id}/credential",
+      "operationId": "unbind_credential_api_v1_models_providers__provider_id__credential_delete",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/models/providers/{provider_id}/credential",
+      "operationId": "bind_credential_api_v1_models_providers__provider_id__credential_post",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/models/providers/{provider_id}/models",
+      "operationId": "list_models_api_v1_models_providers__provider_id__models_get",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/models/providers/{provider_id}/models",
+      "operationId": "register_model_api_v1_models_providers__provider_id__models_post",
+      "tags": [
+        "models"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations",
+      "operationId": "list_organizations_api_v1_organizations_get",
+      "tags": [
+        "organizations"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}",
+      "operationId": "get_organization_api_v1_organizations__organization_id__get",
+      "tags": [
+        "organizations"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/permissions/check",
+      "operationId": "check_capability_api_v1_permissions_check_get",
+      "tags": [
+        "permissions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/plugins",
+      "operationId": "list_plugins_api_v1_plugins_get",
+      "tags": [
+        "plugins"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins",
+      "operationId": "install_plugin_api_v1_plugins_post",
+      "tags": [
+        "plugins"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/plugins/{plugin_id}",
+      "operationId": "uninstall_plugin_api_v1_plugins__plugin_id__delete",
+      "tags": [
+        "plugins"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects",
+      "operationId": "list_projects_api_v1_projects_get",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects",
+      "operationId": "create_project_api_v1_projects_post",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/{project_id}",
+      "operationId": "get_project_api_v1_projects__project_id__get",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/{project_id}/clone",
+      "operationId": "clone_project_api_v1_projects__project_id__clone_post",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/{project_id}/git/refs",
+      "operationId": "list_project_git_refs_api_v1_projects__project_id__git_refs_get",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/{project_id}/status",
+      "operationId": "get_project_status_api_v1_projects__project_id__status_get",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/runs/{run_id}",
+      "operationId": "get_run_api_v1_runs__run_id__get",
+      "tags": [
+        "runs"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/runs/{run_id}/cancel",
+      "operationId": "cancel_run_api_v1_runs__run_id__cancel_post",
+      "tags": [
+        "runs"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/runs/{run_id}/events",
+      "operationId": "list_run_events_api_v1_runs__run_id__events_get",
+      "tags": [
+        "runs"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/schedules",
+      "operationId": "list_schedules_api_v1_schedules_get",
+      "tags": [
+        "schedules"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/schedules",
+      "operationId": "create_schedule_api_v1_schedules_post",
+      "tags": [
+        "schedules"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/schedules/{schedule_id}",
+      "operationId": "delete_schedule_api_v1_schedules__schedule_id__delete",
+      "tags": [
+        "schedules"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/schedules/{schedule_id}",
+      "operationId": "get_schedule_api_v1_schedules__schedule_id__get",
+      "tags": [
+        "schedules"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/schedules/{schedule_id}",
+      "operationId": "update_schedule_api_v1_schedules__schedule_id__put",
+      "tags": [
+        "schedules"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/schedules/{schedule_id}/trigger",
+      "operationId": "trigger_schedule_api_v1_schedules__schedule_id__trigger_post",
+      "tags": [
+        "schedules"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/credentials",
+      "operationId": "list_credentials_api_v1_settings_credentials_get",
+      "tags": [
+        "settings"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/settings/credentials",
+      "operationId": "save_credential_api_v1_settings_credentials_post",
+      "tags": [
+        "settings"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/features",
+      "operationId": "get_feature_flags_api_v1_settings_features_get",
+      "tags": [
+        "settings"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/personal",
+      "operationId": "get_personal_settings_api_v1_settings_personal_get",
+      "tags": [
+        "settings"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings/personal",
+      "operationId": "update_personal_settings_api_v1_settings_personal_put",
+      "tags": [
+        "settings"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/system",
+      "operationId": "get_system_settings_api_v1_settings_system_get",
+      "tags": [
+        "settings"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/skills",
+      "operationId": "list_skills_api_v1_skills_get",
+      "tags": [
+        "skills"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/skills",
+      "operationId": "create_skill_api_v1_skills_post",
+      "tags": [
+        "skills"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/skills/{skill_id}",
+      "operationId": "get_skill_api_v1_skills__skill_id__get",
+      "tags": [
+        "skills"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/skills/{skill_id}",
+      "operationId": "update_skill_api_v1_skills__skill_id__put",
+      "tags": [
+        "skills"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/skills/{skill_id}/publish",
+      "operationId": "publish_skill_version_api_v1_skills__skill_id__publish_post",
+      "tags": [
+        "skills"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/skills/{skill_id}/versions",
+      "operationId": "list_skill_versions_api_v1_skills__skill_id__versions_get",
+      "tags": [
+        "skills"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/skills/{skill_id}/versions",
+      "operationId": "create_skill_version_api_v1_skills__skill_id__versions_post",
+      "tags": [
+        "skills"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks",
+      "operationId": "list_tasks_api_v1_tasks_get",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks",
+      "operationId": "submit_remote_task_api_v1_tasks_post",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{task_id}",
+      "operationId": "get_task_api_v1_tasks__task_id__get",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/{task_id}/apply",
+      "operationId": "apply_task_change_api_v1_tasks__task_id__apply_post",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{task_id}/artifacts",
+      "operationId": "list_task_artifacts_api_v1_tasks__task_id__artifacts_get",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{task_id}/artifacts/{name}",
+      "operationId": "download_task_artifact_api_v1_tasks__task_id__artifacts__name__get",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{task_id}/attempts",
+      "operationId": "list_task_attempts_api_v1_tasks__task_id__attempts_get",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/{task_id}/cancel",
+      "operationId": "cancel_task_api_v1_tasks__task_id__cancel_post",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{task_id}/diff",
+      "operationId": "get_task_diff_api_v1_tasks__task_id__diff_get",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{task_id}/events",
+      "operationId": "list_task_events_api_v1_tasks__task_id__events_get",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{task_id}/executions",
+      "operationId": "list_task_executions_api_v1_tasks__task_id__executions_get",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{task_id}/logs",
+      "operationId": "list_task_logs_api_v1_tasks__task_id__logs_get",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/{task_id}/push",
+      "operationId": "push_task_change_api_v1_tasks__task_id__push_post",
+      "tags": [
+        "tasks"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tools",
+      "operationId": "list_tools_api_v1_tools_get",
+      "tags": [
+        "tools"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tools/permissions",
+      "operationId": "list_permissions_api_v1_tools_permissions_get",
+      "tags": [
+        "tools"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tools/permissions",
+      "operationId": "grant_permission_api_v1_tools_permissions_post",
+      "tags": [
+        "tools"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/tools/permissions/{permission_id}",
+      "operationId": "revoke_permission_api_v1_tools_permissions__permission_id__delete",
+      "tags": [
+        "tools"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/me",
+      "operationId": "read_me_api_v1_users_me_get",
+      "tags": [
+        "users"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/users/me",
+      "operationId": "update_me_api_v1_users_me_put",
+      "tags": [
+        "users"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/me/devices",
+      "operationId": "list_devices_api_v1_users_me_devices_get",
+      "tags": [
+        "users"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/users/me/logout-all",
+      "operationId": "logout_all_api_v1_users_me_logout_all_post",
+      "tags": [
+        "users"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workflows",
+      "operationId": "list_workflows_api_v1_workflows_get",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workflows",
+      "operationId": "create_workflow_api_v1_workflows_post",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/workflows/{workflow_id}",
+      "operationId": "delete_workflow_api_v1_workflows__workflow_id__delete",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workflows/{workflow_id}",
+      "operationId": "get_workflow_api_v1_workflows__workflow_id__get",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workflows/{workflow_id}",
+      "operationId": "update_workflow_api_v1_workflows__workflow_id__put",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workflows/{workflow_id}/publish",
+      "operationId": "publish_workflow_api_v1_workflows__workflow_id__publish_post",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workflows/{workflow_id}/run",
+      "operationId": "run_workflow_api_v1_workflows__workflow_id__run_post",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workflows/{workflow_id}/runs/{run_id}",
+      "operationId": "get_workflow_run_api_v1_workflows__workflow_id__runs__run_id__get",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workflows/{workflow_id}/runs/{run_id}/cancel",
+      "operationId": "cancel_workflow_run_api_v1_workflows__workflow_id__runs__run_id__cancel_post",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workflows/{workflow_id}/versions",
+      "operationId": "list_versions_api_v1_workflows__workflow_id__versions_get",
+      "tags": [
+        "workflows"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces",
+      "operationId": "list_workspaces_api_v1_workspaces_get",
+      "tags": [
+        "workspaces"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces",
+      "operationId": "create_workspace_api_v1_workspaces_post",
+      "tags": [
+        "workspaces"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspace_id}",
+      "operationId": "get_workspace_api_v1_workspaces__workspace_id__get",
+      "tags": [
+        "workspaces"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspace_id}/environment",
+      "operationId": "list_workspace_environments_api_v1_workspaces__workspace_id__environment_get",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspace_id}/environment/{environment_id}",
+      "operationId": "get_workspace_environment_api_v1_workspaces__workspace_id__environment__environment_id__get",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspace_id}/files",
+      "operationId": "list_workspace_files_api_v1_workspaces__workspace_id__files_get",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspace_id}/files/content",
+      "operationId": "read_workspace_file_api_v1_workspaces__workspace_id__files_content_get",
+      "tags": [
+        "projects"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspaces/{workspace_id}/settings",
+      "operationId": "update_workspace_settings_api_v1_workspaces__workspace_id__settings_put",
+      "tags": [
+        "workspaces"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "operationId": "health_health_get",
+      "tags": [
+        "health"
+      ]
+    }
+  ],
+  "schemas": [
+    "AgentResponse",
+    "AgentToolBind",
+    "AgentVersionResponse",
+    "ApplyTaskRequest",
+    "ApplyTaskResponse",
+    "ApprovalResponse",
+    "AuditLogResponse",
+    "BindCredentialRequest",
+    "CaseIn",
+    "CaseOut",
+    "CloneProjectRequest",
+    "CloneProjectResponse",
+    "CompareReport",
+    "ConversationMessageResponse",
+    "ConversationResponse",
+    "CreateAgentRequest",
+    "CreateConversationRequest",
+    "CreateDatasetRequest",
+    "CreateDocumentRequest",
+    "CreateKnowledgeBaseRequest",
+    "CreateMCPPermissionRequest",
+    "CreateProjectRequest",
+    "CreateScheduleRequest",
+    "CreateSkillRequest",
+    "CreateSkillVersionRequest",
+    "CreateWorkflowRequest",
+    "CreateWorkspaceRequest",
+    "CredentialResponse",
+    "DatasetOut",
+    "DeviceResponse",
+    "DiffFileResponse",
+    "DocumentResponse",
+    "EnvironmentResponse",
+    "EnvironmentVarResponse",
+    "ExportResultResponse",
+    "FailsOut",
+    "FeatureFlagsResponse",
+    "FileContentResponse",
+    "FileObjectResponse",
+    "GitRefResponse",
+    "HTTPValidationError",
+    "ImportCasesRequest",
+    "ImportPackageRequest",
+    "InstallPluginRequest",
+    "KnowledgeBaseResponse",
+    "LoginRequest",
+    "MCPPermissionResponse",
+    "MCPServerResponse",
+    "MCPToolResponse",
+    "MemoryResponse",
+    "MessageResponse",
+    "MetricDeltaOut",
+    "ModelProviderResponse",
+    "ModelResponse",
+    "OrganizationResponse",
+    "PermissionCheckResponse",
+    "PersonalSettingsResponse",
+    "PluginResponse",
+    "ProjectResponse",
+    "ProjectStatusResponse",
+    "PublishRequest",
+    "PublishWorkflowRequest",
+    "PushTaskRequest",
+    "PushTaskResponse",
+    "RefreshRequest",
+    "RegisterMCPServerRequest",
+    "RegisterModelRequest",
+    "RegisterProviderRequest",
+    "RegisterRequest",
+    "RemoteTaskSubmitRequest",
+    "RemoteTaskSubmitResponse",
+    "ResultOut",
+    "RunOut",
+    "RunRequest",
+    "RunResponse",
+    "RunWorkflowRequest",
+    "SaveCredentialRequest",
+    "ScheduleResponse",
+    "SearchHitResponse",
+    "SearchRequest",
+    "SearchResponse",
+    "SkillResponse",
+    "SkillVersionResponse",
+    "StartRunRequest",
+    "SystemSettingsResponse",
+    "TaskArtifactResponse",
+    "TaskAttemptResponse",
+    "TaskDiffResponse",
+    "TaskEventPageResponse",
+    "TaskEventResponse",
+    "TaskExecutionResponse",
+    "TaskLogResponse",
+    "TaskResponse",
+    "TokenResponse",
+    "ToolPermissionRequest",
+    "ToolPermissionResponse",
+    "ToolResponse",
+    "TriggerScheduleResponse",
+    "UpdateAgentRequest",
+    "UpdateConversationRequest",
+    "UpdateKnowledgeBaseRequest",
+    "UpdatePersonalSettingsRequest",
+    "UpdateScheduleRequest",
+    "UpdateSkillRequest",
+    "UpdateUserRequest",
+    "UpdateWorkflowRequest",
+    "UpdateWorkspaceSettingsRequest",
+    "UserResponse",
+    "ValidationError",
+    "WorkflowEdgeInput",
+    "WorkflowNodeInput",
+    "WorkflowReplayResponse",
+    "WorkflowResponse",
+    "WorkflowRunResponse",
+    "WorkflowVersionResponse",
+    "WorkspaceResponse"
+  ]
+}

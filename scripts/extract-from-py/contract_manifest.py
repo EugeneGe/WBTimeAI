@@ -142,6 +142,21 @@ class Rule:
 #: Ordered rule table -- **first match wins**, so keep specific patterns on top.
 CLASSIFICATION_RULES: tuple[Rule, ...] = (
     Rule(
+        pattern="frontend-baseline/*",
+        source="manual",
+        dialect_only=None,
+        generated_by="scripts/gen_frontend_baseline.py",
+        requirement="V0.1.0/T1-01 前端基线派生件（供 apps/web 消费的冻结件投影）",
+        rationale=(
+            "三件均由 scripts/gen_frontend_baseline.py 从 contracts/ 内**已冻结产物**派生 "
+            "（openapi.v1.frozen.json / sse/channels.json / errors.json），既不来自 _old 的 ORM "
+            "metadata 编译，也不来自迁移链 raw DDL，故 source=manual。"
+            "本组为 V0.1.0 首次新增进 contracts/，属施工纪律 §4.5.1「经批准的重导」："
+            "已实测 39 项既有产物 sha256 零变化，仅新增 3 项，变更史登记于 "
+            "docs/V1.0/V0.1.0-基座与契约层/03-台账/DoD-V0.1.0.md「契约变更史」"
+        ),
+    ),
+    Rule(
         pattern="schema.v0018.pg.sql",
         source="metadata",
         dialect_only="pg",

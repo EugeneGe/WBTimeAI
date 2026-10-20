@@ -1,6 +1,15 @@
 {
   "classification_rules": [
     {
+      "dialect_only": null,
+      "generated_by": "scripts/gen_frontend_baseline.py",
+      "matched": 3,
+      "pattern": "frontend-baseline/*",
+      "rationale": "三件均由 scripts/gen_frontend_baseline.py 从 contracts/ 内**已冻结产物**派生 （openapi.v1.frozen.json / sse/channels.json / errors.json），既不来自 _old 的 ORM metadata 编译，也不来自迁移链 raw DDL，故 source=manual。本组为 V0.1.0 首次新增进 contracts/，属施工纪律 §4.5.1「经批准的重导」：已实测 39 项既有产物 sha256 零变化，仅新增 3 项，变更史登记于 docs/V1.0/V0.1.0-基座与契约层/03-台账/DoD-V0.1.0.md「契约变更史」",
+      "requirement": "V0.1.0/T1-01 前端基线派生件（供 apps/web 消费的冻结件投影）",
+      "source": "manual"
+    },
+    {
       "dialect_only": "pg",
       "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
       "matched": 1,
@@ -2961,6 +2970,30 @@
     },
     {
       "dialect_only": null,
+      "generated_by": "scripts/gen_frontend_baseline.py",
+      "path": "frontend-baseline/error-codes.ts",
+      "requirement": "V0.1.0/T1-01 前端基线派生件（供 apps/web 消费的冻结件投影）",
+      "sha256": "c3c86ddd8f160c71203118c42b7a1b74cb56c5210d842c6c79ef1cf4cfe4b43e",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/gen_frontend_baseline.py",
+      "path": "frontend-baseline/openapi.subset.json",
+      "requirement": "V0.1.0/T1-01 前端基线派生件（供 apps/web 消费的冻结件投影）",
+      "sha256": "2b36aee68086e1b208c5213248b875861546786567a6207959a35f743283a74f",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/gen_frontend_baseline.py",
+      "path": "frontend-baseline/sse.channels.json",
+      "requirement": "V0.1.0/T1-01 前端基线派生件（供 apps/web 消费的冻结件投影）",
+      "sha256": "fcbfc20ee4b95d304481bbe925a0c7a4d46860c1f47395ea2d74248281c16645",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
       "generated_by": "scripts/extract-from-py/export_openapi.py",
       "path": "openapi.v1.frozen.json",
       "requirement": "V0.0.1/DoD#2 100 paths·134 ops·116 schemas",
@@ -3213,7 +3246,7 @@
     "frozen_contract": "V0.0.1 / C-07",
     "generated_by": "scripts/extract-from-py/contract_manifest.py",
     "name": "wbtime-ai contract manifest",
-    "object_count": 38,
+    "object_count": 41,
     "version": 1
   },
   "status_semantics": {
