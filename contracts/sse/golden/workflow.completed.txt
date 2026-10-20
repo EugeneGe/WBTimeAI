@@ -1,0 +1,4 @@
+id: 1
+event: workflow.completed
+data: {"workflow_id":"wf_01","run_id":"run_01","duration_ms":12}
+

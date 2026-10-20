@@ -1,0 +1,398 @@
+{
+  "artifact": "test-migration-map.csv",
+  "artifacts": {
+    "conformance/content-negotiation.yaml": "4df32b0c14a2355b411ecdea3dc262adb37593ab421c7bce2551f4c673a48083",
+    "conformance/idempotency.yaml": "ba0861e3c95ad2927a993655d2c51b03db2d2be9b498428d3d75a32c439a5551",
+    "conformance/stringly-contracts.yaml": "acfdaf43e565bc92bd13ee39d69f1a845950d489181f3977dd393db7de07d380",
+    "conformance/tenant-404.yaml": "42bd1e6bb5f7f9c04fb1f667a65aab8512a90e833d06dcdc9427da06e5bdfa8e",
+    "test-migration-map.csv": "eb95b086db7eb74a85a8ee6135e004ee63d26db60c14974caae96f84aa3a3599"
+  },
+  "basis": {
+    "bucket_distribution": {
+      "1": 333,
+      "2": 1363,
+      "3": 3
+    },
+    "bucket_plain_port_vs_roadmap": {
+      "bucket_1_rows": 333,
+      "note": "路线图写「桶① ~357 用例」，为估算值（带 ~）；本表按规则表逐条判定",
+      "roadmap_approx": 357
+    },
+    "case_override_summary": [
+      {
+        "bucket": 3,
+        "capability": "权限·旧路径 redirect shim（MCP 专属入口）",
+        "file": "tests/integration/permission/test_mcp_permissions_redirect.py",
+        "rule_bucket": 3,
+        "rule_capability": "权限·旧路径 redirect shim",
+        "rule_pattern": "^tests/integration/permission/test_(mcp|tools)_permissions_redirect\\.py$",
+        "target_module": "@wbtime/permission",
+        "target_version": "V0.2.0",
+        "test_id": "tests/integration/permission/test_mcp_permissions_redirect.py::test_grant_redirects_write_to_resource_permission"
+      },
+      {
+        "bucket": 2,
+        "capability": "权限·MCP tool 未同步 fail-closed",
+        "file": "tests/integration/permission/test_mcp_permissions_redirect.py",
+        "rule_bucket": 3,
+        "rule_capability": "权限·旧路径 redirect shim",
+        "rule_pattern": "^tests/integration/permission/test_(mcp|tools)_permissions_redirect\\.py$",
+        "target_module": "@wbtime/mcp",
+        "target_version": "V0.2.0",
+        "test_id": "tests/integration/permission/test_mcp_permissions_redirect.py::test_unmapped_mcp_tool_is_fail_closed_and_roundtrips"
+      },
+      {
+        "bucket": 3,
+        "capability": "权限·旧路径 redirect shim（tools 专属入口）",
+        "file": "tests/integration/permission/test_tools_permissions_redirect.py",
+        "rule_bucket": 3,
+        "rule_capability": "权限·旧路径 redirect shim",
+        "rule_pattern": "^tests/integration/permission/test_(mcp|tools)_permissions_redirect\\.py$",
+        "target_module": "@wbtime/permission",
+        "target_version": "V0.2.0",
+        "test_id": "tests/integration/permission/test_tools_permissions_redirect.py::test_grant_redirects_write_to_resource_permission"
+      },
+      {
+        "bucket": 3,
+        "capability": "权限·旧路径响应壳快照",
+        "file": "tests/integration/permission/test_tools_permissions_redirect.py",
+        "rule_bucket": 3,
+        "rule_capability": "权限·旧路径 redirect shim",
+        "rule_pattern": "^tests/integration/permission/test_(mcp|tools)_permissions_redirect\\.py$",
+        "target_module": "@wbtime/permission",
+        "target_version": "V0.2.0",
+        "test_id": "tests/integration/permission/test_tools_permissions_redirect.py::test_grant_response_contract_unchanged"
+      }
+    ],
+    "collected_raw": 1743,
+    "observed": {
+      "distribution": {
+        "passed": 1668,
+        "skipped": 23,
+        "xfailed": 8
+      },
+      "formula": "passed − 1661 == selected − 1692 ⇒ 差额全部来自新增用例，非用例丢失",
+      "measured": true,
+      "non_passing": 31,
+      "passed": 1668,
+      "passed_delta_vs_roadmap": 7,
+      "reconciled": true,
+      "selected_delta_vs_legacy": 7
+    },
+    "provider_live_excluded": 44,
+    "roadmap_registered_1661": {
+      "action": "不裁剪：skip/xfail 用例同样需要处置记录",
+      "caliber": "passed（旧线记录「1692 selected = 1661P」）",
+      "delta_vs_selected": 38,
+      "registered_in": [
+        "contracts/test-migration-map.csv (header comments)",
+        "contracts/README.md §「旧用例迁移映射（C-06）」",
+        "scripts/extract-from-py/README.md §10",
+        "contracts/test-migration-summary.json (basis.roadmap_registered_1661)"
+      ],
+      "value": 1661
+    },
+    "selected": 1699
+  },
+  "buckets": {
+    "1": 333,
+    "2": 1363,
+    "3": 3
+  },
+  "case_overrides": [
+    {
+      "bucket": 3,
+      "capability": "权限·旧路径 redirect shim（MCP 专属入口）",
+      "file": "tests/integration/permission/test_mcp_permissions_redirect.py",
+      "rule_bucket": 3,
+      "rule_capability": "权限·旧路径 redirect shim",
+      "rule_pattern": "^tests/integration/permission/test_(mcp|tools)_permissions_redirect\\.py$",
+      "target_module": "@wbtime/permission",
+      "target_version": "V0.2.0",
+      "test_id": "tests/integration/permission/test_mcp_permissions_redirect.py::test_grant_redirects_write_to_resource_permission"
+    },
+    {
+      "bucket": 2,
+      "capability": "权限·MCP tool 未同步 fail-closed",
+      "file": "tests/integration/permission/test_mcp_permissions_redirect.py",
+      "rule_bucket": 3,
+      "rule_capability": "权限·旧路径 redirect shim",
+      "rule_pattern": "^tests/integration/permission/test_(mcp|tools)_permissions_redirect\\.py$",
+      "target_module": "@wbtime/mcp",
+      "target_version": "V0.2.0",
+      "test_id": "tests/integration/permission/test_mcp_permissions_redirect.py::test_unmapped_mcp_tool_is_fail_closed_and_roundtrips"
+    },
+    {
+      "bucket": 3,
+      "capability": "权限·旧路径 redirect shim（tools 专属入口）",
+      "file": "tests/integration/permission/test_tools_permissions_redirect.py",
+      "rule_bucket": 3,
+      "rule_capability": "权限·旧路径 redirect shim",
+      "rule_pattern": "^tests/integration/permission/test_(mcp|tools)_permissions_redirect\\.py$",
+      "target_module": "@wbtime/permission",
+      "target_version": "V0.2.0",
+      "test_id": "tests/integration/permission/test_tools_permissions_redirect.py::test_grant_redirects_write_to_resource_permission"
+    },
+    {
+      "bucket": 3,
+      "capability": "权限·旧路径响应壳快照",
+      "file": "tests/integration/permission/test_tools_permissions_redirect.py",
+      "rule_bucket": 3,
+      "rule_capability": "权限·旧路径 redirect shim",
+      "rule_pattern": "^tests/integration/permission/test_(mcp|tools)_permissions_redirect\\.py$",
+      "target_module": "@wbtime/permission",
+      "target_version": "V0.2.0",
+      "test_id": "tests/integration/permission/test_tools_permissions_redirect.py::test_grant_response_contract_unchanged"
+    }
+  ],
+  "conformance": [
+    {
+      "applies_to": [
+        "V0.2.0"
+      ],
+      "cases": 4,
+      "file": "conformance/tenant-404.yaml",
+      "id": "tenant-404",
+      "sha256": "42bd1e6bb5f7f9c04fb1f667a65aab8512a90e833d06dcdc9427da06e5bdfa8e",
+      "source_refs": 5,
+      "status": "skeleton",
+      "title": "跨租户访问必须返回 404（不是 403 / 401）",
+      "verified": [
+        "tests/integration/test_cross_tenant_404.py:3 ok",
+        "tests/integration/test_cross_tenant_404.py:62 ok",
+        "packages/core/src/wbtime_ai_core/error_codes.py:22 ok",
+        "apps/api/src/wbtime_ai_api/errors.py:37 ok",
+        "packages/application/src/wbtime_ai_application/queries/agent.py:56 ok"
+      ]
+    },
+    {
+      "applies_to": [
+        "V0.1.0",
+        "V0.5.0"
+      ],
+      "cases": 5,
+      "file": "conformance/idempotency.yaml",
+      "id": "idempotency",
+      "sha256": "ba0861e3c95ad2927a993655d2c51b03db2d2be9b498428d3d75a32c439a5551",
+      "source_refs": 6,
+      "status": "skeleton",
+      "title": "幂等键复用语义（同键同体复用首次结果；同键异体 / 跨用户 409）",
+      "verified": [
+        "tests/integration/test_idempotency.py:6 ok",
+        "tests/integration/test_idempotency.py:7 ok",
+        "packages/application/src/wbtime_ai_application/services/idempotency_service.py:107 ok",
+        "packages/application/src/wbtime_ai_application/services/idempotency_service.py:117 ok",
+        "packages/database/src/wbtime_ai_database/models/task.py:52 ok",
+        "tests/unit/test_application_idempotency.py:6 ok"
+      ]
+    },
+    {
+      "applies_to": [
+        "V0.1.0",
+        "V0.3.0"
+      ],
+      "cases": 5,
+      "file": "conformance/content-negotiation.yaml",
+      "id": "content-negotiation",
+      "sha256": "4df32b0c14a2355b411ecdea3dc262adb37593ab421c7bce2551f4c673a48083",
+      "source_refs": 6,
+      "status": "skeleton",
+      "title": "请求 / 响应 Content-Type 协商（含 SSE 不套壳例外）",
+      "verified": [
+        "apps/api/src/wbtime_ai_api/middleware/response_shell.py:16 ok",
+        "apps/api/src/wbtime_ai_api/routers/v1/agents.py:311 ok",
+        "apps/api/src/wbtime_ai_api/routers/v1/agents.py:347 ok",
+        "tests/e2e/test_phase1_flow.py:229 ok",
+        "tests/integration/test_sse_contract.py:9 ok",
+        "tests/integration/test_api_web_static.py:95 ok"
+      ]
+    },
+    {
+      "applies_to": [
+        "V0.1.0"
+      ],
+      "cases": 5,
+      "file": "conformance/stringly-contracts.yaml",
+      "id": "stringly-contracts",
+      "sha256": "acfdaf43e565bc92bd13ee39d69f1a845950d489181f3977dd393db7de07d380",
+      "source_refs": 7,
+      "status": "skeleton",
+      "title": "字符串化契约（枚举字面值 / 时间格式 / uuid 形态）",
+      "verified": [
+        "packages/core/src/wbtime_ai_core/id.py:4 ok",
+        "packages/core/src/wbtime_ai_core/error_codes.py:15 ok",
+        "packages/common/src/wbtime_ai_common/time.py:40 ok",
+        "packages/common/src/wbtime_ai_common/time.py:52 ok",
+        "tests/unit/test_core_id.py:11 ok",
+        "tests/integration/test_id_convention.py:1 ok",
+        "packages/database/src/wbtime_ai_database/models/task.py:52 ok"
+      ]
+    }
+  ],
+  "counts_selfcheck": {
+    "all_case_overrides_applied": true,
+    "bucket_sum_equals_rows": true,
+    "rows_equals_selected": true,
+    "version_sum_equals_rows": true
+  },
+  "files_unmatched": [],
+  "generated_by": "scripts/extract-from-py/export_migration.py",
+  "inputs": [
+    {
+      "path": "D:/WBT/WBTimeAI/scripts/extract-from-py/migration/inputs/collect.json",
+      "sha256": "a38862a25a3debd849ab6adf6fca709df16ceba64f535079eee63914d9ddec88"
+    },
+    {
+      "path": "D:/WBT/WBTimeAI/scripts/extract-from-py/migration/inputs/outcomes.json",
+      "sha256": "de8acd513f3f42a84b2cd950c3250e91e120e45a6f1e10df4c359ecb6a3a841e"
+    }
+  ],
+  "markers": {
+    "contracts": 94,
+    "docker": 11,
+    "security": 88,
+    "smoke": 6
+  },
+  "matrix_version_by_bucket": {
+    "V0.1.0": {
+      "2": 240
+    },
+    "V0.2.0": {
+      "1": 47,
+      "2": 144,
+      "3": 3
+    },
+    "V0.3.0": {
+      "1": 45,
+      "2": 458
+    },
+    "V0.4.0": {
+      "2": 121
+    },
+    "V0.5.0": {
+      "1": 167,
+      "2": 39
+    },
+    "V0.6.0": {
+      "2": 253
+    },
+    "V0.7.0": {
+      "2": 82
+    },
+    "V0.8.0": {
+      "1": 37,
+      "2": 26
+    },
+    "V1.0.0": {
+      "1": 37
+    }
+  },
+  "modules": {
+    "@wbtime/agent": 19,
+    "@wbtime/api": 60,
+    "@wbtime/approval": 27,
+    "@wbtime/audit": 20,
+    "@wbtime/cli": 16,
+    "@wbtime/config": 20,
+    "@wbtime/contracts": 14,
+    "@wbtime/conversation": 26,
+    "@wbtime/core": 20,
+    "@wbtime/database": 63,
+    "@wbtime/domain": 22,
+    "@wbtime/evaluation": 25,
+    "@wbtime/events": 31,
+    "@wbtime/identity": 53,
+    "@wbtime/knowledge": 57,
+    "@wbtime/marketplace": 65,
+    "@wbtime/mcp": 26,
+    "@wbtime/memory": 49,
+    "@wbtime/observability": 10,
+    "@wbtime/permission": 47,
+    "@wbtime/plugin": 17,
+    "@wbtime/provider": 158,
+    "@wbtime/remote": 147,
+    "@wbtime/retention": 15,
+    "@wbtime/runtime": 79,
+    "@wbtime/sandbox": 78,
+    "@wbtime/scheduler": 14,
+    "@wbtime/security": 11,
+    "@wbtime/skills": 44,
+    "@wbtime/sse": 17,
+    "@wbtime/storage": 7,
+    "@wbtime/task": 25,
+    "@wbtime/testing": 13,
+    "@wbtime/tools": 79,
+    "@wbtime/web": 37,
+    "@wbtime/worker": 10,
+    "@wbtime/workflow": 115,
+    "@wbtime/workspace": 57,
+    "@wbtime/workspace-git": 44,
+    "tools/dependency-cruiser": 25,
+    "tools/governance": 37
+  },
+  "outcomes": {
+    "covered": 1699,
+    "distribution": {
+      "passed": 1668,
+      "skipped": 23,
+      "xfailed": 8
+    },
+    "ledger": {
+      "argv": [
+        "-p",
+        "wbtime_migration_outcome",
+        "-o",
+        "addopts=",
+        "-m",
+        "not provider_live",
+        "-q",
+        "--tb=no",
+        "-p",
+        "no:cacheprovider",
+        "tests"
+      ],
+      "counts": {
+        "passed": 1668,
+        "skipped": 23,
+        "xfailed": 8
+      },
+      "duration_seconds": 1056.23,
+      "exitstatus": 0,
+      "path": "scripts/extract-from-py/migration/inputs/outcomes.json",
+      "pytest_version": "9.1.1",
+      "recorded": 1699,
+      "sha256": "de8acd513f3f42a84b2cd950c3250e91e120e45a6f1e10df4c359ecb6a3a841e"
+    },
+    "note": "outcome 全部来自 inputs/outcomes.json 的真实运行结果；未出现在该账本的用例为 unknown，绝不以 passed 代替",
+    "uncovered_unknown": 0,
+    "vocabulary": [
+      "passed",
+      "failed",
+      "skipped",
+      "xfailed",
+      "xpassed",
+      "error",
+      "unknown"
+    ]
+  },
+  "pytest_version": "9.1.1",
+  "roadmap": {
+    "buckets": "§4.1 归并总表",
+    "doc": "docs/V1.0/00-版本路线图.md",
+    "versions": "§3.2"
+  },
+  "rows": 1699,
+  "schema": 1,
+  "source_root": "D:/WBT/WBTimeAI_old",
+  "versions": {
+    "V0.1.0": 240,
+    "V0.2.0": 194,
+    "V0.3.0": 503,
+    "V0.4.0": 121,
+    "V0.5.0": 206,
+    "V0.6.0": 253,
+    "V0.7.0": 82,
+    "V0.8.0": 63,
+    "V1.0.0": 37
+  }
+}

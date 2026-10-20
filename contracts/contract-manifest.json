@@ -1,0 +1,3226 @@
+{
+  "classification_rules": [
+    {
+      "dialect_only": "pg",
+      "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
+      "matched": 1,
+      "pattern": "schema.v0018.pg.sql",
+      "rationale": "主体由 ORM metadata 编译（61 表 / 629 列 / 174 索引），迁移链 raw DDL 只补 2 条 hnsw；按主导来源归 metadata，次要来源 migration 见 normalized 快照的 counts 与 notes",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并·176 索引对象·双侧快照",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": "pg",
+      "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
+      "matched": 1,
+      "pattern": "schema.v0018.pg.normalized.json",
+      "rationale": "编译产物自身携带 counts{metadata_indexes:174, raw_indexes:2, index_objects_total:176}，来自 metadata + migration 合并后的规范化视图",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并·176 索引对象·双侧快照（PG normalized）",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": "sqlite",
+      "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
+      "matched": 1,
+      "pattern": "schema.v0018.sqlite.sql",
+      "rationale": "主体同为 metadata 编译，另含 SQLite 专属 FTS5 虚表 / 影子表 / 3 触发器；FTS5 语句取自迁移链，但对象本身是 SQLite 方言产物，故 dialect_only=sqlite",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并·176 索引对象·双侧快照（SQLite 含 FTS5）",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": "sqlite",
+      "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
+      "matched": 1,
+      "pattern": "schema.v0018.sqlite.normalized.json",
+      "rationale": "编译产物自身携带 counts 与 dialect_only_objects 明细（8 个 SQLite 专属对象）",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并·176 索引对象·双侧快照（SQLite normalized）",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/ddl/gen_type_map.py",
+      "matched": 1,
+      "pattern": "db/type-map.csv",
+      "rationale": "逐列事实（declared / declared_str_type / pg_emit_type / sqlite_emit_type）来自 ORM metadata 反射与 两侧编译结果；但 ts_target 与 strategy 两列是人工映射策略 ⇒ 内容主体仍是事实映射，故 source=metadata，人工列在此显式登记；跨方言对照表本身 ⇒ dialect_only=null",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（列级类型映射）",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_openapi.py",
+      "matched": 1,
+      "pattern": "openapi.v1.frozen.json",
+      "rationale": "由 create_app().openapi() 代码内省自动导出（FastAPI 路由/schema 即结构化元数据），非手写、非迁移链",
+      "requirement": "V0.0.1/DoD#2 100 paths·134 ops·116 schemas",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_openapi.py",
+      "matched": 1,
+      "pattern": "endpoints.txt",
+      "rationale": "数据行派生自 openapi.v1.frozen.json，但分段标题、134/133 口径公式与排除说明是人写骨架 ⇒ 按 C-07 裁定归 manual；派生关系记于 notices[derived:endpoints]",
+      "requirement": "V0.0.1/DoD#2 100 paths·134 ops·116 schemas（134+133 分列口径）",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_envelope.py",
+      "matched": 1,
+      "pattern": "envelope.schema.json",
+      "rationale": "改判为 manual：产物自带 x-wbtimeai.provenance，6 个 $defs 中仅 ErrorResponse / MessageResponse 是 pydantic 反射（pydantic:schemas/common.py），而 errorEnvelope / messageEnvelope / successBody / successEnvelope 与 enforcement 表全部标为 manual+measured ⇒ 壳层如何组装（任何处套壳、哪些不套壳）是人定的，机器只提供叶子模型与实测探针。按「谁产生了这份内容」判 manual",
+      "requirement": "V0.2.0 响应壳逐字节",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_errors.py",
+      "matched": 1,
+      "pattern": "errors.json",
+      "rationale": "保持 metadata：产物 sources 把每个规范性字段都指到代码位置（ErrorCode 枚举 / exception.py / _STATUS_BY_CODE / AST call-site 扫描），http_status_source 实测分布 = api_status_map 27 + exception_class 2 + call_site_override 1；人工部分被限定为 30/30 条 description 且逐条标 description_source=manual ⇒ 描述是注记，不是规范事实，故不因描述人工而降级为 manual。contract_version=3 起，`http_status` 只是**逐 call-site 解析后的多数值**，非全量成立时由 http_status_uniform=false + http_status_distribution + http_status_inconsistent_call_sites 显式披露（D-1：DEPENDENCY_MISSING 8×503 + 2×500），并由 C22 做机器校验",
+      "requirement": "V0.0.1/DoD#6 + V0.2.0 错误码全表参数化",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "matched": 1,
+      "pattern": "sse/channels.json",
+      "rationale": "由 SSE 通道注册表反射生成（channels/by_channel/guard/numeric_format 均为注册表投影）",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "matched": 1,
+      "pattern": "sse/golden/_guard-*.txt",
+      "rationale": "帧内数值（\"0.500000\" / neg_zero / nested.score）是人选的构造参数，用于锁死数值格式陷阱，非注册表投影",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节（数值格式守卫）",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "matched": 19,
+      "pattern": "sse/golden/*.txt",
+      "rationale": "帧的 payload 取值与字段顺序是人写构造参数；schema 校验面由 channels.json 覆盖",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": null,
+      "matched": 1,
+      "pattern": "sse/README.md",
+      "rationale": "人写的通道清单与判据说明",
+      "requirement": "V0.0.1/DoD#4 台账说明",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": null,
+      "matched": 1,
+      "pattern": "README.md",
+      "rationale": "人写的产物登记与口径说明（含 0.4.8 代码串不得继承的约定）",
+      "requirement": "V0.0.1/DoD#6 版本号联签登记（M-4）",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_migration.py",
+      "matched": 4,
+      "pattern": "conformance/*.yaml",
+      "rationale": "4 个不变量的种子用例是人写的骨架；文件由导出器渲染且 source 行号实测校验",
+      "requirement": "V0.0.1/DoD#8 冻结契约可表达性核查（conformance 骨架，按 applies_to 归属版本）",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_migration.py",
+      "matched": 1,
+      "pattern": "test-migration-map.csv",
+      "rationale": "改判为 manual（team-lead 2026-10-20 裁定：判定依据是「谁产生了这份内容」，不是「内容引用了谁」）：test_id/file/markers 三列虽是 pytest 代码内省，但 bucket 归属、target_version 归属、outcome 与 note 的处置决策全部由人工规则表判定 ⇒ 这张表的实质是人做出的迁移判断；跨方言通用 ⇒ dialect_only=null",
+      "requirement": "V0.0.1/DoD#5 用例映射（collected 1699）",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_migration.py",
+      "matched": 1,
+      "pattern": "test-migration-summary.json",
+      "rationale": "映射表的机器可读统计，与 CSV 同源同次生成，用于复算与审计",
+      "requirement": "DoD#5 口径登记（collected/selected/passed 三口径 + 分布 + 输入输出 sha256）",
+      "source": "metadata"
+    }
+  ],
+  "criteria": [
+    {
+      "artifact": "openapi.v1.frozen.json",
+      "basis": "V0.0.1 计划 §3 DoD#2「100 paths / 134 ops / 116 schemas」",
+      "expected": 100,
+      "id": "C1",
+      "measured": 100,
+      "metric": "openapi.paths",
+      "requirement": "DoD#2",
+      "status": "verified"
+    },
+    {
+      "artifact": "openapi.v1.frozen.json",
+      "basis": "同上（path × method 展开）",
+      "expected": 134,
+      "id": "C2",
+      "measured": 134,
+      "metric": "openapi.operations",
+      "requirement": "DoD#2",
+      "status": "verified"
+    },
+    {
+      "artifact": "openapi.v1.frozen.json",
+      "basis": "同上（components.schemas）",
+      "expected": 116,
+      "id": "C3",
+      "measured": 116,
+      "metric": "openapi.schemas",
+      "requirement": "DoD#2",
+      "status": "verified"
+    },
+    {
+      "artifact": "schema.v0018.pg.normalized.json",
+      "basis": "V0.0.1 计划 §3 DoD#3「metadata 61 表」",
+      "expected": 61,
+      "id": "C4",
+      "measured": 61,
+      "metric": "ddl.tables",
+      "note": "sqlite 侧 = 61",
+      "requirement": "DoD#3",
+      "status": "verified"
+    },
+    {
+      "artifact": "schema.v0018.pg.normalized.json",
+      "basis": "同上（629 列）",
+      "expected": 629,
+      "id": "C5",
+      "measured": 629,
+      "metric": "ddl.columns",
+      "note": "sqlite 侧 = 629",
+      "requirement": "DoD#3",
+      "status": "verified"
+    },
+    {
+      "artifact": "schema.v0018.pg.normalized.json",
+      "basis": "同上（174 metadata 索引）",
+      "expected": 174,
+      "id": "C6",
+      "measured": 174,
+      "metric": "ddl.metadata_indexes",
+      "note": "sqlite 侧 = 174",
+      "requirement": "DoD#3",
+      "status": "verified"
+    },
+    {
+      "artifact": "schema.v0018.pg.normalized.json",
+      "basis": "同上（+ raw hnsw 2，仅 PG：pgvector）",
+      "expected": 2,
+      "id": "C7",
+      "measured": 2,
+      "metric": "ddl.raw_hnsw_indexes",
+      "note": "sqlite 侧 = 0（hnsw 为 PG 专属，合法 dialect_only 差异）",
+      "requirement": "DoD#3",
+      "status": "verified"
+    },
+    {
+      "artifact": "schema.v0018.pg.normalized.json",
+      "basis": "174 metadata + 2 raw hnsw = 176",
+      "expected": 176,
+      "id": "C8",
+      "measured": 176,
+      "metric": "ddl.index_objects_total",
+      "note": "sqlite 侧 = 174（174，无 hnsw）",
+      "requirement": "DoD#3",
+      "status": "verified"
+    },
+    {
+      "artifact": "schema.v0018.sqlite.normalized.json",
+      "basis": "V0.0.1 计划 §3 DoD#3「SQLite FTS5 虚表与 5 影子表」",
+      "expected": {
+        "shadow_table": 5,
+        "trigger": 0,
+        "virtual_table": 1
+      },
+      "id": "C9",
+      "measured": {
+        "shadow_table": 4,
+        "trigger": 3,
+        "virtual_table": 1
+      },
+      "metric": "sqlite.dialect_only_objects",
+      "note": "实测 1 虚表 + 4 影子表 + 3 触发器 = 8 个对象；DoD 的「5 影子表」应为 1 虚表 + 4 影子表的合并口径——因 FTS5 用外部内容表（content='document_chunk'）时不生成 _content 影子表，故影子表只有 config/data/docsize/idx 四个。3 个触发器为 C-03 复做时补入。",
+      "requirement": "DoD#3",
+      "status": "reconciled"
+    },
+    {
+      "artifact": "sse/channels.json",
+      "basis": "V0.0.1 计划 §3 DoD#4「19 条 SSE golden 帧」",
+      "expected": 19,
+      "id": "C10",
+      "measured": 19,
+      "metric": "sse.channels",
+      "note": "by_channel 映射条目 = 19",
+      "requirement": "DoD#4",
+      "status": "verified"
+    },
+    {
+      "artifact": "sse/golden/*.txt",
+      "basis": "同上（逐通道一帧，逐字节判据）",
+      "expected": 19,
+      "id": "C11",
+      "measured": 19,
+      "metric": "sse.golden_frames",
+      "note": "另有守卫夹具 1 个（不计入 19）",
+      "requirement": "DoD#4",
+      "status": "verified"
+    },
+    {
+      "artifact": "sse/channels.json ↔ sse/golden/",
+      "basis": "同上（通道集合 ⊆ golden 帧集合）",
+      "expected": "complete",
+      "id": "C12",
+      "measured": "complete",
+      "metric": "sse.golden_coverage",
+      "requirement": "DoD#4",
+      "status": "verified"
+    },
+    {
+      "artifact": "errors.json",
+      "basis": "总纲 §11.2 错误码表（C-04）",
+      "expected": 30,
+      "id": "C13",
+      "measured": 30,
+      "metric": "errors.codes",
+      "requirement": "总纲 §11.2",
+      "status": "verified"
+    },
+    {
+      "artifact": "envelope.schema.json",
+      "basis": "总纲 §11.1「{code,message,data,request_id}」",
+      "expected": 4,
+      "id": "C14",
+      "measured": 4,
+      "metric": "envelope.shell_keys",
+      "note": "keys=['code', 'data', 'message', 'request_id']",
+      "requirement": "总纲 §11.1",
+      "status": "verified"
+    },
+    {
+      "artifact": "test-migration-map.csv",
+      "basis": "C-06 口径：collected_raw 1743 − provider_live 44 = 1699 selected",
+      "expected": 1699,
+      "id": "C15",
+      "measured": 1699,
+      "metric": "migration_map.rows(collected/selected)",
+      "note": "summary.rows=1699 与 CSV 实测行数一致=True；collected_raw=1743 minus provider_live_excluded=44；header=test_id,file,markers,outcome,bucket,target_module,target_version,note,",
+      "requirement": "DoD#5",
+      "status": "verified"
+    },
+    {
+      "artifact": "test-migration-summary.json",
+      "basis": "V0.0.1 计划 §3 DoD#5「覆盖 1661 条」（passed 口径）；旧线登记 1692 selected = 1661P",
+      "expected": 1661,
+      "id": "C16",
+      "measured": 1668,
+      "metric": "migration_map.passed",
+      "note": "本轮已复跑：outcomes.covered=1699，分布={'passed': 1668, 'skipped': 23, 'xfailed': 8}（合计 1699 = 1699 行）；旧线登记 1661P/1692 selected，本轮 1668P/1699 selected，Δpassed=+7 与 Δselected=+7 同步（新增用例全 passed），非 passed 数 31 vs 旧线 31 ⇒ 差额已解释，按实测登记",
+      "requirement": "DoD#5",
+      "status": "reconciled"
+    },
+    {
+      "artifact": "scripts/extract-from-py/",
+      "basis": "V0.0.1 计划 §3 DoD#7「--source 可配置 + sha256 清单 + --check」",
+      "expected": [
+        "_bootstrap.py",
+        "hashes.py",
+        "run.py",
+        "export_openapi.py"
+      ],
+      "id": "C17",
+      "measured": [
+        "_bootstrap.py",
+        "hashes.py",
+        "run.py",
+        "export_openapi.py"
+      ],
+      "metric": "reproducibility.toolkit",
+      "note": "_bootstrap.resolve_source() 优先级：--source > $WBTIME_SOURCE > 默认值",
+      "requirement": "DoD#7",
+      "status": "verified"
+    },
+    {
+      "artifact": "contracts/",
+      "basis": "同上 + 施工纪律 §4.5.1-2「必须登记 sha256 变更史」",
+      "expected": [
+        "manifest.sha256",
+        "contract-manifest.json"
+      ],
+      "id": "C18",
+      "measured": [
+        "manifest.sha256",
+        "contract-manifest.json"
+      ],
+      "metric": "reproducibility.ledgers",
+      "requirement": "DoD#7",
+      "status": "verified"
+    },
+    {
+      "artifact": "conformance/*.yaml",
+      "basis": "summary.conformance 声明的骨架数 = 落盘文件数",
+      "expected": 4,
+      "id": "C19",
+      "measured": 4,
+      "metric": "conformance.skeletons",
+      "note": "files=['content-negotiation.yaml', 'idempotency.yaml', 'stringly-contracts.yaml', 'tenant-404.yaml']",
+      "requirement": "DoD#8",
+      "status": "verified"
+    },
+    {
+      "artifact": "test-migration-summary.json",
+      "basis": "C-06 自带 artifacts sha256 台账 ↔ 本台账实测值",
+      "expected": "consistent",
+      "id": "C20",
+      "measured": "consistent",
+      "metric": "migration.self_declared_digests",
+      "note": "三重互证：C-06 summary 自带摘要、本 manifest 的对象摘要、manifest.sha256 同值",
+      "requirement": "DoD#5",
+      "status": "verified"
+    },
+    {
+      "artifact": "schema.v0018.{pg,sqlite}.normalized.json",
+      "basis": "M-10「每个对象带 source + dialect_only」；与 C6/C7/C8/C9 交叉",
+      "expected": 245,
+      "id": "C21",
+      "measured": 245,
+      "metric": "ddl_objects.total",
+      "note": "kinds={'table': 61, 'index.metadata': 174, 'index.raw_hnsw': 2, 'virtual_table': 1, 'shadow_table': 4, 'trigger': 3}；交叉：C6 metadata_indexes=174 / C7 raw_hnsw=2 / C8 index_objects_total=176 / C9 sqlite dialect_only=8",
+      "requirement": "M-10",
+      "status": "verified"
+    },
+    {
+      "artifact": "errors.json",
+      "basis": "D-1：`http_status` 是逐 call-site 解析后的多数值；非全量成立时必须显式披露分布与偏离点",
+      "expected": "consistent",
+      "id": "C22",
+      "measured": "consistent",
+      "metric": "errors.http_status_uniformity",
+      "note": "非全量成立的码 = ['DEPENDENCY_MISSING']；分布逐码与 resolved sites 条数一致；逐点明细见 codes.*.http_status_by_call_site_resolved（V0.2.0 参数化测试必须按 call-site 取值）",
+      "requirement": "D-1",
+      "status": "verified"
+    },
+    {
+      "artifact": "test-migration-map.csv + test-migration-summary.json",
+      "basis": "D-2：桶③ 理由必须逐条成立；API 级 fail-closed 断言不得被判放弃",
+      "expected": "auditable",
+      "id": "C23",
+      "measured": "auditable",
+      "metric": "migration.disposition_auditability",
+      "note": "bucket=3 行 3 条，note 两两不同；逐用例覆盖 4 条与表内一致；MUST_NOT_BE_DROPPED=1 条均未被判 ③",
+      "requirement": "D-2",
+      "status": "verified"
+    }
+  ],
+  "ddl_objects": [
+    {
+      "columns": 12,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "agent",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_created_by",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_current_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent",
+      "unique": false
+    },
+    {
+      "columns": 8,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "agent_event",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_event"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_event_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_event",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_event_seq",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_event",
+      "unique": false
+    },
+    {
+      "columns": 8,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "agent_knowledge",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_knowledge"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_knowledge_agent_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_knowledge",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_knowledge_knowledge_base_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_knowledge",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_knowledge_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_knowledge",
+      "unique": false
+    },
+    {
+      "columns": 28,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "agent_run",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_run_agent_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_run_agent_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_run_conversation_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_run_status",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_run_task_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_run_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_run_trace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_run_user_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "uq_agent_run_tenant_idempotency_key",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_run",
+      "unique": true
+    },
+    {
+      "columns": 8,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "agent_skill",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_skill"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_skill_agent_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_skill",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_skill_skill_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_skill",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_skill_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_skill",
+      "unique": false
+    },
+    {
+      "columns": 6,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "agent_tool",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_tool"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_tool_agent_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_tool",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_tool_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_tool",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_tool_tool_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_tool",
+      "unique": false
+    },
+    {
+      "columns": 9,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "agent_version",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_version"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_version_agent_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_version",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_agent_version_created_by",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "agent_version",
+      "unique": false
+    },
+    {
+      "columns": 12,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "approval",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "approval"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_approval_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "approval",
+      "unique": false
+    },
+    {
+      "columns": 21,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "audit_log",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "audit_log"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_audit_log_action",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "audit_log",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_audit_log_request_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "audit_log",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_audit_log_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "audit_log",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_audit_log_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "audit_log",
+      "unique": false
+    },
+    {
+      "columns": 10,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "conversation",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "conversation"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_conversation_agent_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "conversation",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_conversation_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "conversation",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_conversation_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "conversation",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_conversation_user_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "conversation",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_conversation_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "conversation",
+      "unique": false
+    },
+    {
+      "columns": 13,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "credential",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "credential"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_credential_name",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "credential",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_credential_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "credential",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_credential_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "credential",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_credential_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "credential",
+      "unique": false
+    },
+    {
+      "columns": 13,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "document",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "document"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_document_knowledge_base_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "document",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_document_status",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "document",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_document_task_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "document",
+      "unique": false
+    },
+    {
+      "columns": 8,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "document_chunk",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "document_chunk"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_document_chunk_document_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "document_chunk",
+      "unique": false
+    },
+    {
+      "columns": 6,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "embedding",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "embedding"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_embedding_chunk_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "embedding",
+      "unique": false
+    },
+    {
+      "columns": 9,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "evaluation_case",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_case"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_case_dataset_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_case",
+      "unique": false
+    },
+    {
+      "columns": 12,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "evaluation_dataset",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_dataset"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_dataset_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_dataset",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_dataset_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_dataset",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_dataset_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_dataset",
+      "unique": false
+    },
+    {
+      "columns": 12,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "evaluation_result",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_result"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_result_agent_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_result",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_result_case_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_result",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_result_evaluation_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_result",
+      "unique": false
+    },
+    {
+      "columns": 15,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "evaluation_run",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_run"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_run_agent_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_run_agent_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_run_dataset_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_run_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_run_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_evaluation_run_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "evaluation_run",
+      "unique": false
+    },
+    {
+      "columns": 6,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "feature_flag",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "feature_flag"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_feature_flag_name",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "feature_flag",
+      "unique": true
+    },
+    {
+      "columns": 12,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "knowledge_base",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "knowledge_base"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_knowledge_base_created_by",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "knowledge_base",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_knowledge_base_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "knowledge_base",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_knowledge_base_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "knowledge_base",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_knowledge_base_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "knowledge_base",
+      "unique": false
+    },
+    {
+      "columns": 7,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "login_attempt",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "login_attempt"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_login_attempt_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "login_attempt",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_login_attempt_username",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "login_attempt",
+      "unique": false
+    },
+    {
+      "columns": 10,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "mcp_permission",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_permission"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_mcp_permission_agent_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_permission",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_mcp_permission_agent_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_permission",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_mcp_permission_mcp_tool_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_permission",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_mcp_permission_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_permission",
+      "unique": false
+    },
+    {
+      "columns": 15,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "mcp_server",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_server"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_mcp_server_credential_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_server",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_mcp_server_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_server",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_mcp_server_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_server",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_mcp_server_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_server",
+      "unique": false
+    },
+    {
+      "columns": 8,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "mcp_tool",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_tool"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_mcp_tool_mcp_server_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "mcp_tool",
+      "unique": false
+    },
+    {
+      "columns": 8,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "membership",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "membership"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_membership_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "membership",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_membership_role_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "membership",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_membership_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "membership",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_membership_user_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "membership",
+      "unique": false
+    },
+    {
+      "columns": 17,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "memory",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_memory_expires_at",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_memory_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_memory_source_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_memory_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_memory_tenant_scope_kind",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_memory_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory",
+      "unique": false
+    },
+    {
+      "columns": 5,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "memory_relation",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory_relation"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_memory_relation_from_memory_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory_relation",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_memory_relation_to_memory_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "memory_relation",
+      "unique": false
+    },
+    {
+      "columns": 8,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "message",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "message"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_message_conversation_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "message",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_message_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "message",
+      "unique": false
+    },
+    {
+      "columns": 7,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "model",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_model_provider_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model",
+      "unique": false
+    },
+    {
+      "columns": 10,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "model_provider",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model_provider"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_model_provider_credential_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model_provider",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_model_provider_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model_provider",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_model_provider_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model_provider",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_model_provider_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model_provider",
+      "unique": false
+    },
+    {
+      "columns": 7,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "model_provider_credential",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model_provider_credential"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_model_provider_credential_credential_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model_provider_credential",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_model_provider_credential_provider_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "model_provider_credential",
+      "unique": false
+    },
+    {
+      "columns": 6,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "organization",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "organization"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_organization_slug",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "organization",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_organization_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "organization",
+      "unique": false
+    },
+    {
+      "columns": 6,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "permission",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "permission"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_permission_code",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "permission",
+      "unique": true
+    },
+    {
+      "columns": 11,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "plugin",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "plugin"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_plugin_name",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "plugin",
+      "unique": true
+    },
+    {
+      "columns": 12,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "project",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "project"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_project_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "project",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_project_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "project",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_project_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "project",
+      "unique": false
+    },
+    {
+      "columns": 9,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "refresh_token",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "refresh_token"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_refresh_token_session_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "refresh_token",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_refresh_token_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "refresh_token",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_refresh_token_token_hash",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "refresh_token",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_refresh_token_user_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "refresh_token",
+      "unique": false
+    },
+    {
+      "columns": 11,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "resource_permission",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "resource_permission"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_resource_permission_resource",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "resource_permission",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_resource_permission_subject",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "resource_permission",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_resource_permission_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "resource_permission",
+      "unique": false
+    },
+    {
+      "columns": 7,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "role",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "role"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_role_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "role",
+      "unique": false
+    },
+    {
+      "columns": 5,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "role_permission",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "role_permission"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_role_permission_permission_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "role_permission",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_role_permission_role_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "role_permission",
+      "unique": false
+    },
+    {
+      "columns": 11,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "sandbox_session",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "sandbox_session"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_sandbox_session_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "sandbox_session",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_sandbox_session_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "sandbox_session",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_sandbox_session_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "sandbox_session",
+      "unique": false
+    },
+    {
+      "columns": 16,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "schedule",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "schedule"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_schedule_next_run_at",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "schedule",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_schedule_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "schedule",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_schedule_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "schedule",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_schedule_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "schedule",
+      "unique": false
+    },
+    {
+      "columns": 10,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "session",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "session"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_session_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "session",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_session_user_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "session",
+      "unique": false
+    },
+    {
+      "columns": 12,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "skill",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_skill_created_by",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_skill_current_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_skill_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_skill_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill",
+      "unique": false
+    },
+    {
+      "columns": 8,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "skill_resource",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill_resource"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_skill_resource_skill_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill_resource",
+      "unique": false
+    },
+    {
+      "columns": 8,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "skill_version",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill_version"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_skill_version_created_by",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill_version",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_skill_version_skill_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "skill_version",
+      "unique": false
+    },
+    {
+      "columns": 13,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "task",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_task_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_task_status",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_task_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_task_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "uq_task_idempotency_key",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task",
+      "unique": true
+    },
+    {
+      "columns": 17,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "task_execution",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task_execution"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_task_execution_project_started",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task_execution",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_task_execution_task_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task_execution",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "uq_task_execution_checkout_ref",
+      "partial": true,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "task_execution",
+      "unique": true
+    },
+    {
+      "columns": 6,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "tenant",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tenant"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tenant_slug",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tenant",
+      "unique": true
+    },
+    {
+      "columns": 13,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "tool",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_name",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool",
+      "unique": false
+    },
+    {
+      "columns": 16,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "tool_call",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_call"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_call_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_call",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_call_sandbox_session_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_call",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_call_status",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_call",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_call_tool_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_call",
+      "unique": false
+    },
+    {
+      "columns": 10,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "tool_permission",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_permission"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_permission_agent_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_permission",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_permission_agent_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_permission",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_permission_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_permission",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_permission_tool_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_permission",
+      "unique": false
+    },
+    {
+      "columns": 5,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "tool_version",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_version"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_tool_version_tool_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "tool_version",
+      "unique": false
+    },
+    {
+      "columns": 10,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "user",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "user"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_user_email",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "user",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_user_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "user",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_user_username",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "user",
+      "unique": false
+    },
+    {
+      "columns": 11,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "workflow",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_created_by",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_current_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow",
+      "unique": false
+    },
+    {
+      "columns": 6,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "workflow_edge",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_edge"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_edge_workflow_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_edge",
+      "unique": false
+    },
+    {
+      "columns": 7,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "workflow_node",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_node"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_node_workflow_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_node",
+      "unique": false
+    },
+    {
+      "columns": 14,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "workflow_node_run",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_node_run"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_node_run_agent_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_node_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_node_run_approval_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_node_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_node_run_workflow_run_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_node_run",
+      "unique": false
+    },
+    {
+      "columns": 13,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "workflow_run",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_run"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_run_status",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_run_task_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_run_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_run",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_run_workflow_version_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_run",
+      "unique": false
+    },
+    {
+      "columns": 7,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "workflow_version",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_version"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_version_created_by",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_version",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workflow_version_workflow_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workflow_version",
+      "unique": false
+    },
+    {
+      "columns": 10,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "workspace",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workspace"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workspace_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workspace",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workspace_owner_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workspace",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workspace_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workspace",
+      "unique": false
+    },
+    {
+      "columns": 9,
+      "dialect_only": null,
+      "kind": "table",
+      "name": "workspace_environment",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workspace_environment"
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workspace_environment_organization_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workspace_environment",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workspace_environment_tenant_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workspace_environment",
+      "unique": false
+    },
+    {
+      "dialect_only": null,
+      "kind": "index.metadata",
+      "name": "ix_workspace_environment_workspace_id",
+      "partial": false,
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "metadata",
+      "table": "workspace_environment",
+      "unique": false
+    },
+    {
+      "dialect_only": "pg",
+      "kind": "index.raw_hnsw",
+      "name": "ix_embedding_vector_hnsw",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_raw": "migration:migrations/versions/0013_phase2_knowledge.py:293",
+      "table": "embedding"
+    },
+    {
+      "dialect_only": "pg",
+      "kind": "index.raw_hnsw",
+      "name": "ix_memory_vector_hnsw",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_raw": "migration:migrations/versions/0014_phase2_memory.py:195",
+      "table": "memory"
+    },
+    {
+      "dialect_only": "sqlite",
+      "kind": "virtual_table",
+      "name": "document_chunk_fts",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_raw": "sqlite_master（执行 0013 FTS5 语句后回读）",
+      "table": "document_chunk_fts"
+    },
+    {
+      "dialect_only": "sqlite",
+      "kind": "shadow_table",
+      "name": "document_chunk_fts_config",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_note": "影子表无人工书写的 DDL：由 SQLite 在执行迁移 0013 的 FTS5 虚表定义时自动生成；归属其声明来源（migration）而非另有来源",
+      "source_raw": "sqlite_master（执行 0013 FTS5 语句后回读）",
+      "table": "document_chunk_fts_config"
+    },
+    {
+      "dialect_only": "sqlite",
+      "kind": "shadow_table",
+      "name": "document_chunk_fts_data",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_note": "影子表无人工书写的 DDL：由 SQLite 在执行迁移 0013 的 FTS5 虚表定义时自动生成；归属其声明来源（migration）而非另有来源",
+      "source_raw": "sqlite_master（执行 0013 FTS5 语句后回读）",
+      "table": "document_chunk_fts_data"
+    },
+    {
+      "dialect_only": "sqlite",
+      "kind": "shadow_table",
+      "name": "document_chunk_fts_docsize",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_note": "影子表无人工书写的 DDL：由 SQLite 在执行迁移 0013 的 FTS5 虚表定义时自动生成；归属其声明来源（migration）而非另有来源",
+      "source_raw": "sqlite_master（执行 0013 FTS5 语句后回读）",
+      "table": "document_chunk_fts_docsize"
+    },
+    {
+      "dialect_only": "sqlite",
+      "kind": "shadow_table",
+      "name": "document_chunk_fts_idx",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_note": "影子表无人工书写的 DDL：由 SQLite 在执行迁移 0013 的 FTS5 虚表定义时自动生成；归属其声明来源（migration）而非另有来源",
+      "source_raw": "sqlite_master（执行 0013 FTS5 语句后回读）",
+      "table": "document_chunk_fts_idx"
+    },
+    {
+      "dialect_only": "sqlite",
+      "kind": "trigger",
+      "name": "document_chunk_ad",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_raw": "sqlite_master（执行 0013 FTS5 语句后回读）",
+      "table": "document_chunk"
+    },
+    {
+      "dialect_only": "sqlite",
+      "kind": "trigger",
+      "name": "document_chunk_ai",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_raw": "sqlite_master（执行 0013 FTS5 语句后回读）",
+      "table": "document_chunk"
+    },
+    {
+      "dialect_only": "sqlite",
+      "kind": "trigger",
+      "name": "document_chunk_au",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（对象级 source/dialect_only）",
+      "source": "migration",
+      "source_raw": "sqlite_master（执行 0013 FTS5 语句后回读）",
+      "table": "document_chunk"
+    }
+  ],
+  "field_semantics": {
+    "fields": {
+      "dialect_only": {
+        "allowed_inconsistency": "仅当差异确属单方言语义时才允许非 null；合法差异不是遗漏（例如 hnsw 仅 PG）。",
+        "question": "该对象是否方言专属",
+        "values": "pg / sqlite / null（跨方言通用或两侧同构）"
+      },
+      "generated_by": {
+        "allowed_inconsistency": "可以是 exporter，即使 source=manual（人定内容、程序落盘）。",
+        "question": "哪个程序把内容落盘（渲染/编码/序列化）",
+        "values": "exporter 的仓库相对路径；人写且无程序落盘时为 null"
+      },
+      "source": {
+        "allowed_inconsistency": "无。与「内容实际由谁决定」不符即为错误。",
+        "question": "内容事实从哪来（谁决定了内容）",
+        "values": {
+          "manual": "人工定义的内容（人工构造的测试载荷、人工判定的桶/版本归属、人工写的骨架文案与壳层组装）",
+          "metadata": "ORM metadata / 代码模型反射或编译得出的事实",
+          "migration": "迁移链 raw DDL 提取出的事实（hnsw、FTS5 等 metadata 无法表达的部分）"
+        }
+      }
+    },
+    "statement": "`source` 与 `generated_by` 回答的是两个不同问题，两者不同**不构成矛盾**；只有 `source` 与「内容实际由谁决定」不符才是错误。",
+    "worked_examples": [
+      "sse/golden/*.txt: source=manual（载荷值、字段取值、seq 口径由人构造）+ generated_by=export_sse.py（编码器落盘）",
+      "test-migration-map.csv: source=manual（桶/版本/处置由人判定）+ generated_by=export_migration.py（表由脚本渲染）",
+      "openapi.v1.frozen.json: source=metadata（路由/schema 由代码内省）+ generated_by=export_openapi.py",
+      "schema.v0018.pg.normalized.json: source=metadata（主导）+ 内含 2 条 migration 来源对象，见 ddl_objects"
+    ]
+  },
+  "notices": [
+    {
+      "basis": "docs/V1.0/V0.0.1-契约继承与抽取/01-计划/README.md §3 DoD#6；路线图 §1.4 M-4",
+      "id": "M-4",
+      "severity": "binding",
+      "text": "info.version = 0.4.8 是旧线 create_app().openapi() 的**代码串，从未发布**；不得作为 TS 线版本号继承（C-3 / M-4 联签条件）。TS 线版本号自 package.json 的 0.0.1 起算，由发布流程独立决定。"
+    },
+    {
+      "basis": "路线图 M-08；contracts/README.md",
+      "id": "M-08",
+      "severity": "binding",
+      "text": "契约文件的**字节数不可作判据**：同一 OpenAPI spec 随序列化参数在 178,934–510,981 B 间波动。判据只用三集合（100 paths / 134 ops / 116 schemas）+ 规范化 sha256。"
+    },
+    {
+      "basis": "C-07 裁定：产物来源按实质判定（§4.5.1-3）",
+      "id": "derived:endpoints",
+      "severity": "info",
+      "text": "endpoints.txt 的数据行派生自 openapi.v1.frozen.json（METHOD PATH，排序稳定），其分段标题与 134/133 口径文案是人写骨架，故 source=manual 而非 metadata。派生关系：openapi.v1.frozen.json -> endpoints.txt（同一 exporter，同一次运行）。"
+    },
+    {
+      "basis": "team-lead 2026-10-20 裁定（C-03 计数复核）；provenance=ruling，本脚本未复算 224/117/62",
+      "id": "count:405-void",
+      "severity": "binding",
+      "text": "「405 口径作废」：224 + 117 + 62 的分解中，62 已含 2 个 VectorType，再加 +2 属重复计数；本版只认两个权威值——401（PG emit）与 403（声明敏感族）。凡引用 405 的旧表述一律以本条为准。"
+    },
+    {
+      "basis": "schema.v0018.sqlite.normalized.json 的 counts.dialect_only_by_kind 实测",
+      "id": "count:sqlite-dialect-only-8",
+      "severity": "binding",
+      "text": "SQLite 方言专属对象为 8 个（虚表 1 + 影子表 4 + 触发器 3，见 ddl_objects 的 sqlite 段）；**文档「5 影子表」口径作废**——FTS5 在 external-content 模式（content='document_chunk'）下不生成 _content 影子表，故影子表只有 config/data/docsize/idx 四个。判据见 C9（reconciled）。"
+    },
+    {
+      "basis": "施工纪律 §4.8 外部依赖 #1/#2（Windows 本机 pgvector / SSH 隧道均不可得）",
+      "id": "scope:pg-not-replayed",
+      "severity": "binding",
+      "text": "**PG 侧未在真实例重放**（归 V0.1.0 parity 前置，施工纪律 §4.8 #1）。本版 DDL 快照来自 ORM metadata 编译 + 迁移链 raw DDL 提取，**不得表述为「PG 已验证」**；SQLite 侧同理（内存库执行后回读 sqlite_master），两侧均属「静态抽取 + 编译期校验」，不是运行期 parity。"
+    },
+    {
+      "basis": "V0.0.1 计划 §3 DoD#3；C-03 产物自带 counts/notes",
+      "id": "composite:ddl",
+      "severity": "info",
+      "text": "DDL 四件套为**三源合并**产物（metadata 编译 + 迁移链 raw hnsw + SQLite 专属 FTS5），按主导来源归 source=metadata；次要来源的计数见各 normalized 快照的 counts 与 notes 字段，判据核对见 criteria C4–C9。"
+    }
+  ],
+  "objects": [
+    {
+      "dialect_only": null,
+      "generated_by": null,
+      "path": "README.md",
+      "requirement": "V0.0.1/DoD#6 版本号联签登记（M-4）",
+      "sha256": "f4e15d72d690ed653da9414117dd8cbb2fbcdc26af8739382341a9701aa96fe6",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_migration.py",
+      "path": "conformance/content-negotiation.yaml",
+      "requirement": "conformance 骨架（content-negotiation）：V0.1.0, V0.3.0 判据",
+      "sha256": "4df32b0c14a2355b411ecdea3dc262adb37593ab421c7bce2551f4c673a48083",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_migration.py",
+      "path": "conformance/idempotency.yaml",
+      "requirement": "conformance 骨架（idempotency）：V0.1.0, V0.5.0 判据",
+      "sha256": "ba0861e3c95ad2927a993655d2c51b03db2d2be9b498428d3d75a32c439a5551",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_migration.py",
+      "path": "conformance/stringly-contracts.yaml",
+      "requirement": "conformance 骨架（stringly-contracts）：V0.1.0 判据",
+      "sha256": "acfdaf43e565bc92bd13ee39d69f1a845950d489181f3977dd393db7de07d380",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_migration.py",
+      "path": "conformance/tenant-404.yaml",
+      "requirement": "conformance 骨架（tenant-404）：V0.2.0 判据",
+      "sha256": "42bd1e6bb5f7f9c04fb1f667a65aab8512a90e833d06dcdc9427da06e5bdfa8e",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/ddl/gen_type_map.py",
+      "path": "db/type-map.csv",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并（列级类型映射）",
+      "sha256": "c201eed5aefbf8464b38c5eee2a7ada504540947b7fc9982270799c9a739dbba",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_openapi.py",
+      "path": "endpoints.txt",
+      "requirement": "V0.0.1/DoD#2 100 paths·134 ops·116 schemas（134+133 分列口径）",
+      "sha256": "d29fbeafd3af5217b8f1644dc49359744ca7403e7d5eb18ef91503c0b0fa83ae",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_envelope.py",
+      "path": "envelope.schema.json",
+      "requirement": "V0.2.0 响应壳逐字节",
+      "sha256": "6c6759dd138c50ce0ea5c1c57366c205bdd9f54c0f22678ee7a5266a9a24d2ba",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_errors.py",
+      "path": "errors.json",
+      "requirement": "V0.0.1/DoD#6 + V0.2.0 错误码全表参数化",
+      "sha256": "9d2f47b12c68dd6407380d3218748a9496642618b5f80448c8049541ac5723a3",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_openapi.py",
+      "path": "openapi.v1.frozen.json",
+      "requirement": "V0.0.1/DoD#2 100 paths·134 ops·116 schemas",
+      "sha256": "28dd9c152dcb65f15f4b4832563c1601d30ae122496eec5e2432fee4976dfc54",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": "pg",
+      "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
+      "path": "schema.v0018.pg.normalized.json",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并·176 索引对象·双侧快照（PG normalized）",
+      "sha256": "d9cc2746cd5487f89e6a608b3f2999157f0f0697ed24b853914b18e38ef4c0c7",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": "pg",
+      "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
+      "path": "schema.v0018.pg.sql",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并·176 索引对象·双侧快照",
+      "sha256": "7cb4c0535618b4550c9723350bea7bf85d36ab9ce6600d57147a77f658832ff1",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": "sqlite",
+      "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
+      "path": "schema.v0018.sqlite.normalized.json",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并·176 索引对象·双侧快照（SQLite normalized）",
+      "sha256": "7218eafc80f667381474816046372f80f45f1885d4fa940fa292531456e53f7a",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": "sqlite",
+      "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
+      "path": "schema.v0018.sqlite.sql",
+      "requirement": "V0.0.1/DoD#3 DDL 三源合并·176 索引对象·双侧快照（SQLite 含 FTS5）",
+      "sha256": "65ee733d230e224e824e68691f0f20c62ff776f58fca6d594f3f0d5aa0ffeb15",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": null,
+      "path": "sse/README.md",
+      "requirement": "V0.0.1/DoD#4 台账说明",
+      "sha256": "caadddb883a85dcd1b0a6263b854abfd9813c1a9458cff46f7f2230e7cd4737a",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/channels.json",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "db80f7b3bcfdf19880a379520410d83c4e1c593e378d0051dc7099efe8f083b1",
+      "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/_guard-float-normalization.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节（数值格式守卫）",
+      "sha256": "5e88718d569c001d0169c0bfb5b00fa011944a517e1f35f75919043e7cfa395c",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/agent.completed.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "e713717adad0a9e743672058854a31d79f75a823b6c994a1aafa078cdec9ce6d",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/agent.error.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "a0710fea33982eb5482ce92e484bd08b1ee328b7cc0e522dd93f437aed4a413a",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/agent.started.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "bb0069e15c223137836df1b078e886b1de91d91ed84ad6e6b4ca7779630fc482",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/agent.thinking.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "8fc9777a5418a54210d4df73680a8282784d11c4b9db9941db184cc165b6c592",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/approval.decided.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "e7434fb252893b1119c198e8aff0e6d99a4db607bac6e315a9561d4930c2c39e",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/approval.requested.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "d75d1966f91f79580a1a29c79ca600fa6c270dbdae865207a08ec5240ee4448f",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/knowledge.indexed.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "18a93e135c6e590d0ca34e984a827e998faa39dad686a0315458f773f8f2c1a7",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/mcp.completed.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "6816f03bdce1a1713541bb141d03802309e47492ba0225fe10d767e54547ae49",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/mcp.started.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "ef2ea4df41f2c800ebe60e07e9faa9bc24c9676ffd764181f3454131be4d6f52",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/memory.written.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "0e63282ad5b7fd43e2f376a234827c779e131d94b30553338c357f4f945e019d",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/message.delta.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "9c14f455021eb04870af3ae30cad89c5cce8c284124b158d7414282957f180fa",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/skill.resolved.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "7c54b75f560468d722409d92b9d19fe75fb9299b7c1ab33ffba8ca4a6bf19838",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/tool.completed.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "843dd7cc6a030cf39f48842ce5c835dc4fc40071e84ab83531eddeba96ccbc3f",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/tool.started.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "09dd51bafdb1fc161763cf32387b413554ec6b12cebd4230d88f6c1ccc5af9e8",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/workflow.completed.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "92eebb063c1011b2e85b758ed56e919743acca3ebb84babac0a1b2295f052ec5",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/workflow.failed.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "0fd533361af69a9520bc58184d03dfc9f425136faa1dee592919a319357df549",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/workflow.node.completed.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "3ff5cf6e7976bdfa92a11a0864aace6bd1f1b68cb0f89d4ad0e7569b90f8e581",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/workflow.node.started.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "ac85b9bd41ab6cba51ffdeb7d67f60b8c44e5100b7db560545507d38bef9ec85",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_sse.py",
+      "path": "sse/golden/workflow.started.txt",
+      "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
+      "sha256": "4d0bdd8f88168666046638286803e0d0f7d03e516109de4eba086c4e56b38b97",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_migration.py",
+      "path": "test-migration-map.csv",
+      "requirement": "V0.0.1/DoD#5 用例映射（collected 1699）",
+      "sha256": "eb95b086db7eb74a85a8ee6135e004ee63d26db60c14974caae96f84aa3a3599",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": "scripts/extract-from-py/export_migration.py",
+      "path": "test-migration-summary.json",
+      "requirement": "DoD#5 口径登记（collected/selected/passed 三口径 + 分布 + 输入输出 sha256）",
+      "sha256": "af07f021dd9850d10471eb1e803cbcc7594a51c414d003f2e310e8cdfb49cd87",
+      "source": "metadata"
+    }
+  ],
+  "schema": {
+    "ddl_object_count": 245,
+    "field_contract": {
+      "dialect_only": [
+        "pg",
+        "sqlite",
+        null
+      ],
+      "generated_by": "产生该产物的 exporter；人写产物为 null",
+      "path": "相对 contracts/ 的 POSIX 路径",
+      "requirement": "该产物服务的判据（DoD#n / 总纲 §x / M-n）",
+      "sha256": "该文件实际 sha256（64 位十六进制，与 manifest.sha256 逐字节一致）",
+      "source": [
+        "metadata",
+        "migration",
+        "manual"
+      ]
+    },
+    "frozen_contract": "V0.0.1 / C-07",
+    "generated_by": "scripts/extract-from-py/contract_manifest.py",
+    "name": "wbtime-ai contract manifest",
+    "object_count": 38,
+    "version": 1
+  },
+  "status_semantics": {
+    "mismatch": "实测与期望不符，**直接判红**（export 拒绝落盘 / check 退出码 1）",
+    "pending": "产物尚未落盘，判据无法核对；不判红，但在 summary 里列出 id 供收口时复看",
+    "reconciled": "与文档口径不一致，但已判定为文档错误/口径合并；**产物按实测**，差额与理由写在 note 里，不假装相等",
+    "registered": "该值是**登记值**（来自旧线记录或裁定），本轮未复跑、无实测支撑；不得被引用为「已验证」",
+    "verified": "实测值与期望值相等，且实测值由本脚本从产物现读得出"
+  }
+}

@@ -1,0 +1,4 @@
+id: 1
+event: skill.resolved
+data: {"skill_name":"pdf","skill_id":"skill_01","version":"1.0.0","run_id":"run_01"}
+

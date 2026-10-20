@@ -1,0 +1,4 @@
+id: 1
+event: agent.error
+data: {"run_id":"run_01","error_type":"ToolTimeout","error":"upstream returned 502","duration_ms":12}
+

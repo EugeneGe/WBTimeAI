@@ -1,0 +1,536 @@
+{
+  "$comment": "使用 anyOf 而非 oneOf：messageEnvelope 是 successEnvelope 的真子集 （data 恰为 {message: string}），oneOf 会因两个分支同时命中而判失败。",
+  "$defs": {
+    "ErrorResponse": {
+      "description": "统一失败响应壳 ``{code, message, data, request_id}``（总纲 §11.1）。",
+      "properties": {
+        "code": {
+          "description": "统一错误码（ErrorCode 字面值）",
+          "title": "Code",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "description": "附加上下文",
+          "title": "Data",
+          "type": "object"
+        },
+        "message": {
+          "description": "人类可读错误信息",
+          "title": "Message",
+          "type": "string"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "本次请求 request_id（UUIDv7）",
+          "title": "Request Id"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorResponse",
+      "type": "object"
+    },
+    "MessageResponse": {
+      "$comment": "pydantic 模型原样导出。**不会**单独上线：MessageResponse 作为 response_model 时同样被成功壳包裹（见 $defs/messageEnvelope）。",
+      "description": "简单消息响应。",
+      "properties": {
+        "message": {
+          "description": "提示信息",
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "title": "MessageResponse",
+      "type": "object"
+    },
+    "errorEnvelope": {
+      "additionalProperties": false,
+      "description": "失败响应壳（总纲 §11.1）。由 register_exception_handlers 直接产出，**不经过** ResponseShellMiddleware（status >= 400 时 dispatch 提前 return，避免二次包裹）。四顶层键恒在；data 缺省为 {}，request_id 可为 null（值可空，键不可缺）。",
+      "properties": {
+        "code": {
+          "description": "统一错误码（ErrorCode 字面值，字符串）。",
+          "enum": [
+            "UNKNOWN",
+            "INTERNAL_ERROR",
+            "VALIDATION_ERROR",
+            "NOT_FOUND",
+            "METHOD_NOT_ALLOWED",
+            "CONFLICT",
+            "PERMISSION_DENIED",
+            "UNAUTHORIZED",
+            "NOT_IMPLEMENTED",
+            "CONFIGURATION_ERROR",
+            "DEPENDENCY_MISSING",
+            "AUTH_INVALID_CREDENTIALS",
+            "AUTH_TOKEN_EXPIRED",
+            "AUTH_TOKEN_INVALID",
+            "AUTH_TOKEN_REVOKED",
+            "AUTH_ACCOUNT_LOCKED",
+            "TENANT_NOT_FOUND",
+            "USER_NOT_FOUND",
+            "USER_ALREADY_EXISTS",
+            "ORGANIZATION_NOT_FOUND",
+            "WORKSPACE_NOT_FOUND",
+            "TASK_NOT_FOUND",
+            "CREDENTIAL_NOT_FOUND",
+            "RESOURCE_LIMIT_EXCEEDED",
+            "MAX_ITERATIONS",
+            "CONTEXT_LENGTH_EXCEEDED",
+            "TOOL_TIMEOUT",
+            "IDEMPOTENCY_KEY_REUSE",
+            "HEARTBEAT_TIMEOUT",
+            "EVENT_CURSOR_EXPIRED"
+          ],
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/$defs/ErrorResponse/properties/data"
+        },
+        "message": {
+          "description": "人类可读错误信息（非空字符串，可能为中文）。",
+          "type": "string"
+        },
+        "request_id": {
+          "description": "本次请求 request_id。与响应头 X-Request-Id 同源（「响应体 == 响应头」）。UUIDv7（RFC 9562），由 wbtime_ai_core.id.generate_id 生成；**键恒在**（值可为 null），实测 4/4 探针用例满足 body.request_id == header。",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "data",
+        "message",
+        "request_id"
+      ],
+      "source": "measured:apps/api/src/wbtime_ai_api/errors.py",
+      "type": "object"
+    },
+    "messageEnvelope": {
+      "additionalProperties": false,
+      "description": "**简单消息壳**（MessageResponse）在线上被成功壳包住，因此裸 MessageResponse 不会单独出现在线上；线上形态为 {code: 0, message: \"ok\", data: {message: <str>}, request_id}。注意 message 出现了两次且语义不同：外层恒为 \"ok\"，内层是业务提示语。",
+      "properties": {
+        "code": {
+          "const": 0,
+          "type": "integer"
+        },
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "message": {
+              "description": "提示信息",
+              "type": "string"
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "type": "object"
+        },
+        "message": {
+          "const": "ok",
+          "type": "string"
+        },
+        "request_id": {
+          "description": "本次请求 request_id。与响应头 X-Request-Id 同源（「响应体 == 响应头」）。UUIDv7（RFC 9562），由 wbtime_ai_core.id.generate_id 生成；**键恒在**（值可为 null），实测 4/4 探针用例满足 body.request_id == header。",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "data",
+        "message",
+        "request_id"
+      ],
+      "source": "measured:pydantic MessageResponse + response shell",
+      "type": "object"
+    },
+    "successBody": {
+      "anyOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "array"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "成功壳 data 成员的内容：裸业务对象，无统一外壳。实测依据：116 个 components.schemas 中**没有**任何泛型 {data} 包装模型，2xx 响应直接 $ref 业务模型（AgentResponse / WorkspaceResponse / …）。",
+      "source": "measured:contracts/openapi.v1.frozen.json"
+    },
+    "successEnvelope": {
+      "additionalProperties": false,
+      "description": "成功响应壳（总纲 §11.1）。由 ResponseShellMiddleware 套在**成功的 application/json** 响应外层。四顶层键恒在（实测 4/4）。注意 code 为**整数** 0，与失败壳的**字符串**错误码不同型。",
+      "properties": {
+        "code": {
+          "const": 0,
+          "description": "成功恒为整数 0（_SUCCESS_CODE）。",
+          "type": "integer"
+        },
+        "data": {
+          "$ref": "#/$defs/successBody",
+          "description": "**裸业务对象**：原始响应体的 JSON 解码值（对象 / 数组 / 标量 / null），**没有**二级 {data: ...} 外壳。字段结构见 openapi.v1.frozen.json 的 components.schemas。"
+        },
+        "message": {
+          "const": "ok",
+          "description": "成功恒为 \"ok\"（_SUCCESS_MESSAGE）。",
+          "type": "string"
+        },
+        "request_id": {
+          "description": "本次请求 request_id。与响应头 X-Request-Id 同源（「响应体 == 响应头」）。UUIDv7（RFC 9562），由 wbtime_ai_core.id.generate_id 生成；**键恒在**（值可为 null），实测 4/4 探针用例满足 body.request_id == header。",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "data",
+        "message",
+        "request_id"
+      ],
+      "source": "measured:apps/api/src/wbtime_ai_api/middleware/response_shell.py",
+      "type": "object"
+    }
+  },
+  "$id": "https://wbtimeai.local/contracts/envelope.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/errorEnvelope"
+    },
+    {
+      "$ref": "#/$defs/messageEnvelope"
+    },
+    {
+      "$ref": "#/$defs/successEnvelope"
+    }
+  ],
+  "description": "WBTimeAI API v1 响应壳契约（冻结）。成功壳 code=0(integer)/message=\"ok\"，data=裸业务对象；失败壳 code=ErrorCode(string)/message=可读信息，data 缺省 {}。两者共享同一组四顶层键，但 code 的类型不同。**生效方式**（路由返回裸对象 → 中间件套壳；失败壳由异常处理器直出）见 x-wbtimeai.enforcement。",
+  "title": "WBTimeAI v1 unified response envelope",
+  "x-wbtimeai": {
+    "contract_version": 2,
+    "enforcement": {
+      "error_shell": {
+        "bypasses_middleware": "ResponseShellMiddleware.dispatch 在 status_code >= 400 时直接 return response，因此失败壳不会被二次包裹。",
+        "code_resolution": "code 取 ErrorCode 字面值（字符串），与成功壳的整数 0 不同型。",
+        "produced_by": [
+          {
+            "covers": "DomainError 及其子类（WBTimeAIError / NotFoundError / …）",
+            "data": "exc.to_dict()['data']（通常 {}，可带上下文）",
+            "handler": "errors.py::_domain_error_handler",
+            "status_rule": "_STATUS_BY_CODE.get(exc.code, exc.status_code)"
+          },
+          {
+            "covers": "fastapi.exceptions.RequestValidationError",
+            "data": "{errors: [...]}（实测：jsonable_encoder(exc.errors())）",
+            "handler": "errors.py::_validation_error_handler",
+            "status_rule": "恒 422"
+          },
+          {
+            "covers": "starlette HTTPException（框架层 404 / 405 等）",
+            "data": "{}",
+            "handler": "errors.py::_http_exception_handler",
+            "status_rule": "原样保留 exc.status_code"
+          },
+          {
+            "covers": "未捕获的 Exception",
+            "data": "{}",
+            "handler": "errors.py::_unhandled_exception_handler",
+            "status_rule": "恒 500"
+          }
+        ]
+      },
+      "field_invariance": {
+        "always_present": [
+          "code",
+          "data",
+          "message",
+          "request_id"
+        ],
+        "code_type_by_outcome": {
+          "failure": "string（ErrorCode 字面值，30 种）",
+          "note": "**不得**在 TS 侧用同一个类型同时表达两种结果，必须按 status 分支判别。",
+          "success": "integer 0"
+        },
+        "data": {
+          "failure_default": {},
+          "key_always_present": true,
+          "may_carry_context": true,
+          "measured_examples": [
+            "404 → {}",
+            "422 → {\"errors\": [ ... ]}",
+            "DEPENDENCY_MISSING(503) → {\"capability\": \"remote_tasks\"}"
+          ]
+        },
+        "message": {
+          "failure": "人类可读文本，可能为中文",
+          "success": "恒为 \"ok\""
+        },
+        "request_id": {
+          "equals_response_header": true,
+          "evidence": "errors.py::_payload 与 _domain_error_handler 都无条件写 request_id 键；实测 4/4 探针相等。",
+          "key_always_present": true,
+          "value_may_be_null": true
+        },
+        "top_level_key_count": 4
+      },
+      "legacy_test_evidence": [
+        {
+          "asserts": "set(body) >= {'code','message','data','request_id'}",
+          "note": "该 helper 在该文件被调用 4 次，覆盖 /projects、/workspaces/{id}/files|environment、/approvals、/tasks 四个路由族。",
+          "test": "tests/integration/test_api_2c_surface.py::_assert_shell"
+        },
+        {
+          "asserts": "client.post('/api/v1/workspaces') → 201，再取 _shell_data(created)['id']",
+          "note": "业务对象 id 位于 data 之内 ⇒ 业务响应确实被套壳，而不是裸对象。",
+          "test": "tests/integration/test_api_2c_surface.py::_create_workspace"
+        },
+        {
+          "asserts": "status_code == 503 且 json()['code'] == 'DEPENDENCY_MISSING'",
+          "note": "失败壳字段与状态码的联合断言；也是 errors.json 中该码取 503 的依据。",
+          "test": "tests/integration/test_api_2c_surface.py::test_workspace_files_503_when_unassembled"
+        },
+        {
+          "asserts": "_is_success_shell 真值表 + 真实中间件行为（非壳→套壳、已壳→原样透传）",
+          "note": "证明「已是壳」判定是**值判定**（code==0 且 message=='ok' 且含 data 且含 request_id），不是只看键是否存在。",
+          "test": "tests/unit/test_response_shell_value_judgement.py"
+        }
+      ],
+      "middleware_stack": {
+        "note": "Starlette 的 add_middleware 是**后加者更靠外**：RequestContextMiddleware 先加（更内层），ResponseShellMiddleware 后加（更外层）。main.py 注释原文：「先加 → 更内层；其响应头供外层『响应壳中间件』复用（体 == 头）」。因此壳里的 request_id 优先取响应头 X-Request-Id。",
+        "outermost_first": [
+          "CORSMiddleware",
+          "ResponseShellMiddleware",
+          "RequestContextMiddleware"
+        ],
+        "source": "read:apps/api/src/wbtime_ai_api/main.py:40-46,66"
+      },
+      "source": "manual+measured",
+      "success_wrap": {
+        "note": "这是对「成功响应是裸业务对象」这一常见误解的直接纠正：裸对象只是**路由返回值**，客户端看到的是壳。",
+        "produced_by": "ResponseShellMiddleware.dispatch → _wrap_success_json",
+        "router_returns_bare_object": true,
+        "router_samples": [
+          {
+            "cite": "apps/api/src/wbtime_ai_api/routers/v1/agents.py:112,130",
+            "family": "agents",
+            "operation": "POST /api/v1/agents",
+            "response_model": "AgentResponse",
+            "router_returns": "return _to_agent_response(dto)",
+            "success_status": 201,
+            "wire_body": "{\"code\": 0, \"message\": \"ok\", \"data\": <上面 response_model 的实例>, \"request_id\": \"<X-Request-Id>\"}"
+          },
+          {
+            "cite": "apps/api/src/wbtime_ai_api/routers/v1/agents.py:133,143",
+            "family": "agents (list → data 为数组)",
+            "operation": "GET /api/v1/agents",
+            "response_model": "array<AgentResponse>",
+            "router_returns": "return [_to_agent_response(dto) for dto in _paginate(dtos, page, page_size)]",
+            "success_status": 200,
+            "wire_body": "{\"code\": 0, \"message\": \"ok\", \"data\": <上面 response_model 的实例>, \"request_id\": \"<X-Request-Id>\"}"
+          },
+          {
+            "cite": "apps/api/src/wbtime_ai_api/routers/v1/workspaces.py:55,73",
+            "family": "workspaces",
+            "operation": "POST /api/v1/workspaces",
+            "response_model": "WorkspaceResponse",
+            "router_returns": "return _to_response(dto)",
+            "success_status": 201,
+            "wire_body": "{\"code\": 0, \"message\": \"ok\", \"data\": <上面 response_model 的实例>, \"request_id\": \"<X-Request-Id>\"}"
+          },
+          {
+            "cite": "apps/api/src/wbtime_ai_api/routers/v1/runs.py:36",
+            "family": "runs",
+            "operation": "GET /api/v1/runs/{run_id}",
+            "response_model": "RunResponse",
+            "router_returns": "return _to_run_response(dto)",
+            "success_status": 200,
+            "wire_body": "{\"code\": 0, \"message\": \"ok\", \"data\": <上面 response_model 的实例>, \"request_id\": \"<X-Request-Id>\"}"
+          }
+        ],
+        "trigger": "status_code < 400 且 content-type 含 application/json 且 path ∉ _SKIP_PATHS 且 body 非空 且 非「已是成功壳」",
+        "wire_equals": "{code: 0, message: \"ok\", data: <response_model 实例>, request_id: <响应头 X-Request-Id>}"
+      },
+      "summary": "响应壳**在中间件层生效**，不在路由层。路由声明 response_model=<业务模型> 并直接 return 业务对象；ResponseShellMiddleware 在外层把该对象放进 data 并补 code=0/message=\"ok\"/request_id。失败响应则由异常处理器直接产出，完全绕过中间件。"
+    },
+    "generated_by": "scripts/extract-from-py/export_envelope.py",
+    "measured": {
+      "error_code_count": 30,
+      "error_required_fields": [
+        "code",
+        "message"
+      ],
+      "router_samples_checked": 4,
+      "shell_keys": [
+        "code",
+        "data",
+        "message",
+        "request_id"
+      ],
+      "success_code": 0,
+      "success_message": "ok"
+    },
+    "not_wrapped": {
+      "cases": [
+        {
+          "case": "failure",
+          "condition": "status_code >= 400",
+          "note": "已由异常处理器产出四字段壳；中间件跳过，避免二次包裹。"
+        },
+        {
+          "case": "sse",
+          "condition": "content-type 含 text/event-stream",
+          "note": "§11.1 例外；request_id / trace_id 仅经响应头下发。帧契约见 sse/channels.json。"
+        },
+        {
+          "case": "non_json",
+          "condition": "content-type 不含 application/json",
+          "note": "例如 /metrics 的 text/plain。"
+        },
+        {
+          "case": "framework_path",
+          "condition": "path ∈ ['/openapi.json']",
+          "note": "供 Swagger / Redoc 消费，不得套壳。"
+        },
+        {
+          "case": "already_shell",
+          "condition": "code == 0 且 message == \"ok\" 且含 data 与 request_id",
+          "note": "幂等（值判定，非键判定）：命中即原样返回，不二次包裹。"
+        },
+        {
+          "case": "empty_body",
+          "condition": "body == b\"\"",
+          "note": "204 等空体响应只保留状态码与响应头。"
+        }
+      ],
+      "description": "下列响应**不套壳**（原样返回），任何 TS 侧的统一解包逻辑都必须先排除它们。"
+    },
+    "provenance": {
+      "ErrorResponse": "pydantic:apps/api/src/wbtime_ai_api/schemas/common.py",
+      "MessageResponse": "pydantic:apps/api/src/wbtime_ai_api/schemas/common.py",
+      "enforcement": "manual+measured:main.py + routers/v1/*.py + errors.py + 旧仓测试",
+      "errorEnvelope": "manual+measured:errors.py",
+      "messageEnvelope": "manual+measured:pydantic+middleware",
+      "successBody": "manual+measured:contracts/openapi.v1.frozen.json",
+      "successEnvelope": "manual+measured:middleware/response_shell.py"
+    },
+    "runtime_probe": {
+      "available": true,
+      "cases": {
+        "framework_404": {
+          "field_types": {
+            "code": "string",
+            "data": "object",
+            "message": "string",
+            "request_id": "string"
+          },
+          "is_unified_shell": true,
+          "json": true,
+          "method": "GET",
+          "path": "/api/v1/__wbtime_contract_probe__",
+          "request_id_equals_header": true,
+          "status": 404,
+          "top_level_keys": [
+            "code",
+            "data",
+            "message",
+            "request_id"
+          ]
+        },
+        "framework_405": {
+          "field_types": {
+            "code": "string",
+            "data": "object",
+            "message": "string",
+            "request_id": "string"
+          },
+          "is_unified_shell": true,
+          "json": true,
+          "method": "DELETE",
+          "path": "/health",
+          "request_id_equals_header": true,
+          "status": 405,
+          "top_level_keys": [
+            "code",
+            "data",
+            "message",
+            "request_id"
+          ]
+        },
+        "success_json": {
+          "field_types": {
+            "code": "integer",
+            "data": "object",
+            "message": "string",
+            "request_id": "string"
+          },
+          "is_unified_shell": true,
+          "json": true,
+          "method": "GET",
+          "path": "/health",
+          "request_id_equals_header": true,
+          "status": 200,
+          "top_level_keys": [
+            "code",
+            "data",
+            "message",
+            "request_id"
+          ]
+        },
+        "unauthenticated_401": {
+          "field_types": {
+            "code": "string",
+            "data": "object",
+            "message": "string",
+            "request_id": "string"
+          },
+          "is_unified_shell": true,
+          "json": true,
+          "method": "GET",
+          "path": "/api/v1/users/me",
+          "request_id_equals_header": true,
+          "status": 401,
+          "top_level_keys": [
+            "code",
+            "data",
+            "message",
+            "request_id"
+          ]
+        }
+      }
+    },
+    "schema_kind": "response-envelope",
+    "source": "D:/WBT/WBTimeAI_old"
+  }
+}

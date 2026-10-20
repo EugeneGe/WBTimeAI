@@ -1,0 +1,4 @@
+id: 1
+event: memory.written
+data: {"memory_id":"mem_01","scope":"run","key":"favorite_color"}
+

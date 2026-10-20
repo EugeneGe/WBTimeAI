@@ -1,0 +1,4132 @@
+{
+  "codes": {
+    "AUTH_ACCOUNT_LOCKED": {
+      "code": "AUTH_ACCOUNT_LOCKED",
+      "description": "账号已锁定。",
+      "description_source": "manual",
+      "enum_index": 15,
+      "enum_name": "AUTH_ACCOUNT_LOCKED",
+      "exception_docstring": null,
+      "http_status": 423,
+      "http_status_by_api_map": 423,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 423,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/login_guard.py",
+          "line": 100,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "423": 1
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 1,
+      "raise_site_modules": [
+        "packages/security/src/wbtime_ai_security/login_guard.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "AUTH_INVALID_CREDENTIALS": {
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "description": "登录凭证（用户名 / 密码等）错误。",
+      "description_source": "manual",
+      "enum_index": 11,
+      "enum_name": "AUTH_INVALID_CREDENTIALS",
+      "exception_docstring": null,
+      "http_status": 401,
+      "http_status_by_api_map": 401,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/auth_service.py",
+          "line": 139,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/auth_service.py",
+          "line": 141,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "401": 2
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 2,
+      "raise_site_modules": [
+        "packages/application/src/wbtime_ai_application/services/auth_service.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "AUTH_TOKEN_EXPIRED": {
+      "code": "AUTH_TOKEN_EXPIRED",
+      "description": "访问令牌已过期。",
+      "description_source": "manual",
+      "enum_index": 12,
+      "enum_name": "AUTH_TOKEN_EXPIRED",
+      "exception_docstring": null,
+      "http_status": 401,
+      "http_status_by_api_map": 401,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/jwt.py",
+          "line": 145,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "401": 1
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 1,
+      "raise_site_modules": [
+        "packages/security/src/wbtime_ai_security/jwt.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "AUTH_TOKEN_INVALID": {
+      "code": "AUTH_TOKEN_INVALID",
+      "description": "访问令牌非法（签名 / 格式错误）。",
+      "description_source": "manual",
+      "enum_index": 13,
+      "enum_name": "AUTH_TOKEN_INVALID",
+      "exception_docstring": null,
+      "http_status": 401,
+      "http_status_by_api_map": 401,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/jwt.py",
+          "line": 151,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/jwt.py",
+          "line": 147,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/session.py",
+          "line": 142,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "401": 3
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 3,
+      "raise_site_modules": [
+        "packages/security/src/wbtime_ai_security/jwt.py",
+        "packages/security/src/wbtime_ai_security/session.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "AUTH_TOKEN_REVOKED": {
+      "code": "AUTH_TOKEN_REVOKED",
+      "description": "访问令牌已撤销。",
+      "description_source": "manual",
+      "enum_index": 14,
+      "enum_name": "AUTH_TOKEN_REVOKED",
+      "exception_docstring": null,
+      "http_status": 401,
+      "http_status_by_api_map": 401,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/session.py",
+          "line": 144,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/session.py",
+          "line": 149,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "401": 2
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 2,
+      "raise_site_modules": [
+        "packages/security/src/wbtime_ai_security/session.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "CONFIGURATION_ERROR": {
+      "code": "CONFIGURATION_ERROR",
+      "description": "配置非法或缺失。",
+      "description_source": "manual",
+      "enum_index": 9,
+      "enum_name": "CONFIGURATION_ERROR",
+      "exception_docstring": null,
+      "http_status": 422,
+      "http_status_by_api_map": 422,
+      "http_status_by_call_site": [
+        422
+      ],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/settings_service.py",
+          "line": 72,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 418,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 441,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 500,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/config/src/wbtime_ai_config/providers.py",
+          "line": 527,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/config/src/wbtime_ai_config/providers.py",
+          "line": 163,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/config/src/wbtime_ai_config/providers.py",
+          "line": 236,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/config/src/wbtime_ai_config/providers.py",
+          "line": 519,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/config/src/wbtime_ai_config/providers.py",
+          "line": 172,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/config/src/wbtime_ai_config/providers.py",
+          "line": 180,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/database/src/wbtime_ai_database/maintenance/vacuum.py",
+          "line": 79,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/index_task.py",
+          "line": 202,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/registry.py",
+          "line": 54,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/router.py",
+          "line": 128,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/router.py",
+          "line": 101,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/catalog_service.py",
+          "line": 216,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/provider_resolver.py",
+          "line": 241,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/provider_runtime.py",
+          "line": 73,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/publish.py",
+          "line": 194,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/reference/agent_executor.py",
+          "line": 37,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/reference/model_gateway.py",
+          "line": 23,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/registry.py",
+          "line": 50,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/sandbox/src/wbtime_ai_sandbox/factory.py",
+          "line": 100,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/sandbox/src/wbtime_ai_sandbox/factory.py",
+          "line": 91,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/constants.py",
+          "line": 42,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/constants.py",
+          "line": 48,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/credential_service.py",
+          "line": 333,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/crypto.py",
+          "line": 42,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/secret_provider.py",
+          "line": 86,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/errors.py",
+          "line": 53,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/errors.py",
+          "line": 58,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/ports.py",
+          "line": 72,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/runtime_bridge.py",
+          "line": 95,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/runtime_bridge.py",
+          "line": 156,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/runtime_bridge.py",
+          "line": 180,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+          "line": 442,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/base.py",
+          "line": 124,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/human_approval.py",
+          "line": 79,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/loop.py",
+          "line": 57,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/parallel.py",
+          "line": 64,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/inline.py",
+          "line": 378,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/queued.py",
+          "line": 169,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/queued.py",
+          "line": 175,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/queued.py",
+          "line": 206,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/queued.py",
+          "line": 258,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": 422,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 673,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/project_service.py",
+          "line": 216,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/project_service.py",
+          "line": 268,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 244,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 251,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 257,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/cli/src/wbtime_ai_cli/commands/data.py",
+          "line": 76,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/cli/src/wbtime_ai_cli/commands/data.py",
+          "line": 83,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "422": 53
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 53,
+      "raise_site_modules": [
+        "apps/cli/src/wbtime_ai_cli/commands/data.py",
+        "packages/application/src/wbtime_ai_application/services/settings_service.py",
+        "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+        "packages/config/src/wbtime_ai_config/providers.py",
+        "packages/database/src/wbtime_ai_database/maintenance/vacuum.py",
+        "packages/knowledge/src/wbtime_ai_knowledge/index_task.py",
+        "packages/model/src/wbtime_ai_model/registry.py",
+        "packages/model/src/wbtime_ai_model/router.py",
+        "packages/model/src/wbtime_ai_model/services/catalog_service.py",
+        "packages/model/src/wbtime_ai_model/services/provider_resolver.py",
+        "packages/model/src/wbtime_ai_model/services/provider_runtime.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/publish.py",
+        "packages/plugin/src/wbtime_ai_plugin/reference/agent_executor.py",
+        "packages/plugin/src/wbtime_ai_plugin/reference/model_gateway.py",
+        "packages/plugin/src/wbtime_ai_plugin/registry.py",
+        "packages/sandbox/src/wbtime_ai_sandbox/factory.py",
+        "packages/security/src/wbtime_ai_security/constants.py",
+        "packages/security/src/wbtime_ai_security/credential_service.py",
+        "packages/security/src/wbtime_ai_security/crypto.py",
+        "packages/security/src/wbtime_ai_security/secret_provider.py",
+        "packages/tool/src/wbtime_ai_tool/errors.py",
+        "packages/workflow/src/wbtime_ai_workflow/engine/ports.py",
+        "packages/workflow/src/wbtime_ai_workflow/engine/runtime_bridge.py",
+        "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/base.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/human_approval.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/loop.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/parallel.py",
+        "packages/workflow/src/wbtime_ai_workflow/run/inline.py",
+        "packages/workflow/src/wbtime_ai_workflow/run/queued.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/project_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/environment.py"
+      ],
+      "status_code_overrides": [
+        {
+          "line": 673,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        }
+      ],
+      "unmapped": false
+    },
+    "CONFLICT": {
+      "code": "CONFLICT",
+      "description": "资源状态冲突（版本、唯一性等）。",
+      "description_source": "manual",
+      "enum_index": 5,
+      "enum_name": "CONFLICT",
+      "exception_docstring": "资源冲突（HTTP 409）。",
+      "http_status": 409,
+      "http_status_by_api_map": 409,
+      "http_status_by_call_site": [
+        409
+      ],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/evaluation.py",
+          "line": 206,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/evaluation.py",
+          "line": 295,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/evaluation.py",
+          "line": 222,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/knowledge_service.py",
+          "line": 132,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/knowledge_service.py",
+          "line": 176,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/marketplace.py",
+          "line": 197,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 132,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 219,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/database/src/wbtime_ai_database/repositories/schedule_repository.py",
+          "line": 57,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/mcp/src/wbtime_ai_mcp/registry.py",
+          "line": 64,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/pricing/catalog.py",
+          "line": 85,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/pricing/catalog.py",
+          "line": 97,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/registry.py",
+          "line": 33,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/cli_extension.py",
+          "line": 85,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/import_.py",
+          "line": 104,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/index.py",
+          "line": 49,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/publish.py",
+          "line": 64,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/registry.py",
+          "line": 104,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": 409,
+          "file": "packages/runtime/src/wbtime_ai_runtime/errors.py",
+          "line": 52,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/skill/src/wbtime_ai_skill/domain/entities.py",
+          "line": 162,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/skill/src/wbtime_ai_skill/domain/entities.py",
+          "line": 184,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/skill/src/wbtime_ai_skill/domain/entities.py",
+          "line": 198,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/skill/src/wbtime_ai_skill/registry.py",
+          "line": 122,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/skill/src/wbtime_ai_skill/repositories/sql.py",
+          "line": 184,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/registry.py",
+          "line": 37,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/domain/entities.py",
+          "line": 301,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/repositories/sql.py",
+          "line": 190,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": 409,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 504,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": 409,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 547,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": 409,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 555,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": 409,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 404,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/project_storage.py",
+          "line": 101,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": 409,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/approvals.py",
+          "line": 76,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/mcp.py",
+          "line": 114,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/plugins.py",
+          "line": 60,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/skills.py",
+          "line": 95,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/skills.py",
+          "line": 173,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/skills.py",
+          "line": 226,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "apps/cli/src/wbtime_ai_cli/registry.py",
+          "line": 68,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": 409,
+      "http_status_default_without_override": 409,
+      "http_status_distribution": {
+        "409": 39
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": "ConflictError",
+      "python_exception_module": "wbtime_ai_core.exception",
+      "python_exception_unmapped": false,
+      "raise_site_count": 39,
+      "raise_site_modules": [
+        "apps/api/src/wbtime_ai_api/routers/v1/approvals.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/mcp.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/plugins.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/skills.py",
+        "apps/cli/src/wbtime_ai_cli/registry.py",
+        "packages/application/src/wbtime_ai_application/services/evaluation.py",
+        "packages/application/src/wbtime_ai_application/services/knowledge_service.py",
+        "packages/application/src/wbtime_ai_application/services/marketplace.py",
+        "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+        "packages/database/src/wbtime_ai_database/repositories/schedule_repository.py",
+        "packages/mcp/src/wbtime_ai_mcp/registry.py",
+        "packages/model/src/wbtime_ai_model/pricing/catalog.py",
+        "packages/model/src/wbtime_ai_model/registry.py",
+        "packages/plugin/src/wbtime_ai_plugin/cli_extension.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/import_.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/index.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/publish.py",
+        "packages/plugin/src/wbtime_ai_plugin/registry.py",
+        "packages/runtime/src/wbtime_ai_runtime/errors.py",
+        "packages/skill/src/wbtime_ai_skill/domain/entities.py",
+        "packages/skill/src/wbtime_ai_skill/registry.py",
+        "packages/skill/src/wbtime_ai_skill/repositories/sql.py",
+        "packages/tool/src/wbtime_ai_tool/registry.py",
+        "packages/workflow/src/wbtime_ai_workflow/domain/entities.py",
+        "packages/workflow/src/wbtime_ai_workflow/repositories/sql.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/project_storage.py"
+      ],
+      "status_code_overrides": [
+        {
+          "line": 52,
+          "module": "packages/runtime/src/wbtime_ai_runtime/errors.py"
+        },
+        {
+          "line": 504,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        },
+        {
+          "line": 547,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        },
+        {
+          "line": 555,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        },
+        {
+          "line": 404,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        },
+        {
+          "line": 76,
+          "module": "apps/api/src/wbtime_ai_api/routers/v1/approvals.py"
+        }
+      ],
+      "unmapped": false
+    },
+    "CONTEXT_LENGTH_EXCEEDED": {
+      "code": "CONTEXT_LENGTH_EXCEEDED",
+      "description": "上下文长度超出模型窗口。",
+      "description_source": "manual",
+      "enum_index": 25,
+      "enum_name": "CONTEXT_LENGTH_EXCEEDED",
+      "exception_docstring": null,
+      "http_status": 422,
+      "http_status_by_api_map": 422,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/runtime/src/wbtime_ai_runtime/errors.py",
+          "line": 34,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "422": 1
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 1,
+      "raise_site_modules": [
+        "packages/runtime/src/wbtime_ai_runtime/errors.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "CREDENTIAL_NOT_FOUND": {
+      "code": "CREDENTIAL_NOT_FOUND",
+      "description": "凭证记录不存在。",
+      "description_source": "manual",
+      "enum_index": 22,
+      "enum_name": "CREDENTIAL_NOT_FOUND",
+      "exception_docstring": null,
+      "http_status": 404,
+      "http_status_by_api_map": 404,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/credential_service.py",
+          "line": 444,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/credential_service.py",
+          "line": 189,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "404": 2
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 2,
+      "raise_site_modules": [
+        "packages/security/src/wbtime_ai_security/credential_service.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "DEPENDENCY_MISSING": {
+      "code": "DEPENDENCY_MISSING",
+      "description": "可选依赖 / 能力未装配；非静默降级，须显式上报。状态由 call-site 决定：8 处显式 503，2 处未传 status_code 的构造点回落 500（见 http_status_uniform=false）。",
+      "description_source": "manual",
+      "enum_index": 10,
+      "enum_name": "DEPENDENCY_MISSING",
+      "exception_docstring": null,
+      "http_status": 503,
+      "http_status_by_api_map": null,
+      "http_status_by_call_site": [
+        503
+      ],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/parser/base.py",
+          "line": 66,
+          "status_origin": "domain_error_default"
+        },
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/serialize.py",
+          "line": 50,
+          "status_origin": "domain_error_default"
+        },
+        {
+          "actual_status": 503,
+          "declared_status_code": 503,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 648,
+          "status_origin": "call_site_explicit"
+        },
+        {
+          "actual_status": 503,
+          "declared_status_code": 503,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 759,
+          "status_origin": "call_site_explicit"
+        },
+        {
+          "actual_status": 503,
+          "declared_status_code": 503,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 778,
+          "status_origin": "call_site_explicit"
+        },
+        {
+          "actual_status": 503,
+          "declared_status_code": 503,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1258,
+          "status_origin": "call_site_explicit"
+        },
+        {
+          "actual_status": 503,
+          "declared_status_code": 503,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/projects.py",
+          "line": 77,
+          "status_origin": "call_site_explicit"
+        },
+        {
+          "actual_status": 503,
+          "declared_status_code": 503,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/projects.py",
+          "line": 143,
+          "status_origin": "call_site_explicit"
+        },
+        {
+          "actual_status": 503,
+          "declared_status_code": 503,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/tasks.py",
+          "line": 173,
+          "status_origin": "call_site_explicit"
+        },
+        {
+          "actual_status": 503,
+          "declared_status_code": 503,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/tasks.py",
+          "line": 186,
+          "status_origin": "call_site_explicit"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "500": 2,
+        "503": 8
+      },
+      "http_status_inconsistent_call_sites": [
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/parser/base.py",
+          "line": 66,
+          "status_origin": "domain_error_default"
+        },
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/serialize.py",
+          "line": 50,
+          "status_origin": "domain_error_default"
+        }
+      ],
+      "http_status_source": "call_site_override",
+      "http_status_uniform": false,
+      "note": "**非全量成立**：`http_status = 503` 是 10 处构造点中的多数值，实测分布 = 500 × 2 / 503 × 8；其中 500 × 2 不是 503——未传 `status_code=` 的构造点回落到 `DomainError` 默认 500。下游（V0.2.0 参数化测试 / TS 侧）**必须按 call-site 取值**，不得假设 `DEPENDENCY_MISSING` 恒为 503；逐点明细见 `http_status_by_call_site_resolved`，偏离点见 `http_status_inconsistent_call_sites`。",
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 10,
+      "raise_site_modules": [
+        "apps/api/src/wbtime_ai_api/routers/v1/projects.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/tasks.py",
+        "packages/knowledge/src/wbtime_ai_knowledge/parser/base.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/serialize.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py"
+      ],
+      "status_code_overrides": [
+        {
+          "line": 648,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        },
+        {
+          "line": 759,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        },
+        {
+          "line": 778,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        },
+        {
+          "line": 1258,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py"
+        },
+        {
+          "line": 77,
+          "module": "apps/api/src/wbtime_ai_api/routers/v1/projects.py"
+        },
+        {
+          "line": 143,
+          "module": "apps/api/src/wbtime_ai_api/routers/v1/projects.py"
+        },
+        {
+          "line": 173,
+          "module": "apps/api/src/wbtime_ai_api/routers/v1/tasks.py"
+        },
+        {
+          "line": 186,
+          "module": "apps/api/src/wbtime_ai_api/routers/v1/tasks.py"
+        }
+      ],
+      "unmapped": false
+    },
+    "EVENT_CURSOR_EXPIRED": {
+      "code": "EVENT_CURSOR_EXPIRED",
+      "description": "事件续读游标已过期（引用序号低于保留窗口低水位）。",
+      "description_source": "manual",
+      "enum_index": 29,
+      "enum_name": "EVENT_CURSOR_EXPIRED",
+      "exception_docstring": null,
+      "http_status": 410,
+      "http_status_by_api_map": 410,
+      "http_status_by_call_site": [
+        410
+      ],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 410,
+          "declared_status_code": 410,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1078,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "410": 1
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 1,
+      "raise_site_modules": [
+        "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py"
+      ],
+      "status_code_overrides": [
+        {
+          "line": 1078,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py"
+        }
+      ],
+      "unmapped": false
+    },
+    "HEARTBEAT_TIMEOUT": {
+      "code": "HEARTBEAT_TIMEOUT",
+      "description": "心跳超时（执行端失联）。",
+      "description_source": "manual",
+      "enum_index": 28,
+      "enum_name": "HEARTBEAT_TIMEOUT",
+      "exception_docstring": null,
+      "http_status": 500,
+      "http_status_by_api_map": 500,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {},
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": null,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 0,
+      "raise_site_modules": [],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "IDEMPOTENCY_KEY_REUSE": {
+      "code": "IDEMPOTENCY_KEY_REUSE",
+      "description": "幂等键复用但请求内容不一致。",
+      "description_source": "manual",
+      "enum_index": 27,
+      "enum_name": "IDEMPOTENCY_KEY_REUSE",
+      "exception_docstring": null,
+      "http_status": 409,
+      "http_status_by_api_map": 409,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/idempotency_service.py",
+          "line": 115,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/idempotency_service.py",
+          "line": 122,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "409": 2
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 2,
+      "raise_site_modules": [
+        "packages/application/src/wbtime_ai_application/services/idempotency_service.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "INTERNAL_ERROR": {
+      "code": "INTERNAL_ERROR",
+      "description": "服务端未预期错误，由兜底异常处理器产出。",
+      "description_source": "manual",
+      "enum_index": 1,
+      "enum_name": "INTERNAL_ERROR",
+      "exception_docstring": "WBTimeAI 平台统一异常基类。",
+      "http_status": 500,
+      "http_status_by_api_map": null,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "packages/agent/src/wbtime_ai_agent/services/agent_service.py",
+          "line": 200,
+          "status_origin": "exception_class_default"
+        },
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "packages/agent/src/wbtime_ai_agent/services/agent_service.py",
+          "line": 222,
+          "status_origin": "exception_class_default"
+        },
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/providers/base.py",
+          "line": 58,
+          "status_origin": "exception_class_default"
+        },
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/timeout.py",
+          "line": 188,
+          "status_origin": "exception_class_default"
+        },
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/git.py",
+          "line": 369,
+          "status_origin": "exception_class_default"
+        },
+        {
+          "actual_status": 500,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/schedules.py",
+          "line": 190,
+          "status_origin": "exception_class_default"
+        }
+      ],
+      "http_status_by_exception_class": 500,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "500": 6
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "exception_class",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": "WBTimeAIError",
+      "python_exception_module": "wbtime_ai_core.exception",
+      "python_exception_unmapped": false,
+      "raise_site_count": 6,
+      "raise_site_modules": [
+        "apps/api/src/wbtime_ai_api/routers/v1/schedules.py",
+        "packages/agent/src/wbtime_ai_agent/services/agent_service.py",
+        "packages/model/src/wbtime_ai_model/providers/base.py",
+        "packages/workflow/src/wbtime_ai_workflow/engine/timeout.py",
+        "packages/workspace/src/wbtime_ai_workspace/git.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "MAX_ITERATIONS": {
+      "code": "MAX_ITERATIONS",
+      "description": "Agent 迭代次数达到上限。",
+      "description_source": "manual",
+      "enum_index": 24,
+      "enum_name": "MAX_ITERATIONS",
+      "exception_docstring": null,
+      "http_status": 422,
+      "http_status_by_api_map": 422,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/runtime/src/wbtime_ai_runtime/errors.py",
+          "line": 25,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "422": 1
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 1,
+      "raise_site_modules": [
+        "packages/runtime/src/wbtime_ai_runtime/errors.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "METHOD_NOT_ALLOWED": {
+      "code": "METHOD_NOT_ALLOWED",
+      "description": "HTTP 方法不被该路径允许。",
+      "description_source": "manual",
+      "enum_index": 4,
+      "enum_name": "METHOD_NOT_ALLOWED",
+      "exception_docstring": null,
+      "http_status": 405,
+      "http_status_by_api_map": 405,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {},
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": null,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 0,
+      "raise_site_modules": [],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "NOT_FOUND": {
+      "code": "NOT_FOUND",
+      "description": "资源不存在。",
+      "description_source": "manual",
+      "enum_index": 3,
+      "enum_name": "NOT_FOUND",
+      "exception_docstring": "资源不存在（HTTP 404）。",
+      "http_status": 404,
+      "http_status_by_api_map": 404,
+      "http_status_by_call_site": [
+        404
+      ],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/agent/src/wbtime_ai_agent/services/agent_service.py",
+          "line": 111,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/agent/src/wbtime_ai_agent/services/agent_service.py",
+          "line": 148,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/commands/agent.py",
+          "line": 82,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/queries/agent.py",
+          "line": 59,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/queries/run.py",
+          "line": 38,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/agent_run_service.py",
+          "line": 115,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/agent_run_service.py",
+          "line": 163,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/agent_run_service.py",
+          "line": 170,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/agent_run_service.py",
+          "line": 208,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/agent_run_service.py",
+          "line": 254,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/evaluation.py",
+          "line": 381,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/evaluation.py",
+          "line": 392,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/knowledge_service.py",
+          "line": 311,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/marketplace.py",
+          "line": 243,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/memory_service.py",
+          "line": 140,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 361,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 431,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 464,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/evaluation/src/wbtime_ai_evaluation/runner.py",
+          "line": 103,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/mcp/src/wbtime_ai_mcp/services.py",
+          "line": 232,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/mcp/src/wbtime_ai_mcp/services.py",
+          "line": 223,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/catalog_service.py",
+          "line": 190,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/catalog_service.py",
+          "line": 228,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/credential_binding.py",
+          "line": 52,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/provider_runtime.py",
+          "line": 67,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/reference/agent_executor.py",
+          "line": 45,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/reference/agent_executor.py",
+          "line": 53,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/registry.py",
+          "line": 164,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/sandbox/src/wbtime_ai_sandbox/docker_provider.py",
+          "line": 198,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/permission/approval.py",
+          "line": 138,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/storage/src/wbtime_ai_storage/local.py",
+          "line": 109,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/storage/src/wbtime_ai_storage/local.py",
+          "line": 116,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/errors.py",
+          "line": 48,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/registry.py",
+          "line": 53,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/services/permission_service.py",
+          "line": 192,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/services/permission_service.py",
+          "line": 184,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+          "line": 242,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+          "line": 449,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/inline.py",
+          "line": 294,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/inline.py",
+          "line": 322,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/inline.py",
+          "line": 349,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/inline.py",
+          "line": 385,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/queued.py",
+          "line": 163,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/queued.py",
+          "line": 231,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/replay.py",
+          "line": 233,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": 404,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 905,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/project_service.py",
+          "line": 172,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": 404,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1248,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 138,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/approvals.py",
+          "line": 66,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/conversations.py",
+          "line": 107,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/conversations.py",
+          "line": 129,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/conversations.py",
+          "line": 137,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/conversations.py",
+          "line": 158,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/mcp.py",
+          "line": 91,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": 404,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/projects.py",
+          "line": 296,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/schedules.py",
+          "line": 70,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/skills.py",
+          "line": 79,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/tasks.py",
+          "line": 160,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/cli/src/wbtime_ai_cli/registry.py",
+          "line": 103,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": 404,
+      "http_status_default_without_override": 404,
+      "http_status_distribution": {
+        "404": 60
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": "NotFoundError",
+      "python_exception_module": "wbtime_ai_core.exception",
+      "python_exception_unmapped": false,
+      "raise_site_count": 60,
+      "raise_site_modules": [
+        "apps/api/src/wbtime_ai_api/routers/v1/approvals.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/conversations.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/mcp.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/projects.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/schedules.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/skills.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/tasks.py",
+        "apps/cli/src/wbtime_ai_cli/registry.py",
+        "packages/agent/src/wbtime_ai_agent/services/agent_service.py",
+        "packages/application/src/wbtime_ai_application/commands/agent.py",
+        "packages/application/src/wbtime_ai_application/queries/agent.py",
+        "packages/application/src/wbtime_ai_application/queries/run.py",
+        "packages/application/src/wbtime_ai_application/services/agent_run_service.py",
+        "packages/application/src/wbtime_ai_application/services/evaluation.py",
+        "packages/application/src/wbtime_ai_application/services/knowledge_service.py",
+        "packages/application/src/wbtime_ai_application/services/marketplace.py",
+        "packages/application/src/wbtime_ai_application/services/memory_service.py",
+        "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+        "packages/evaluation/src/wbtime_ai_evaluation/runner.py",
+        "packages/mcp/src/wbtime_ai_mcp/services.py",
+        "packages/model/src/wbtime_ai_model/services/catalog_service.py",
+        "packages/model/src/wbtime_ai_model/services/credential_binding.py",
+        "packages/model/src/wbtime_ai_model/services/provider_runtime.py",
+        "packages/plugin/src/wbtime_ai_plugin/reference/agent_executor.py",
+        "packages/plugin/src/wbtime_ai_plugin/registry.py",
+        "packages/sandbox/src/wbtime_ai_sandbox/docker_provider.py",
+        "packages/security/src/wbtime_ai_security/permission/approval.py",
+        "packages/storage/src/wbtime_ai_storage/local.py",
+        "packages/tool/src/wbtime_ai_tool/errors.py",
+        "packages/tool/src/wbtime_ai_tool/registry.py",
+        "packages/tool/src/wbtime_ai_tool/services/permission_service.py",
+        "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+        "packages/workflow/src/wbtime_ai_workflow/run/inline.py",
+        "packages/workflow/src/wbtime_ai_workflow/run/queued.py",
+        "packages/workflow/src/wbtime_ai_workflow/run/replay.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/project_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/environment.py"
+      ],
+      "status_code_overrides": [
+        {
+          "line": 905,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        },
+        {
+          "line": 1248,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py"
+        },
+        {
+          "line": 296,
+          "module": "apps/api/src/wbtime_ai_api/routers/v1/projects.py"
+        }
+      ],
+      "unmapped": false
+    },
+    "NOT_IMPLEMENTED": {
+      "code": "NOT_IMPLEMENTED",
+      "description": "功能尚未实现（骨架路由占位、Feature Flag 降级）。",
+      "description_source": "manual",
+      "enum_index": 8,
+      "enum_name": "NOT_IMPLEMENTED",
+      "exception_docstring": "功能尚未实现（HTTP 501）。",
+      "http_status": 501,
+      "http_status_by_api_map": 501,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 501,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+          "line": 585,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 501,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/base.py",
+          "line": 199,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": 501,
+      "http_status_default_without_override": 501,
+      "http_status_distribution": {
+        "501": 2
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": "NotImplementedYetError",
+      "python_exception_module": "wbtime_ai_core.exception",
+      "python_exception_unmapped": false,
+      "raise_site_count": 2,
+      "raise_site_modules": [
+        "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/base.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "ORGANIZATION_NOT_FOUND": {
+      "code": "ORGANIZATION_NOT_FOUND",
+      "description": "组织不存在。",
+      "description_source": "manual",
+      "enum_index": 19,
+      "enum_name": "ORGANIZATION_NOT_FOUND",
+      "exception_docstring": null,
+      "http_status": 404,
+      "http_status_by_api_map": 404,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/organizations.py",
+          "line": 48,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "404": 1
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 1,
+      "raise_site_modules": [
+        "apps/api/src/wbtime_ai_api/routers/v1/organizations.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "PERMISSION_DENIED": {
+      "code": "PERMISSION_DENIED",
+      "description": "已认证但权限不足。",
+      "description_source": "manual",
+      "enum_index": 6,
+      "enum_name": "PERMISSION_DENIED",
+      "exception_docstring": "权限不足（HTTP 403）。",
+      "http_status": 403,
+      "http_status_by_api_map": 403,
+      "http_status_by_call_site": [
+        403
+      ],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/sandbox/src/wbtime_ai_sandbox/local_process_provider.py",
+          "line": 237,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/egress/policy.py",
+          "line": 368,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/egress/policy.py",
+          "line": 268,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/egress/policy.py",
+          "line": 308,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/errors.py",
+          "line": 38,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/runtime_bridge.py",
+          "line": 199,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 689,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 718,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 730,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 736,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 742,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": 403,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 836,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": 403,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 988,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/git.py",
+          "line": 493,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/git.py",
+          "line": 500,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/git.py",
+          "line": 506,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 203,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/project_storage.py",
+          "line": 139,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 403,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/project_storage.py",
+          "line": 152,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": 403,
+      "http_status_default_without_override": 403,
+      "http_status_distribution": {
+        "403": 19
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": "PermissionDeniedError",
+      "python_exception_module": "wbtime_ai_core.exception",
+      "python_exception_unmapped": false,
+      "raise_site_count": 19,
+      "raise_site_modules": [
+        "packages/sandbox/src/wbtime_ai_sandbox/local_process_provider.py",
+        "packages/security/src/wbtime_ai_security/egress/policy.py",
+        "packages/tool/src/wbtime_ai_tool/errors.py",
+        "packages/workflow/src/wbtime_ai_workflow/engine/runtime_bridge.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/git.py",
+        "packages/workspace/src/wbtime_ai_workspace/paths.py",
+        "packages/workspace/src/wbtime_ai_workspace/project_storage.py"
+      ],
+      "status_code_overrides": [
+        {
+          "line": 836,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py"
+        },
+        {
+          "line": 988,
+          "module": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py"
+        }
+      ],
+      "unmapped": false
+    },
+    "RESOURCE_LIMIT_EXCEEDED": {
+      "code": "RESOURCE_LIMIT_EXCEEDED",
+      "description": "执行期资源限额超限（并行度 / 产物 / 等待队列）。",
+      "description_source": "manual",
+      "enum_index": 23,
+      "enum_name": "RESOURCE_LIMIT_EXCEEDED",
+      "exception_docstring": null,
+      "http_status": 429,
+      "http_status_by_api_map": 429,
+      "http_status_by_call_site": [
+        429
+      ],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 429,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/concurrency.py",
+          "line": 135,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 429,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/concurrency.py",
+          "line": 69,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 429,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/parallel.py",
+          "line": 75,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 429,
+          "declared_status_code": 429,
+          "file": "apps/api/src/wbtime_ai_api/dependencies/services.py",
+          "line": 1903,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 429,
+          "declared_status_code": 429,
+          "file": "apps/worker/src/wbtime_ai_worker/recovery.py",
+          "line": 267,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 429,
+          "declared_status_code": 429,
+          "file": "apps/worker/src/wbtime_ai_worker/recovery.py",
+          "line": 445,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "429": 6
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 6,
+      "raise_site_modules": [
+        "apps/api/src/wbtime_ai_api/dependencies/services.py",
+        "apps/worker/src/wbtime_ai_worker/recovery.py",
+        "packages/workflow/src/wbtime_ai_workflow/engine/concurrency.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/parallel.py"
+      ],
+      "status_code_overrides": [
+        {
+          "line": 1903,
+          "module": "apps/api/src/wbtime_ai_api/dependencies/services.py"
+        },
+        {
+          "line": 267,
+          "module": "apps/worker/src/wbtime_ai_worker/recovery.py"
+        },
+        {
+          "line": 445,
+          "module": "apps/worker/src/wbtime_ai_worker/recovery.py"
+        }
+      ],
+      "unmapped": false
+    },
+    "TASK_NOT_FOUND": {
+      "code": "TASK_NOT_FOUND",
+      "description": "任务不存在。",
+      "description_source": "manual",
+      "enum_index": 21,
+      "enum_name": "TASK_NOT_FOUND",
+      "exception_docstring": null,
+      "http_status": 404,
+      "http_status_by_api_map": 404,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {},
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": null,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 0,
+      "raise_site_modules": [],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "TENANT_NOT_FOUND": {
+      "code": "TENANT_NOT_FOUND",
+      "description": "租户不存在。",
+      "description_source": "manual",
+      "enum_index": 16,
+      "enum_name": "TENANT_NOT_FOUND",
+      "exception_docstring": null,
+      "http_status": 404,
+      "http_status_by_api_map": 404,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {},
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": null,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 0,
+      "raise_site_modules": [],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "TOOL_TIMEOUT": {
+      "code": "TOOL_TIMEOUT",
+      "description": "工具调用超时。",
+      "description_source": "manual",
+      "enum_index": 26,
+      "enum_name": "TOOL_TIMEOUT",
+      "exception_docstring": null,
+      "http_status": 504,
+      "http_status_by_api_map": 504,
+      "http_status_by_call_site": [
+        504
+      ],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 504,
+          "declared_status_code": null,
+          "file": "packages/runtime/src/wbtime_ai_runtime/errors.py",
+          "line": 43,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 504,
+          "declared_status_code": 504,
+          "file": "packages/runtime/src/wbtime_ai_runtime/errors.py",
+          "line": 62,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 504,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/timeout.py",
+          "line": 141,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "504": 3
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 3,
+      "raise_site_modules": [
+        "packages/runtime/src/wbtime_ai_runtime/errors.py",
+        "packages/workflow/src/wbtime_ai_workflow/engine/timeout.py"
+      ],
+      "status_code_overrides": [
+        {
+          "line": 62,
+          "module": "packages/runtime/src/wbtime_ai_runtime/errors.py"
+        }
+      ],
+      "unmapped": false
+    },
+    "UNAUTHORIZED": {
+      "code": "UNAUTHORIZED",
+      "description": "未认证或凭证缺失 / 无效。",
+      "description_source": "manual",
+      "enum_index": 7,
+      "enum_name": "UNAUTHORIZED",
+      "exception_docstring": "未认证（HTTP 401）。",
+      "http_status": 401,
+      "http_status_by_api_map": 401,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/auth_service.py",
+          "line": 183,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/auth_service.py",
+          "line": 205,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 401,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/auth_service.py",
+          "line": 207,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": 401,
+      "http_status_default_without_override": 401,
+      "http_status_distribution": {
+        "401": 3
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": "UnauthorizedError",
+      "python_exception_module": "wbtime_ai_core.exception",
+      "python_exception_unmapped": false,
+      "raise_site_count": 3,
+      "raise_site_modules": [
+        "packages/application/src/wbtime_ai_application/services/auth_service.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "UNKNOWN": {
+      "code": "UNKNOWN",
+      "description": "未分类错误的兜底码（框架层 HTTPException 无对应码时回落）。",
+      "description_source": "manual",
+      "enum_index": 0,
+      "enum_name": "UNKNOWN",
+      "exception_docstring": "领域 / 应用错误基类。",
+      "http_status": 500,
+      "http_status_by_api_map": null,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [],
+      "http_status_by_exception_class": 500,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {},
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "exception_class",
+      "http_status_uniform": null,
+      "note": null,
+      "python_exception": "DomainError",
+      "python_exception_module": "wbtime_ai_core.error",
+      "python_exception_unmapped": false,
+      "raise_site_count": 0,
+      "raise_site_modules": [],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "USER_ALREADY_EXISTS": {
+      "code": "USER_ALREADY_EXISTS",
+      "description": "用户已存在（唯一性冲突）。",
+      "description_source": "manual",
+      "enum_index": 18,
+      "enum_name": "USER_ALREADY_EXISTS",
+      "exception_docstring": null,
+      "http_status": 409,
+      "http_status_by_api_map": 409,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/auth_service.py",
+          "line": 81,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 409,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/auth_service.py",
+          "line": 87,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "409": 2
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 2,
+      "raise_site_modules": [
+        "packages/application/src/wbtime_ai_application/services/auth_service.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "USER_NOT_FOUND": {
+      "code": "USER_NOT_FOUND",
+      "description": "用户不存在。",
+      "description_source": "manual",
+      "enum_index": 17,
+      "enum_name": "USER_NOT_FOUND",
+      "exception_docstring": null,
+      "http_status": 404,
+      "http_status_by_api_map": 404,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/identity/src/wbtime_ai_identity/services/user_service.py",
+          "line": 81,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "404": 1
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 1,
+      "raise_site_modules": [
+        "packages/identity/src/wbtime_ai_identity/services/user_service.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "VALIDATION_ERROR": {
+      "code": "VALIDATION_ERROR",
+      "description": "请求参数 / 数据校验失败；FastAPI RequestValidationError 亦映射到此码。",
+      "description_source": "manual",
+      "enum_index": 2,
+      "enum_name": "VALIDATION_ERROR",
+      "exception_docstring": "参数/数据校验失败（HTTP 422）。",
+      "http_status": 422,
+      "http_status_by_api_map": 422,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/agent/src/wbtime_ai_agent/services/agent_service.py",
+          "line": 141,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/agent/src/wbtime_ai_agent/services/agent_service.py",
+          "line": 238,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/evaluation.py",
+          "line": 158,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/evaluation.py",
+          "line": 288,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/evaluation.py",
+          "line": 216,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/marketplace.py",
+          "line": 175,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/marketplace.py",
+          "line": 184,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/marketplace.py",
+          "line": 240,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/marketplace.py",
+          "line": 277,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/marketplace.py",
+          "line": 287,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 457,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+          "line": 470,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/conversation/src/wbtime_ai_conversation/services/conversation_service.py",
+          "line": 57,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/conversation/src/wbtime_ai_conversation/services/run_service.py",
+          "line": 240,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/database/src/wbtime_ai_database/maintenance/vacuum.py",
+          "line": 103,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/domain/src/wbtime_ai_domain/approval.py",
+          "line": 74,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/domain/src/wbtime_ai_domain/approval.py",
+          "line": 92,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/evaluation/src/wbtime_ai_evaluation/compare.py",
+          "line": 135,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/evaluation/src/wbtime_ai_evaluation/domain/kinds.py",
+          "line": 146,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/evaluation/src/wbtime_ai_evaluation/scorers/deterministic.py",
+          "line": 90,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/identity/src/wbtime_ai_identity/services/bootstrap.py",
+          "line": 106,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/chunker/fixed.py",
+          "line": 123,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/chunker/fixed.py",
+          "line": 129,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/embedder.py",
+          "line": 93,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/embedding_store.py",
+          "line": 74,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/index_task.py",
+          "line": 157,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/index_task.py",
+          "line": 120,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/index_task.py",
+          "line": 129,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/index_task.py",
+          "line": 170,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/parser/base.py",
+          "line": 98,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/knowledge/src/wbtime_ai_knowledge/status.py",
+          "line": 127,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/mcp/src/wbtime_ai_mcp/services.py",
+          "line": 154,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/memory/src/wbtime_ai_memory/domain/kinds.py",
+          "line": 160,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/catalog_service.py",
+          "line": 96,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/catalog_service.py",
+          "line": 103,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/catalog_service.py",
+          "line": 159,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/model/src/wbtime_ai_model/services/credential_binding.py",
+          "line": 32,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/import_.py",
+          "line": 99,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/index.py",
+          "line": 44,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/package.py",
+          "line": 78,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/publish.py",
+          "line": 59,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/schema/__init__.py",
+          "line": 53,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/serialize.py",
+          "line": 150,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/serialize.py",
+          "line": 107,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/serialize.py",
+          "line": 129,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/plugin/src/wbtime_ai_plugin/marketplace/serialize.py",
+          "line": 135,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/credential_service.py",
+          "line": 141,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/credential_service.py",
+          "line": 250,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/credential_service.py",
+          "line": 287,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/credential_service.py",
+          "line": 415,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/crypto.py",
+          "line": 95,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/crypto.py",
+          "line": 93,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/crypto.py",
+          "line": 100,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/permission/approval.py",
+          "line": 86,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/permission/approval.py",
+          "line": 92,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/permission/approval.py",
+          "line": 197,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/security/src/wbtime_ai_security/permission/approval.py",
+          "line": 191,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/skill/src/wbtime_ai_skill/manifest.py",
+          "line": 141,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/skill/src/wbtime_ai_skill/registry.py",
+          "line": 48,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/storage/src/wbtime_ai_storage/local.py",
+          "line": 52,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/storage/src/wbtime_ai_storage/local.py",
+          "line": 55,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/storage/src/wbtime_ai_storage/local.py",
+          "line": 58,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/agents.py",
+          "line": 81,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/agents.py",
+          "line": 68,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/maintenance/cleanup.py",
+          "line": 100,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/maintenance/cleanup.py",
+          "line": 143,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/maintenance/cleanup.py",
+          "line": 108,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/maintenance/cleanup.py",
+          "line": 116,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/models.py",
+          "line": 65,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/scheduler/triggers.py",
+          "line": 103,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/scheduler/triggers.py",
+          "line": 107,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/scheduler/triggers.py",
+          "line": 113,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/scheduler/triggers.py",
+          "line": 117,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/scheduler/triggers.py",
+          "line": 123,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/scheduler/triggers.py",
+          "line": 129,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/scheduler/triggers.py",
+          "line": 252,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/scheduler/triggers.py",
+          "line": 177,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/task/src/wbtime_ai_task/states.py",
+          "line": 67,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/errors.py",
+          "line": 43,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/tool/src/wbtime_ai_tool/services/permission_service.py",
+          "line": 142,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/domain/state.py",
+          "line": 205,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/domain/state.py",
+          "line": 228,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+          "line": 135,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+          "line": 391,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+          "line": 436,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/agent.py",
+          "line": 45,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 240,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 263,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 226,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 159,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 165,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 171,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 196,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 201,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 220,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 299,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 322,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+          "line": 178,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/human_approval.py",
+          "line": 127,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/loop.py",
+          "line": 86,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/loop.py",
+          "line": 105,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/loop.py",
+          "line": 111,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/loop.py",
+          "line": 99,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/mcp.py",
+          "line": 47,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/mcp.py",
+          "line": 59,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/parallel.py",
+          "line": 101,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/parallel.py",
+          "line": 116,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/tool.py",
+          "line": 46,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/nodes/tool.py",
+          "line": 53,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workflow/src/wbtime_ai_workflow/run/replay.py",
+          "line": 352,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 368,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 540,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 695,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 712,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 724,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+          "line": 786,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/project_service.py",
+          "line": 200,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/project_service.py",
+          "line": 262,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 632,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1028,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1046,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1188,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1194,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1200,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1040,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+          "line": 1071,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/domain/project.py",
+          "line": 57,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/domain/project.py",
+          "line": 63,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/domain/project.py",
+          "line": 100,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/domain/project.py",
+          "line": 106,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 263,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 114,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 193,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 213,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 224,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 230,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 239,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/environment.py",
+          "line": 206,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/files.py",
+          "line": 67,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/files.py",
+          "line": 73,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/files.py",
+          "line": 77,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/files.py",
+          "line": 84,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/files.py",
+          "line": 129,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/git.py",
+          "line": 181,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 88,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 96,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 209,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 247,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 265,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 282,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 293,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 197,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/paths.py",
+          "line": 259,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/services/workspace_service.py",
+          "line": 57,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/services/workspace_service.py",
+          "line": 129,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/dependencies/services.py",
+          "line": 1324,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/api/src/wbtime_ai_api/routers/v1/knowledge.py",
+          "line": 169,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/cli/src/wbtime_ai_cli/commands/data.py",
+          "line": 147,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/worker/src/wbtime_ai_worker/tasks/agent_run.py",
+          "line": 43,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/worker/src/wbtime_ai_worker/tasks/knowledge_index.py",
+          "line": 45,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/worker/src/wbtime_ai_worker/tasks/project_clone.py",
+          "line": 50,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/worker/src/wbtime_ai_worker/tasks/remote_agent_run.py",
+          "line": 132,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/worker/src/wbtime_ai_worker/tasks/remote_agent_run.py",
+          "line": 144,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 422,
+          "declared_status_code": null,
+          "file": "apps/worker/src/wbtime_ai_worker/tasks/workflow_run.py",
+          "line": 49,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": 422,
+      "http_status_default_without_override": 422,
+      "http_status_distribution": {
+        "422": 164
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": "ValidationError",
+      "python_exception_module": "wbtime_ai_core.exception",
+      "python_exception_unmapped": false,
+      "raise_site_count": 164,
+      "raise_site_modules": [
+        "apps/api/src/wbtime_ai_api/dependencies/services.py",
+        "apps/api/src/wbtime_ai_api/routers/v1/knowledge.py",
+        "apps/cli/src/wbtime_ai_cli/commands/data.py",
+        "apps/worker/src/wbtime_ai_worker/tasks/agent_run.py",
+        "apps/worker/src/wbtime_ai_worker/tasks/knowledge_index.py",
+        "apps/worker/src/wbtime_ai_worker/tasks/project_clone.py",
+        "apps/worker/src/wbtime_ai_worker/tasks/remote_agent_run.py",
+        "apps/worker/src/wbtime_ai_worker/tasks/workflow_run.py",
+        "packages/agent/src/wbtime_ai_agent/services/agent_service.py",
+        "packages/application/src/wbtime_ai_application/services/evaluation.py",
+        "packages/application/src/wbtime_ai_application/services/marketplace.py",
+        "packages/application/src/wbtime_ai_application/services/workflow_service.py",
+        "packages/conversation/src/wbtime_ai_conversation/services/conversation_service.py",
+        "packages/conversation/src/wbtime_ai_conversation/services/run_service.py",
+        "packages/database/src/wbtime_ai_database/maintenance/vacuum.py",
+        "packages/domain/src/wbtime_ai_domain/approval.py",
+        "packages/evaluation/src/wbtime_ai_evaluation/compare.py",
+        "packages/evaluation/src/wbtime_ai_evaluation/domain/kinds.py",
+        "packages/evaluation/src/wbtime_ai_evaluation/scorers/deterministic.py",
+        "packages/identity/src/wbtime_ai_identity/services/bootstrap.py",
+        "packages/knowledge/src/wbtime_ai_knowledge/chunker/fixed.py",
+        "packages/knowledge/src/wbtime_ai_knowledge/embedder.py",
+        "packages/knowledge/src/wbtime_ai_knowledge/embedding_store.py",
+        "packages/knowledge/src/wbtime_ai_knowledge/index_task.py",
+        "packages/knowledge/src/wbtime_ai_knowledge/parser/base.py",
+        "packages/knowledge/src/wbtime_ai_knowledge/status.py",
+        "packages/mcp/src/wbtime_ai_mcp/services.py",
+        "packages/memory/src/wbtime_ai_memory/domain/kinds.py",
+        "packages/model/src/wbtime_ai_model/services/catalog_service.py",
+        "packages/model/src/wbtime_ai_model/services/credential_binding.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/import_.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/index.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/package.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/publish.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/schema/__init__.py",
+        "packages/plugin/src/wbtime_ai_plugin/marketplace/serialize.py",
+        "packages/security/src/wbtime_ai_security/credential_service.py",
+        "packages/security/src/wbtime_ai_security/crypto.py",
+        "packages/security/src/wbtime_ai_security/permission/approval.py",
+        "packages/skill/src/wbtime_ai_skill/manifest.py",
+        "packages/skill/src/wbtime_ai_skill/registry.py",
+        "packages/storage/src/wbtime_ai_storage/local.py",
+        "packages/task/src/wbtime_ai_task/agents.py",
+        "packages/task/src/wbtime_ai_task/maintenance/cleanup.py",
+        "packages/task/src/wbtime_ai_task/models.py",
+        "packages/task/src/wbtime_ai_task/scheduler/triggers.py",
+        "packages/task/src/wbtime_ai_task/states.py",
+        "packages/tool/src/wbtime_ai_tool/errors.py",
+        "packages/tool/src/wbtime_ai_tool/services/permission_service.py",
+        "packages/workflow/src/wbtime_ai_workflow/domain/state.py",
+        "packages/workflow/src/wbtime_ai_workflow/engine/scheduler.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/agent.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/condition.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/human_approval.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/loop.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/mcp.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/parallel.py",
+        "packages/workflow/src/wbtime_ai_workflow/nodes/tool.py",
+        "packages/workflow/src/wbtime_ai_workflow/run/replay.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/change_review_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/project_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/application/remote_task_service.py",
+        "packages/workspace/src/wbtime_ai_workspace/domain/project.py",
+        "packages/workspace/src/wbtime_ai_workspace/environment.py",
+        "packages/workspace/src/wbtime_ai_workspace/files.py",
+        "packages/workspace/src/wbtime_ai_workspace/git.py",
+        "packages/workspace/src/wbtime_ai_workspace/paths.py",
+        "packages/workspace/src/wbtime_ai_workspace/services/workspace_service.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    },
+    "WORKSPACE_NOT_FOUND": {
+      "code": "WORKSPACE_NOT_FOUND",
+      "description": "工作空间不存在。",
+      "description_source": "manual",
+      "enum_index": 20,
+      "enum_name": "WORKSPACE_NOT_FOUND",
+      "exception_docstring": null,
+      "http_status": 404,
+      "http_status_by_api_map": 404,
+      "http_status_by_call_site": [],
+      "http_status_by_call_site_resolved": [
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/services/workspace_service.py",
+          "line": 96,
+          "status_origin": "api_status_map"
+        },
+        {
+          "actual_status": 404,
+          "declared_status_code": null,
+          "file": "packages/workspace/src/wbtime_ai_workspace/services/workspace_service.py",
+          "line": 138,
+          "status_origin": "api_status_map"
+        }
+      ],
+      "http_status_by_exception_class": null,
+      "http_status_default_without_override": 500,
+      "http_status_distribution": {
+        "404": 2
+      },
+      "http_status_inconsistent_call_sites": [],
+      "http_status_source": "api_status_map",
+      "http_status_uniform": true,
+      "note": null,
+      "python_exception": null,
+      "python_exception_module": null,
+      "python_exception_unmapped": true,
+      "raise_site_count": 2,
+      "raise_site_modules": [
+        "packages/workspace/src/wbtime_ai_workspace/services/workspace_service.py"
+      ],
+      "status_code_overrides": [],
+      "unmapped": false
+    }
+  },
+  "contract_version": 3,
+  "exceptions": [
+    {
+      "base": "Exception",
+      "class": "DomainError",
+      "code": "UNKNOWN",
+      "docstring": "领域 / 应用错误基类。",
+      "http_status": 500,
+      "message": "Domain error",
+      "module": "wbtime_ai_core.error"
+    },
+    {
+      "base": "DomainError",
+      "class": "WBTimeAIError",
+      "code": "INTERNAL_ERROR",
+      "docstring": "WBTimeAI 平台统一异常基类。",
+      "http_status": 500,
+      "message": "Internal error",
+      "module": "wbtime_ai_core.exception"
+    },
+    {
+      "base": "WBTimeAIError",
+      "class": "NotFoundError",
+      "code": "NOT_FOUND",
+      "docstring": "资源不存在（HTTP 404）。",
+      "http_status": 404,
+      "message": "Resource not found",
+      "module": "wbtime_ai_core.exception"
+    },
+    {
+      "base": "WBTimeAIError",
+      "class": "ValidationError",
+      "code": "VALIDATION_ERROR",
+      "docstring": "参数/数据校验失败（HTTP 422）。",
+      "http_status": 422,
+      "message": "Validation error",
+      "module": "wbtime_ai_core.exception"
+    },
+    {
+      "base": "WBTimeAIError",
+      "class": "ConflictError",
+      "code": "CONFLICT",
+      "docstring": "资源冲突（HTTP 409）。",
+      "http_status": 409,
+      "message": "Resource conflict",
+      "module": "wbtime_ai_core.exception"
+    },
+    {
+      "base": "WBTimeAIError",
+      "class": "PermissionDeniedError",
+      "code": "PERMISSION_DENIED",
+      "docstring": "权限不足（HTTP 403）。",
+      "http_status": 403,
+      "message": "Permission denied",
+      "module": "wbtime_ai_core.exception"
+    },
+    {
+      "base": "WBTimeAIError",
+      "class": "UnauthorizedError",
+      "code": "UNAUTHORIZED",
+      "docstring": "未认证（HTTP 401）。",
+      "http_status": 401,
+      "message": "Unauthorized",
+      "module": "wbtime_ai_core.exception"
+    },
+    {
+      "base": "WBTimeAIError",
+      "class": "NotImplementedYetError",
+      "code": "NOT_IMPLEMENTED",
+      "docstring": "功能尚未实现（HTTP 501）。",
+      "http_status": 501,
+      "message": "Not implemented yet",
+      "module": "wbtime_ai_core.exception"
+    }
+  ],
+  "generated_by": "scripts/extract-from-py/export_errors.py",
+  "meta": {
+    "call_site_resolved": {
+      "DEPENDENCY_MISSING": 503
+    },
+    "codes_digest_sha256": "76b4524d30677a4fcf9287a7f3f087e5db34a378aeb581d99eef8e1268f306d4",
+    "codes_with_non_uniform_http_status": [
+      "DEPENDENCY_MISSING"
+    ],
+    "codes_with_raise_sites": [
+      "AUTH_ACCOUNT_LOCKED",
+      "AUTH_INVALID_CREDENTIALS",
+      "AUTH_TOKEN_EXPIRED",
+      "AUTH_TOKEN_INVALID",
+      "AUTH_TOKEN_REVOKED",
+      "CONFIGURATION_ERROR",
+      "CONFLICT",
+      "CONTEXT_LENGTH_EXCEEDED",
+      "CREDENTIAL_NOT_FOUND",
+      "DEPENDENCY_MISSING",
+      "EVENT_CURSOR_EXPIRED",
+      "IDEMPOTENCY_KEY_REUSE",
+      "INTERNAL_ERROR",
+      "MAX_ITERATIONS",
+      "NOT_FOUND",
+      "NOT_IMPLEMENTED",
+      "ORGANIZATION_NOT_FOUND",
+      "PERMISSION_DENIED",
+      "RESOURCE_LIMIT_EXCEEDED",
+      "TOOL_TIMEOUT",
+      "UNAUTHORIZED",
+      "USER_ALREADY_EXISTS",
+      "USER_NOT_FOUND",
+      "VALIDATION_ERROR",
+      "WORKSPACE_NOT_FOUND"
+    ],
+    "codes_with_uniform_http_status": 24,
+    "codes_without_any_http_status": [],
+    "codes_without_exception_class": [
+      "METHOD_NOT_ALLOWED",
+      "CONFIGURATION_ERROR",
+      "DEPENDENCY_MISSING",
+      "AUTH_INVALID_CREDENTIALS",
+      "AUTH_TOKEN_EXPIRED",
+      "AUTH_TOKEN_INVALID",
+      "AUTH_TOKEN_REVOKED",
+      "AUTH_ACCOUNT_LOCKED",
+      "TENANT_NOT_FOUND",
+      "USER_NOT_FOUND",
+      "USER_ALREADY_EXISTS",
+      "ORGANIZATION_NOT_FOUND",
+      "WORKSPACE_NOT_FOUND",
+      "TASK_NOT_FOUND",
+      "CREDENTIAL_NOT_FOUND",
+      "RESOURCE_LIMIT_EXCEEDED",
+      "MAX_ITERATIONS",
+      "CONTEXT_LENGTH_EXCEEDED",
+      "TOOL_TIMEOUT",
+      "IDEMPOTENCY_KEY_REUSE",
+      "HEARTBEAT_TIMEOUT",
+      "EVENT_CURSOR_EXPIRED"
+    ],
+    "codes_without_exception_class_count": 22,
+    "count": 30,
+    "description_source": "manual",
+    "domain_error_default_status": 500,
+    "exception_class_count": 7,
+    "http_status_histogram": {
+      "401": 5,
+      "403": 1,
+      "404": 7,
+      "405": 1,
+      "409": 3,
+      "410": 1,
+      "422": 4,
+      "423": 1,
+      "429": 1,
+      "500": 3,
+      "501": 1,
+      "503": 1,
+      "504": 1
+    },
+    "http_status_uniformity_rule": "http_status_uniform = true ⇔ every raise site resolves to `http_status`; false ⇔ at least two distinct statuses are measured; null ⇔ the code has no raise site, so uniformity is not claimed either way",
+    "non_uniform_codes": {
+      "DEPENDENCY_MISSING": {
+        "500": 2,
+        "503": 8
+      }
+    },
+    "raise_site_total": 387,
+    "unmapped_codes": [],
+    "with_api_status_map": 27,
+    "with_call_site_override": 1,
+    "with_exception_status_fallback": 2
+  },
+  "reverse_map_by_http_status": {
+    "401": "UNAUTHORIZED",
+    "403": "PERMISSION_DENIED",
+    "404": "NOT_FOUND",
+    "405": "METHOD_NOT_ALLOWED",
+    "409": "CONFLICT",
+    "422": "VALIDATION_ERROR"
+  },
+  "schema": "wbtimeai.contracts/errors",
+  "source": "D:/WBT/WBTimeAI_old",
+  "sources": {
+    "api_reverse_map": "apps/api/src/wbtime_ai_api/errors.py::_CODE_BY_HTTP_STATUS",
+    "api_status_map": "apps/api/src/wbtime_ai_api/errors.py::_STATUS_BY_CODE",
+    "call_sites": "AST scan of <source>/{packages/*,apps/{api,cli,worker}}/src for calls passing code=ErrorCode.<NAME> (literal keyword arguments only)",
+    "error_codes": "packages/core/src/wbtime_ai_core/error_codes.py::ErrorCode",
+    "exceptions": "packages/core/src/wbtime_ai_core/exception.py (+ error.py::DomainError)",
+    "resolution_rule": "apps/api/src/wbtime_ai_api/errors.py::_domain_error_handler -> _STATUS_BY_CODE.get(exc.code, exc.status_code). Per raise site: (1) the API-layer map wins when the code is in it; (2) else the exception instance's status_code, i.e. the site's own status_code= override when present; (3) else the exception class default -- DomainError.status_code (=500) for codes with no dedicated class. `http_status` is the dominant measured value; read `http_status_uniform` / `http_status_distribution` / `http_status_by_call_site_resolved` before assuming it holds for every site"
+  }
+}

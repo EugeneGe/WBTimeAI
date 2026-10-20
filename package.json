@@ -1,0 +1,17 @@
+{
+  "name": "wbtime-ai",
+  "version": "0.0.1",
+  "private": true,
+  "description": "WBTimeAI 社区线（ts/）重建仓 —— V0.0.1 契约继承与抽取（本版只产契约，不产 TS 业务代码）",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "check:baseline": "python scripts/check_baseline.py",
+    "check:docs": "python scripts/check_docs.py",
+    "check:contracts": "python scripts/extract-from-py/run.py check",
+    "extract:contracts": "python scripts/extract-from-py/run.py export",
+    "check": "python scripts/check_baseline.py && python scripts/check_docs.py && python scripts/extract-from-py/run.py check"
+  }
+}

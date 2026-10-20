@@ -1,0 +1,4 @@
+id: 1
+event: message.delta
+data: {"run_id":"run_01","message_id":"msg_01","role":"assistant","delta":"你好，世界"}
+

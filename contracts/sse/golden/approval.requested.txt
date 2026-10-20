@@ -1,0 +1,4 @@
+id: 1
+event: approval.requested
+data: {"approval_id":"appr_01","subject_type":"tool_call","subject_ref":"toolcall_01","requested_by":"user_01"}
+

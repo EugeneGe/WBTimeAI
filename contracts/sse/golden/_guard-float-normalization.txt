@@ -1,0 +1,4 @@
+id: 1
+event: agent.completed
+data: {"run_id":"run_01","duration_ms":12,"iterations":1,"score":"0.500000","ratio":1,"neg_zero":0,"nested":{"score":"0.250000"}}
+

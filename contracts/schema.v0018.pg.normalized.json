@@ -1,0 +1,8185 @@
+{
+  "dialect": "postgresql",
+  "schema_version": "v0018",
+  "frozen_contract": "V0.0.1 / C-03",
+  "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
+  "counts": {
+    "tables": 61,
+    "columns": 629,
+    "metadata_indexes": 174,
+    "unique_indexes": 7,
+    "partial_indexes": 1,
+    "unique_constraints": 29,
+    "foreign_keys": 159,
+    "raw_indexes": 2,
+    "index_objects_total": 176,
+    "extensions": 1,
+    "extension_statements": 2,
+    "dialect_only_objects": 2,
+    "dialect_only_by_kind": {
+      "index": 2
+    },
+    "triggers": 0
+  },
+  "tables": [
+    {
+      "name": "agent",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "current_version_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": "fk_agent_current_version_id",
+          "columns": [
+            "current_version_id"
+          ],
+          "referred_table": "agent_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_agent_created_by",
+          "columns": [
+            "created_by"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_current_version_id",
+          "columns": [
+            "current_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "agent_event",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "run_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "seq",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "payload",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "trace_id",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "span_id",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "run_id"
+          ],
+          "referred_table": "agent_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_agent_event_run_id",
+          "columns": [
+            "run_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_event_seq",
+          "columns": [
+            "seq"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "agent_knowledge",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_version_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "knowledge_base_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "enabled",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "config",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_agent_knowledge_version_kb",
+          "columns": [
+            "agent_version_id",
+            "knowledge_base_id"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_version_id"
+          ],
+          "referred_table": "agent_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "knowledge_base_id"
+          ],
+          "referred_table": "knowledge_base",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_agent_knowledge_agent_version_id",
+          "columns": [
+            "agent_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_knowledge_knowledge_base_id",
+          "columns": [
+            "knowledge_base_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_knowledge_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "agent_run",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_version_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "conversation_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "task_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "trigger",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "run_mode",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "trace_id",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "span_id",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "last_heartbeat_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "idempotency_key",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "started_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "completed_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "duration_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "token_usage",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "error_type",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "tool_error_count",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "cost",
+          "type": "NUMERIC(18, 6)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "cost_currency",
+          "type": "VARCHAR(10)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "cost_price_version",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "cost_estimated",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "cost_breakdown",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "cost_status",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "error",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_id"
+          ],
+          "referred_table": "agent",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "agent_version_id"
+          ],
+          "referred_table": "agent_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "conversation_id"
+          ],
+          "referred_table": "conversation",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "task_id"
+          ],
+          "referred_table": "task",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "user_id"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_agent_run_agent_id",
+          "columns": [
+            "agent_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_run_agent_version_id",
+          "columns": [
+            "agent_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_run_conversation_id",
+          "columns": [
+            "conversation_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_run_status",
+          "columns": [
+            "status"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_run_task_id",
+          "columns": [
+            "task_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_run_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_run_trace_id",
+          "columns": [
+            "trace_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_run_user_id",
+          "columns": [
+            "user_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "uq_agent_run_tenant_idempotency_key",
+          "columns": [
+            "tenant_id",
+            "idempotency_key"
+          ],
+          "unique": true,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "agent_skill",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_version_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "skill_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "enabled",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "config",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_agent_skill_version_skill",
+          "columns": [
+            "agent_version_id",
+            "skill_id"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_version_id"
+          ],
+          "referred_table": "agent_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "skill_id"
+          ],
+          "referred_table": "skill",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_agent_skill_agent_version_id",
+          "columns": [
+            "agent_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_skill_skill_id",
+          "columns": [
+            "skill_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_skill_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "agent_tool",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_version_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tool_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "enabled",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "permission_scope",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_agent_tool_version_tool",
+          "columns": [
+            "agent_version_id",
+            "tool_id"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_version_id"
+          ],
+          "referred_table": "agent_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tool_id"
+          ],
+          "referred_table": "tool",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_agent_tool_agent_version_id",
+          "columns": [
+            "agent_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_tool_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_tool_tool_id",
+          "columns": [
+            "tool_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "agent_version",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "version",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "system_prompt",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "model_config",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "runtime_config",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_id"
+          ],
+          "referred_table": "agent",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_agent_version_agent_id",
+          "columns": [
+            "agent_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_agent_version_created_by",
+          "columns": [
+            "created_by"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "approval",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "subject_type",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "subject_ref",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "requested_by",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "decided_by",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "decided_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "payload",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "decided_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "requested_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_approval_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "audit_log",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "agent_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "run_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "tool_call_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "action",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "resource_type",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "resource_id",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "outcome",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "duration_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "token_usage",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "cost",
+          "type": "NUMERIC(18, 6)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "request_id",
+          "type": "VARCHAR(64)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "trace_id",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "ip",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "extensions",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_id"
+          ],
+          "referred_table": "agent",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "run_id"
+          ],
+          "referred_table": "agent_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tool_call_id"
+          ],
+          "referred_table": "tool_call",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "user_id"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_audit_log_action",
+          "columns": [
+            "action"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_audit_log_request_id",
+          "columns": [
+            "request_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_audit_log_run_id",
+          "columns": [
+            "run_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_audit_log_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "conversation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_id"
+          ],
+          "referred_table": "agent",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "user_id"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_conversation_agent_id",
+          "columns": [
+            "agent_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_conversation_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_conversation_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_conversation_user_id",
+          "columns": [
+            "user_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_conversation_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "credential",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "provider",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "key_type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "encrypted_value",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(150)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "last_used_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_credential_name",
+          "columns": [
+            "name"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_credential_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_credential_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_credential_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "document",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "knowledge_base_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR(512)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "source_type",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "storage_key",
+          "type": "VARCHAR(1024)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "mime",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "size",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "checksum",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "error",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "task_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "knowledge_base_id"
+          ],
+          "referred_table": "knowledge_base",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "task_id"
+          ],
+          "referred_table": "task",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_document_knowledge_base_id",
+          "columns": [
+            "knowledge_base_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_document_status",
+          "columns": [
+            "status"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_document_task_id",
+          "columns": [
+            "task_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "document_chunk",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "document_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "ordinal",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "content",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "token_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "embedding_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_document_chunk_document_ordinal",
+          "columns": [
+            "document_id",
+            "ordinal"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "document_id"
+          ],
+          "referred_table": "document",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_document_chunk_document_id",
+          "columns": [
+            "document_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "embedding",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "chunk_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "model",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "dimensions",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "vector",
+          "type": "VECTOR(1536)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_embedding_chunk_id",
+          "columns": [
+            "chunk_id"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "chunk_id"
+          ],
+          "referred_table": "document_chunk",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_embedding_chunk_id",
+          "columns": [
+            "chunk_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "evaluation_case",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "dataset_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "case_key",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "input",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expected",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "assertions",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "tags",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_evaluation_case_dataset_case_key",
+          "columns": [
+            "dataset_id",
+            "case_key"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "dataset_id"
+          ],
+          "referred_table": "evaluation_dataset",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_evaluation_case_dataset_id",
+          "columns": [
+            "dataset_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "evaluation_dataset",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "version",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "parent_dataset_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR(1024)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "parent_dataset_id"
+          ],
+          "referred_table": "evaluation_dataset",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_evaluation_dataset_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_evaluation_dataset_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_evaluation_dataset_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "evaluation_result",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "evaluation_run_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "case_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_run_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "score",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "assertion_results",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "duration_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "token_usage",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "cost",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "error_type",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_evaluation_result_run_case",
+          "columns": [
+            "evaluation_run_id",
+            "case_id"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_run_id"
+          ],
+          "referred_table": "agent_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "case_id"
+          ],
+          "referred_table": "evaluation_case",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "evaluation_run_id"
+          ],
+          "referred_table": "evaluation_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_evaluation_result_agent_run_id",
+          "columns": [
+            "agent_run_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_evaluation_result_case_id",
+          "columns": [
+            "case_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_evaluation_result_evaluation_run_id",
+          "columns": [
+            "evaluation_run_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "evaluation_run",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "dataset_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_version_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "idempotency_key",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "started_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "completed_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "summary",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_evaluation_run_idempotency_key",
+          "columns": [
+            "idempotency_key"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_id"
+          ],
+          "referred_table": "agent",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "agent_version_id"
+          ],
+          "referred_table": "agent_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "dataset_id"
+          ],
+          "referred_table": "evaluation_dataset",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_evaluation_run_agent_id",
+          "columns": [
+            "agent_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_evaluation_run_agent_version_id",
+          "columns": [
+            "agent_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_evaluation_run_dataset_id",
+          "columns": [
+            "dataset_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_evaluation_run_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_evaluation_run_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_evaluation_run_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "feature_flag",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(150)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "enabled",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "name": "ix_feature_flag_name",
+          "columns": [
+            "name"
+          ],
+          "unique": true,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "knowledge_base",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "embedding_model",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "chunk_config",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_knowledge_base_tenant_name",
+          "columns": [
+            "tenant_id",
+            "name"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_knowledge_base_created_by",
+          "columns": [
+            "created_by"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_knowledge_base_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_knowledge_base_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_knowledge_base_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "login_attempt",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "username",
+          "type": "VARCHAR(150)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "ip_address",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_login_attempt_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_login_attempt_username",
+          "columns": [
+            "username"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "mcp_permission",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "agent_version_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "mcp_tool_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "action",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "effect",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "scope",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_mcp_permission_tool_agent_action",
+          "columns": [
+            "mcp_tool_id",
+            "agent_id",
+            "action"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_id"
+          ],
+          "referred_table": "agent",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "agent_version_id"
+          ],
+          "referred_table": "agent_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "mcp_tool_id"
+          ],
+          "referred_table": "mcp_tool",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_mcp_permission_agent_id",
+          "columns": [
+            "agent_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_mcp_permission_agent_version_id",
+          "columns": [
+            "agent_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_mcp_permission_mcp_tool_id",
+          "columns": [
+            "mcp_tool_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_mcp_permission_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "mcp_server",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "transport",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "endpoint",
+          "type": "VARCHAR(1024)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "command",
+          "type": "VARCHAR(1024)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "args",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "env_ref",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "credential_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "capabilities",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_mcp_server_tenant_name",
+          "columns": [
+            "tenant_id",
+            "name"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "credential_id"
+          ],
+          "referred_table": "credential",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_mcp_server_credential_id",
+          "columns": [
+            "credential_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_mcp_server_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_mcp_server_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_mcp_server_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "mcp_tool",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "mcp_server_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "input_schema",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "output_schema",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "discovered_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_mcp_tool_server_name",
+          "columns": [
+            "mcp_server_id",
+            "name"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "mcp_server_id"
+          ],
+          "referred_table": "mcp_server",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_mcp_tool_mcp_server_id",
+          "columns": [
+            "mcp_server_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "membership",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "role_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "role_id"
+          ],
+          "referred_table": "role",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "user_id"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_membership_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_membership_role_id",
+          "columns": [
+            "role_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_membership_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_membership_user_id",
+          "columns": [
+            "user_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "memory",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "kind",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "scope_type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "scope_id",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "visibility",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "content",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "memory_type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "importance",
+          "type": "FLOAT",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "confidence",
+          "type": "FLOAT",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "source_run_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "vector",
+          "type": "VECTOR(1536)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "source_run_id"
+          ],
+          "referred_table": "agent_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_memory_expires_at",
+          "columns": [
+            "expires_at"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_memory_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_memory_source_run_id",
+          "columns": [
+            "source_run_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_memory_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_memory_tenant_scope_kind",
+          "columns": [
+            "tenant_id",
+            "scope_type",
+            "scope_id",
+            "kind"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_memory_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "memory_relation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "from_memory_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "to_memory_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "relation",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_memory_relation_from_to_relation",
+          "columns": [
+            "from_memory_id",
+            "to_memory_id",
+            "relation"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "from_memory_id"
+          ],
+          "referred_table": "memory",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "to_memory_id"
+          ],
+          "referred_table": "memory",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_memory_relation_from_memory_id",
+          "columns": [
+            "from_memory_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_memory_relation_to_memory_id",
+          "columns": [
+            "to_memory_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "message",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "conversation_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "run_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "role",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "content",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "content_parts",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "token_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "conversation_id"
+          ],
+          "referred_table": "conversation",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "run_id"
+          ],
+          "referred_table": "agent_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_message_conversation_id",
+          "columns": [
+            "conversation_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_message_run_id",
+          "columns": [
+            "run_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "model",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "provider_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "context_window",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "capabilities",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "provider_id"
+          ],
+          "referred_table": "model_provider",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_model_provider_id",
+          "columns": [
+            "provider_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "model_provider",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "endpoint",
+          "type": "VARCHAR(512)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "credential_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "config",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "credential_id"
+          ],
+          "referred_table": "credential",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_model_provider_credential_id",
+          "columns": [
+            "credential_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_model_provider_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_model_provider_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_model_provider_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "model_provider_credential",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "provider_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "credential_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "weight",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_model_provider_credential",
+          "columns": [
+            "provider_id",
+            "credential_id"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "credential_id"
+          ],
+          "referred_table": "credential",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "provider_id"
+          ],
+          "referred_table": "model_provider",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_model_provider_credential_credential_id",
+          "columns": [
+            "credential_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_model_provider_credential_provider_id",
+          "columns": [
+            "provider_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "organization",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "slug",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_organization_slug",
+          "columns": [
+            "slug"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_organization_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "permission",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "code",
+          "type": "VARCHAR(150)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(150)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "name": "ix_permission_code",
+          "columns": [
+            "code"
+          ],
+          "unique": true,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "plugin",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(150)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "version",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "kind",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "entry_point",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "permissions",
+          "type": "JSON",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "manifest",
+          "type": "JSON",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "installed_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "name": "ix_plugin_name",
+          "columns": [
+            "name"
+          ],
+          "unique": true,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "project",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR(1024)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "repo_url",
+          "type": "VARCHAR(2048)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "default_branch",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "settings",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_project_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_project_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_project_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "refresh_token",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "session_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "token_hash",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "revoked_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "session_id"
+          ],
+          "referred_table": "session",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "user_id"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_refresh_token_session_id",
+          "columns": [
+            "session_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_refresh_token_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_refresh_token_token_hash",
+          "columns": [
+            "token_hash"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_refresh_token_user_id",
+          "columns": [
+            "user_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "resource_permission",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "subject_type",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "subject_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "resource_type",
+          "type": "VARCHAR(30)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "resource_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "action",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "effect",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "scope",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_resource_permission_subject_resource_action",
+          "columns": [
+            "tenant_id",
+            "subject_type",
+            "subject_id",
+            "resource_type",
+            "resource_id",
+            "action"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_resource_permission_resource",
+          "columns": [
+            "tenant_id",
+            "resource_type",
+            "resource_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_resource_permission_subject",
+          "columns": [
+            "tenant_id",
+            "subject_type",
+            "subject_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_resource_permission_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "role",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "is_system",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_role_tenant_name",
+          "columns": [
+            "tenant_id",
+            "name"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_role_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "role_permission",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "role_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "permission_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_role_permission",
+          "columns": [
+            "role_id",
+            "permission_id"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "permission_id"
+          ],
+          "referred_table": "permission",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "role_id"
+          ],
+          "referred_table": "role",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_role_permission_permission_id",
+          "columns": [
+            "permission_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_role_permission_role_id",
+          "columns": [
+            "role_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "sandbox_session",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "run_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "provider",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "image",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "container_ref",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workdir",
+          "type": "VARCHAR(512)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "ended_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "run_id"
+          ],
+          "referred_table": "agent_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_sandbox_session_run_id",
+          "columns": [
+            "run_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_sandbox_session_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_sandbox_session_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "schedule",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "target_type",
+          "type": "VARCHAR(30)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "target_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "trigger",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "cron",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "event_type",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "payload",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "enabled",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "last_run_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "next_run_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_schedule_target_name",
+          "columns": [
+            "tenant_id",
+            "target_type",
+            "target_id",
+            "name"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_schedule_next_run_at",
+          "columns": [
+            "next_run_at"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_schedule_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_schedule_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_schedule_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "session",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "device",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "ip_address",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "user_agent",
+          "type": "VARCHAR(512)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "revoked_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "user_id"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_session_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_session_user_id",
+          "columns": [
+            "user_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "skill",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "display_name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "category",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "current_version_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_skill_tenant_name",
+          "columns": [
+            "tenant_id",
+            "name"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": "fk_skill_current_version_id",
+          "columns": [
+            "current_version_id"
+          ],
+          "referred_table": "skill_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_skill_created_by",
+          "columns": [
+            "created_by"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_skill_current_version_id",
+          "columns": [
+            "current_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_skill_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_skill_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "skill_resource",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "skill_version_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "path",
+          "type": "VARCHAR(1024)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "kind",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "storage_key",
+          "type": "VARCHAR(1024)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "checksum",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "size",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "skill_version_id"
+          ],
+          "referred_table": "skill_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_skill_resource_skill_version_id",
+          "columns": [
+            "skill_version_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "skill_version",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "skill_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "version",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "instructions",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "manifest",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_skill_version_skill_version",
+          "columns": [
+            "skill_id",
+            "version"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "skill_id"
+          ],
+          "referred_table": "skill",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_skill_version_created_by",
+          "columns": [
+            "created_by"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_skill_version_skill_id",
+          "columns": [
+            "skill_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "task",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "priority",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "execution_mode",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "payload",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "result",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "idempotency_key",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_task_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_task_status",
+          "columns": [
+            "status"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_task_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_task_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "uq_task_idempotency_key",
+          "columns": [
+            "idempotency_key"
+          ],
+          "unique": true,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "task_execution",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "task_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "attempt",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "worker_id",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "started_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "finished_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "duration_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "error",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "project_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "checkout_ref",
+          "type": "VARCHAR(128)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "base_commit",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "result_commit",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "environment_digest",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "artifact_refs",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "heartbeat_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "lease_expires_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_task_execution_task_attempt",
+          "columns": [
+            "task_id",
+            "attempt"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "task_id"
+          ],
+          "referred_table": "task",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": "fk_task_execution_project_id",
+          "columns": [
+            "project_id"
+          ],
+          "referred_table": "project",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": "RESTRICT",
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_task_execution_project_started",
+          "columns": [
+            "project_id",
+            "started_at"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_task_execution_task_id",
+          "columns": [
+            "task_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "uq_task_execution_checkout_ref",
+          "columns": [
+            "checkout_ref"
+          ],
+          "unique": true,
+          "where": "checkout_ref IS NOT NULL"
+        }
+      ]
+    },
+    {
+      "name": "tenant",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "slug",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "name": "ix_tenant_slug",
+          "columns": [
+            "slug"
+          ],
+          "unique": true,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "tool",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "display_name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "category",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "source",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "input_schema",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "output_schema",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "requires_sandbox",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tool_ref",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_tool_name",
+          "columns": [
+            "name"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_tool_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_tool_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "tool_call",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "run_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tool_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "tool_name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tool_type",
+          "type": "VARCHAR(30)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tool_ref",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "attempt",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "trace_id",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "span_id",
+          "type": "VARCHAR(64)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "input",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "output",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "duration_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "sandbox_session_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "error",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "run_id"
+          ],
+          "referred_table": "agent_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "sandbox_session_id"
+          ],
+          "referred_table": "sandbox_session",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tool_id"
+          ],
+          "referred_table": "tool",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_tool_call_run_id",
+          "columns": [
+            "run_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_tool_call_sandbox_session_id",
+          "columns": [
+            "sandbox_session_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_tool_call_status",
+          "columns": [
+            "status"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_tool_call_tool_id",
+          "columns": [
+            "tool_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "tool_permission",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "agent_version_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "tool_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "action",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "effect",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "scope",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_tool_permission_agent_tool_action",
+          "columns": [
+            "agent_id",
+            "tool_id",
+            "action"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_id"
+          ],
+          "referred_table": "agent",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "agent_version_id"
+          ],
+          "referred_table": "agent_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tool_id"
+          ],
+          "referred_table": "tool",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_tool_permission_agent_id",
+          "columns": [
+            "agent_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_tool_permission_agent_version_id",
+          "columns": [
+            "agent_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_tool_permission_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_tool_permission_tool_id",
+          "columns": [
+            "tool_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "tool_version",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tool_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "version",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "spec",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "tool_id"
+          ],
+          "referred_table": "tool",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_tool_version_tool_id",
+          "columns": [
+            "tool_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "user",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "username",
+          "type": "VARCHAR(150)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(320)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "password_hash",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "display_name",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "is_superuser",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_user_tenant_email",
+          "columns": [
+            "tenant_id",
+            "email"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_user_email",
+          "columns": [
+            "email"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_user_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_user_username",
+          "columns": [
+            "username"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "workflow",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "current_version_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_workflow_tenant_name",
+          "columns": [
+            "tenant_id",
+            "name"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": "fk_workflow_current_version_id",
+          "columns": [
+            "current_version_id"
+          ],
+          "referred_table": "workflow_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_workflow_created_by",
+          "columns": [
+            "created_by"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workflow_current_version_id",
+          "columns": [
+            "current_version_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workflow_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workflow_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "workflow_edge",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "workflow_version_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "from_node_key",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "to_node_key",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "condition",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_workflow_edge_version_from_to",
+          "columns": [
+            "workflow_version_id",
+            "from_node_key",
+            "to_node_key"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "workflow_version_id"
+          ],
+          "referred_table": "workflow_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_workflow_edge_workflow_version_id",
+          "columns": [
+            "workflow_version_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "workflow_node",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "workflow_version_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "node_key",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "config",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_workflow_node_version_node_key",
+          "columns": [
+            "workflow_version_id",
+            "node_key"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "workflow_version_id"
+          ],
+          "referred_table": "workflow_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_workflow_node_workflow_version_id",
+          "columns": [
+            "workflow_version_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "workflow_node_run",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "workflow_run_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "node_key",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "attempt",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "agent_run_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "tool_call_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "approval_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "input",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "output",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "started_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "completed_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_workflow_node_run_run_key_attempt",
+          "columns": [
+            "workflow_run_id",
+            "node_key",
+            "attempt"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "agent_run_id"
+          ],
+          "referred_table": "agent_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "approval_id"
+          ],
+          "referred_table": "approval",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tool_call_id"
+          ],
+          "referred_table": "tool_call",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workflow_run_id"
+          ],
+          "referred_table": "workflow_run",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_workflow_node_run_agent_run_id",
+          "columns": [
+            "agent_run_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workflow_node_run_approval_id",
+          "columns": [
+            "approval_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workflow_node_run_workflow_run_id",
+          "columns": [
+            "workflow_run_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "workflow_run",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "workflow_version_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "trigger",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "task_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "input",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "output",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "started_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "completed_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "error",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "task_id"
+          ],
+          "referred_table": "task",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workflow_version_id"
+          ],
+          "referred_table": "workflow_version",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_workflow_run_status",
+          "columns": [
+            "status"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workflow_run_task_id",
+          "columns": [
+            "task_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workflow_run_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workflow_run_workflow_version_id",
+          "columns": [
+            "workflow_version_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "workflow_version",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "workflow_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "version",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "definition",
+          "type": "JSONB",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_workflow_version_workflow_version",
+          "columns": [
+            "workflow_id",
+            "version"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "created_by"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workflow_id"
+          ],
+          "referred_table": "workflow",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_workflow_version_created_by",
+          "columns": [
+            "created_by"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workflow_version_workflow_id",
+          "columns": [
+            "workflow_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "workspace",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "owner_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "workspace_type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "settings",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "config",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "owner_id"
+          ],
+          "referred_table": "user",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_workspace_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workspace_owner_id",
+          "columns": [
+            "owner_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workspace_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    },
+    {
+      "name": "workspace_environment",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "organization_id",
+          "type": "UUID",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "workspace_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "env_vars",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "runtime",
+          "type": "JSONB",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_workspace_environment_ws_name",
+          "columns": [
+            "workspace_id",
+            "name"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": null,
+          "columns": [
+            "organization_id"
+          ],
+          "referred_table": "organization",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "tenant_id"
+          ],
+          "referred_table": "tenant",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        },
+        {
+          "name": null,
+          "columns": [
+            "workspace_id"
+          ],
+          "referred_table": "workspace",
+          "referred_columns": [
+            "id"
+          ],
+          "ondelete": null,
+          "onupdate": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_workspace_environment_organization_id",
+          "columns": [
+            "organization_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workspace_environment_tenant_id",
+          "columns": [
+            "tenant_id"
+          ],
+          "unique": false,
+          "where": null
+        },
+        {
+          "name": "ix_workspace_environment_workspace_id",
+          "columns": [
+            "workspace_id"
+          ],
+          "unique": false,
+          "where": null
+        }
+      ]
+    }
+  ],
+  "raw_indexes": [
+    {
+      "name": "ix_embedding_vector_hnsw",
+      "table": "embedding",
+      "method": "hnsw",
+      "indexed_column": "vector",
+      "operator_class": "vector_cosine_ops",
+      "options": {
+        "m": "16",
+        "ef_construction": "64"
+      },
+      "sql": "CREATE INDEX ix_embedding_vector_hnsw ON embedding USING hnsw (vector vector_cosine_ops) WITH (m = 16, ef_construction = 64);",
+      "source": "migration:migrations/versions/0013_phase2_knowledge.py:293"
+    },
+    {
+      "name": "ix_memory_vector_hnsw",
+      "table": "memory",
+      "method": "hnsw",
+      "indexed_column": "vector",
+      "operator_class": "vector_cosine_ops",
+      "options": {
+        "m": "16",
+        "ef_construction": "64"
+      },
+      "sql": "CREATE INDEX ix_memory_vector_hnsw ON memory USING hnsw (vector vector_cosine_ops) WITH (m = 16, ef_construction = 64);",
+      "source": "migration:migrations/versions/0014_phase2_memory.py:195"
+    }
+  ],
+  "extensions": [
+    {
+      "name": "vector",
+      "sql": "CREATE EXTENSION IF NOT EXISTS vector;",
+      "sources": [
+        "migration:migrations/versions/0013_phase2_knowledge.py:104",
+        "migration:migrations/versions/0014_phase2_memory.py:95"
+      ]
+    }
+  ],
+  "triggers": [],
+  "dialect_only": [],
+  "notes": [
+    "类型为 PG 方言真正 emit 的类型（UUID / TIMESTAMP WITH TIME ZONE / JSONB / VECTOR），不是 str(col.type) 的声明名（M-01）",
+    "raw_indexes 来自迁移链 raw DDL：Base.metadata 无法表达 hnsw，纯 ORM 编译会静默漏掉",
+    "unique_indexes 与 unique_constraints 是两个不同集合，勿混算进索引数",
+    "PG 侧 DB 触发器为 0：三个 FTS5 同步触发器是 SQLite 专属（dialect_only: sqlite）"
+  ]
+}

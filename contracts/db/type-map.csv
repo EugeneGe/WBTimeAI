@@ -1,0 +1,630 @@
+table,column,declared_type,declared_str_type,pg_emit_type,sqlite_emit_type,ts_target,strategy,dialect_sensitive
+agent,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+agent,description,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+agent,type,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+agent,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+agent,current_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent_event,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_event,run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_event,seq,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+agent_event,type,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+agent_event,payload,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+agent_event,trace_id,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+agent_event,span_id,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+agent_event,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent_knowledge,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_knowledge,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_knowledge,agent_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_knowledge,knowledge_base_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_knowledge,enabled,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+agent_knowledge,config,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+agent_knowledge,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent_knowledge,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent_run,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_run,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_run,agent_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_run,agent_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_run,conversation_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_run,user_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_run,task_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_run,trigger,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+agent_run,run_mode,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+agent_run,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+agent_run,trace_id,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+agent_run,span_id,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+agent_run,last_heartbeat_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent_run,idempotency_key,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+agent_run,started_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent_run,completed_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent_run,duration_ms,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+agent_run,token_usage,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+agent_run,success,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+agent_run,error_type,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+agent_run,tool_error_count,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+agent_run,cost,"Numeric(precision=18, scale=6)","NUMERIC(18, 6)","NUMERIC(18, 6)","NUMERIC(18, 6)",string,decimal-string,false
+agent_run,cost_currency,String(length=10),VARCHAR(10),VARCHAR(10),VARCHAR(10),string,varchar-passthrough,false
+agent_run,cost_price_version,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+agent_run,cost_estimated,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+agent_run,cost_breakdown,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+agent_run,cost_status,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+agent_run,error,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+agent_skill,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_skill,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_skill,agent_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_skill,skill_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_skill,enabled,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+agent_skill,config,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+agent_skill,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent_skill,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+agent_tool,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_tool,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_tool,agent_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_tool,tool_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_tool,enabled,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+agent_tool,permission_scope,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+agent_version,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_version,agent_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_version,version,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+agent_version,system_prompt,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+agent_version,model_config,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+agent_version,runtime_config,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+agent_version,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+agent_version,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+agent_version,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+approval,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+approval,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+approval,subject_type,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+approval,subject_ref,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+approval,requested_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+approval,status,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+approval,decided_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+approval,decided_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+approval,payload,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+approval,expires_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+approval,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+approval,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+audit_log,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+audit_log,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+audit_log,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+audit_log,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+audit_log,user_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+audit_log,agent_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+audit_log,run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+audit_log,tool_call_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+audit_log,action,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+audit_log,resource_type,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+audit_log,resource_id,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+audit_log,outcome,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+audit_log,duration_ms,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+audit_log,token_usage,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+audit_log,cost,"Numeric(precision=18, scale=6)","NUMERIC(18, 6)","NUMERIC(18, 6)","NUMERIC(18, 6)",string,decimal-string,false
+audit_log,request_id,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+audit_log,trace_id,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+audit_log,ip,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+audit_log,metadata,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+audit_log,extensions,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+audit_log,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+conversation,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+conversation,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+conversation,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+conversation,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+conversation,agent_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+conversation,user_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+conversation,title,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+conversation,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+conversation,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+conversation,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+credential,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+credential,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+credential,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+credential,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+credential,provider,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+credential,key_type,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+credential,encrypted_value,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+credential,name,String(length=150),VARCHAR(150),VARCHAR(150),VARCHAR(150),string,varchar-passthrough,false
+credential,status,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+credential,last_used_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+credential,metadata,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+credential,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+credential,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+document,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+document,knowledge_base_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+document,title,String(length=512),VARCHAR(512),VARCHAR(512),VARCHAR(512),string,varchar-passthrough,false
+document,source_type,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+document,storage_key,String(length=1024),VARCHAR(1024),VARCHAR(1024),VARCHAR(1024),string,varchar-passthrough,false
+document,mime,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+document,size,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+document,checksum,String(length=128),VARCHAR(128),VARCHAR(128),VARCHAR(128),string,varchar-passthrough,false
+document,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+document,error,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+document,task_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+document,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+document,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+document_chunk,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+document_chunk,document_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+document_chunk,ordinal,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+document_chunk,content,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+document_chunk,token_count,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+document_chunk,metadata,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+document_chunk,embedding_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+document_chunk,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+embedding,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+embedding,chunk_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+embedding,model,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+embedding,dimensions,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+embedding,vector,VectorType(),JSON,VECTOR(1536),JSON,number[],vector-1536-number-array,true
+embedding,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+evaluation_case,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_case,dataset_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_case,case_key,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+evaluation_case,input,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+evaluation_case,expected,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+evaluation_case,assertions,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+evaluation_case,tags,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+evaluation_case,position,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+evaluation_case,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+evaluation_dataset,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_dataset,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_dataset,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_dataset,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_dataset,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+evaluation_dataset,version,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+evaluation_dataset,parent_dataset_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_dataset,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+evaluation_dataset,description,String(length=1024),VARCHAR(1024),VARCHAR(1024),VARCHAR(1024),string,varchar-passthrough,false
+evaluation_dataset,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_dataset,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+evaluation_dataset,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+evaluation_result,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_result,evaluation_run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_result,case_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_result,agent_run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_result,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+evaluation_result,score,Float(),FLOAT,FLOAT,FLOAT,number,double-number,false
+evaluation_result,assertion_results,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+evaluation_result,duration_ms,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+evaluation_result,token_usage,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+evaluation_result,cost,Float(),FLOAT,FLOAT,FLOAT,number,double-number,false
+evaluation_result,error_type,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+evaluation_result,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+evaluation_run,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_run,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_run,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_run,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_run,dataset_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_run,agent_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_run,agent_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_run,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+evaluation_run,idempotency_key,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+evaluation_run,started_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+evaluation_run,completed_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+evaluation_run,summary,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+evaluation_run,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+evaluation_run,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+evaluation_run,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+feature_flag,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+feature_flag,name,String(length=150),VARCHAR(150),VARCHAR(150),VARCHAR(150),string,varchar-passthrough,false
+feature_flag,enabled,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+feature_flag,description,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+feature_flag,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+feature_flag,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+knowledge_base,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+knowledge_base,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+knowledge_base,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+knowledge_base,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+knowledge_base,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+knowledge_base,description,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+knowledge_base,embedding_model,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+knowledge_base,chunk_config,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+knowledge_base,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+knowledge_base,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+knowledge_base,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+knowledge_base,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+login_attempt,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+login_attempt,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+login_attempt,username,String(length=150),VARCHAR(150),VARCHAR(150),VARCHAR(150),string,varchar-passthrough,false
+login_attempt,ip_address,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+login_attempt,success,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+login_attempt,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+login_attempt,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+mcp_permission,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_permission,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_permission,agent_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_permission,agent_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_permission,mcp_tool_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_permission,action,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+mcp_permission,effect,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+mcp_permission,scope,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+mcp_permission,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+mcp_permission,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+mcp_server,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_server,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_server,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_server,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_server,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+mcp_server,transport,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+mcp_server,endpoint,String(length=1024),VARCHAR(1024),VARCHAR(1024),VARCHAR(1024),string,varchar-passthrough,false
+mcp_server,command,String(length=1024),VARCHAR(1024),VARCHAR(1024),VARCHAR(1024),string,varchar-passthrough,false
+mcp_server,args,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+mcp_server,env_ref,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+mcp_server,credential_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_server,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+mcp_server,capabilities,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+mcp_server,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+mcp_server,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+mcp_tool,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_tool,mcp_server_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+mcp_tool,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+mcp_tool,description,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+mcp_tool,input_schema,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+mcp_tool,output_schema,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+mcp_tool,discovered_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+mcp_tool,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+membership,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+membership,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+membership,user_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+membership,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+membership,role_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+membership,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+membership,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+membership,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+memory,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+memory,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+memory,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+memory,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+memory,kind,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+memory,scope_type,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+memory,scope_id,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+memory,visibility,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+memory,content,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+memory,memory_type,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+memory,importance,Float(),FLOAT,FLOAT,FLOAT,number,double-number,false
+memory,confidence,Float(),FLOAT,FLOAT,FLOAT,number,double-number,false
+memory,source_run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+memory,vector,VectorType(),JSON,VECTOR(1536),JSON,number[],vector-1536-number-array,true
+memory,expires_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+memory,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+memory,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+memory_relation,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+memory_relation,from_memory_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+memory_relation,to_memory_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+memory_relation,relation,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+memory_relation,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+message,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+message,conversation_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+message,run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+message,role,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+message,content,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+message,content_parts,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+message,token_count,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+message,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+model,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model,provider_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+model,type,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+model,context_window,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+model,capabilities,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+model,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+model_provider,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model_provider,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model_provider,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model_provider,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model_provider,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+model_provider,type,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+model_provider,endpoint,String(length=512),VARCHAR(512),VARCHAR(512),VARCHAR(512),string,varchar-passthrough,false
+model_provider,credential_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model_provider,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+model_provider,config,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+model_provider_credential,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model_provider_credential,provider_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model_provider_credential,credential_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+model_provider_credential,weight,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+model_provider_credential,status,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+model_provider_credential,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+model_provider_credential,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+organization,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+organization,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+organization,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+organization,slug,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+organization,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+organization,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+permission,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+permission,code,String(length=150),VARCHAR(150),VARCHAR(150),VARCHAR(150),string,varchar-passthrough,false
+permission,name,String(length=150),VARCHAR(150),VARCHAR(150),VARCHAR(150),string,varchar-passthrough,false
+permission,description,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+permission,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+permission,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+plugin,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+plugin,name,String(length=150),VARCHAR(150),VARCHAR(150),VARCHAR(150),string,varchar-passthrough,false
+plugin,version,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+plugin,kind,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+plugin,entry_point,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+plugin,permissions,JSON(),JSON,JSON,JSON,unknown,json-opaque,false
+plugin,manifest,JSON(),JSON,JSON,JSON,unknown,json-opaque,false
+plugin,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+plugin,installed_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+plugin,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+plugin,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+project,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+project,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+project,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+project,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+project,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+project,description,String(length=1024),VARCHAR(1024),VARCHAR(1024),VARCHAR(1024),string,varchar-passthrough,false
+project,repo_url,String(length=2048),VARCHAR(2048),VARCHAR(2048),VARCHAR(2048),string,varchar-passthrough,false
+project,default_branch,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+project,settings,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+project,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+project,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+project,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+refresh_token,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+refresh_token,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+refresh_token,user_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+refresh_token,session_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+refresh_token,token_hash,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+refresh_token,expires_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+refresh_token,revoked_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+refresh_token,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+refresh_token,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+resource_permission,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+resource_permission,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+resource_permission,subject_type,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+resource_permission,subject_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+resource_permission,resource_type,String(length=30),VARCHAR(30),VARCHAR(30),VARCHAR(30),string,varchar-passthrough,false
+resource_permission,resource_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+resource_permission,action,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+resource_permission,effect,String(length=10),VARCHAR(10),VARCHAR(10),VARCHAR(10),string,varchar-passthrough,false
+resource_permission,scope,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+resource_permission,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+resource_permission,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+role,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+role,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+role,name,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+role,description,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+role,is_system,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+role,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+role,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+role_permission,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+role_permission,role_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+role_permission,permission_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+role_permission,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+role_permission,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+sandbox_session,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+sandbox_session,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+sandbox_session,run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+sandbox_session,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+sandbox_session,provider,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+sandbox_session,image,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+sandbox_session,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+sandbox_session,container_ref,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+sandbox_session,workdir,String(length=512),VARCHAR(512),VARCHAR(512),VARCHAR(512),string,varchar-passthrough,false
+sandbox_session,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+sandbox_session,ended_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+schedule,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+schedule,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+schedule,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+schedule,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+schedule,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+schedule,target_type,String(length=30),VARCHAR(30),VARCHAR(30),VARCHAR(30),string,varchar-passthrough,false
+schedule,target_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+schedule,trigger,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+schedule,cron,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+schedule,event_type,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+schedule,payload,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+schedule,enabled,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+schedule,last_run_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+schedule,next_run_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+schedule,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+schedule,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+session,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+session,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+session,user_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+session,device,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+session,ip_address,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+session,user_agent,String(length=512),VARCHAR(512),VARCHAR(512),VARCHAR(512),string,varchar-passthrough,false
+session,expires_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+session,revoked_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+session,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+session,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+skill,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+skill,display_name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+skill,description,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+skill,category,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+skill,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+skill,current_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+skill,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+skill_resource,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill_resource,skill_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill_resource,path,String(length=1024),VARCHAR(1024),VARCHAR(1024),VARCHAR(1024),string,varchar-passthrough,false
+skill_resource,kind,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+skill_resource,storage_key,String(length=1024),VARCHAR(1024),VARCHAR(1024),VARCHAR(1024),string,varchar-passthrough,false
+skill_resource,checksum,String(length=128),VARCHAR(128),VARCHAR(128),VARCHAR(128),string,varchar-passthrough,false
+skill_resource,size,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+skill_resource,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+skill_version,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill_version,skill_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill_version,version,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+skill_version,instructions,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+skill_version,manifest,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+skill_version,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+skill_version,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+skill_version,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+task,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+task,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+task,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+task,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+task,type,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+task,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+task,priority,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+task,execution_mode,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+task,payload,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+task,result,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+task,idempotency_key,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+task,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+task,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+task_execution,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+task_execution,task_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+task_execution,attempt,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+task_execution,worker_id,String(length=128),VARCHAR(128),VARCHAR(128),VARCHAR(128),string,varchar-passthrough,false
+task_execution,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+task_execution,started_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+task_execution,finished_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+task_execution,duration_ms,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+task_execution,error,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+task_execution,project_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+task_execution,checkout_ref,String(length=128),VARCHAR(128),VARCHAR(128),VARCHAR(128),string,varchar-passthrough,false
+task_execution,base_commit,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+task_execution,result_commit,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+task_execution,environment_digest,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+task_execution,artifact_refs,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+task_execution,heartbeat_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+task_execution,lease_expires_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+tenant,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tenant,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+tenant,slug,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+tenant,is_active,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+tenant,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+tenant,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+tool,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool,name,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+tool,display_name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+tool,description,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+tool,category,String(length=100),VARCHAR(100),VARCHAR(100),VARCHAR(100),string,varchar-passthrough,false
+tool,source,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+tool,input_schema,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+tool,output_schema,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+tool,requires_sandbox,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+tool,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+tool,tool_ref,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+tool_call,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_call,run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_call,tool_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_call,tool_name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+tool_call,tool_type,String(length=30),VARCHAR(30),VARCHAR(30),VARCHAR(30),string,varchar-passthrough,false
+tool_call,tool_ref,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+tool_call,attempt,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+tool_call,trace_id,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+tool_call,span_id,String(length=64),VARCHAR(64),VARCHAR(64),VARCHAR(64),string,varchar-passthrough,false
+tool_call,input,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+tool_call,output,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+tool_call,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+tool_call,duration_ms,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+tool_call,sandbox_session_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_call,error,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+tool_call,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+tool_permission,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_permission,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_permission,agent_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_permission,agent_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_permission,tool_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_permission,action,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+tool_permission,effect,String(length=20),VARCHAR(20),VARCHAR(20),VARCHAR(20),string,varchar-passthrough,false
+tool_permission,scope,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+tool_permission,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+tool_permission,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+tool_version,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_version,tool_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+tool_version,version,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+tool_version,spec,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+tool_version,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+user,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+user,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+user,username,String(length=150),VARCHAR(150),VARCHAR(150),VARCHAR(150),string,varchar-passthrough,false
+user,email,String(length=320),VARCHAR(320),VARCHAR(320),VARCHAR(320),string,varchar-passthrough,false
+user,password_hash,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+user,display_name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+user,is_active,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+user,is_superuser,Boolean(),BOOLEAN,BOOLEAN,BOOLEAN,boolean,bool-passthrough,false
+user,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+user,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+workflow,description,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+workflow,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+workflow,current_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_edge,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_edge,workflow_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_edge,from_node_key,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+workflow_edge,to_node_key,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+workflow_edge,condition,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+workflow_edge,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_node,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_node,workflow_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_node,node_key,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+workflow_node,type,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+workflow_node,config,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workflow_node,position,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workflow_node,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_node_run,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_node_run,workflow_run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_node_run,node_key,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+workflow_node_run,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+workflow_node_run,attempt,Integer(),INTEGER,INTEGER,INTEGER,number,int32-number,false
+workflow_node_run,agent_run_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_node_run,tool_call_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_node_run,approval_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_node_run,input,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workflow_node_run,output,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workflow_node_run,started_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_node_run,completed_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_node_run,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_node_run,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_run,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_run,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_run,workflow_version_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_run,trigger,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+workflow_run,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+workflow_run,task_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_run,input,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workflow_run,output,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workflow_run,started_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_run,completed_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_run,error,Text(),TEXT,TEXT,TEXT,string,text-passthrough,false
+workflow_run,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_run,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workflow_version,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_version,workflow_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_version,version,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+workflow_version,definition,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workflow_version,status,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+workflow_version,created_by,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workflow_version,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workspace,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workspace,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workspace,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workspace,owner_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workspace,name,String(length=255),VARCHAR(255),VARCHAR(255),VARCHAR(255),string,varchar-passthrough,false
+workspace,workspace_type,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+workspace,settings,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workspace,config,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workspace,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workspace,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workspace_environment,id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workspace_environment,tenant_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workspace_environment,organization_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workspace_environment,workspace_id,GUID(length=36),CHAR(36),UUID,CHAR(36),string,uuid-string,true
+workspace_environment,name,String(length=50),VARCHAR(50),VARCHAR(50),VARCHAR(50),string,varchar-passthrough,false
+workspace_environment,env_vars,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workspace_environment,runtime,JSONType(),JSON,JSONB,JSON,unknown,jsonb-opaque,true
+workspace_environment,created_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true
+workspace_environment,updated_at,DateTime(timezone=True),DATETIME,TIMESTAMP WITH TIME ZONE,DATETIME,string,timestamptz-iso8601,true

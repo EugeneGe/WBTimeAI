@@ -1,0 +1,10 @@
+# WBTimeAI · pnpm workspace（V0.0.1 最小骨架）
+#
+# 为什么只有一个 packages: 列表、没有任何子包：
+#   V0.0.1 的产出是「契约继承与抽取」——纯 Python 抽取 + contracts/ 下的 JSON/SQL/CSV，
+#   按路线图 §2 与施工纪律 §4.8-3，本版**不写任何 TS 业务代码**。
+#   因此这里**刻意不创建** packages/ 与 apps/ 的目录树（空目录树冒充骨架 = 自证工程量的假绿），
+#   只登记后续版本会用的 glob；首个 TS 版本（V0.1.0 基座与契约层）建目录后自动生效。
+packages:
+  - "packages/*"
+  - "apps/*"

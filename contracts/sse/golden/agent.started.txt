@@ -1,0 +1,4 @@
+id: 1
+event: agent.started
+data: {"run_id":"run_01","agent_id":"agent_01","agent_version_id":"agentver_01","conversation_id":"conv_01","run_mode":"inline"}
+

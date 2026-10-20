@@ -1,0 +1,143 @@
+# WBTimeAI · CI（V0.0.1 建仓基线）
+#
+# 依据：`docs/施工纪律.md` §4.7（运行时地板口径）、`docs/V1.0/00-版本路线图.md` §7.2-15。
+#
+# 三条硬纪律，本文件逐条落地：
+#   1. Node 三档，**全部 required**：22.19.0（地板，精确 patch）/ 24.18.1（桌面实际档）/
+#      26.x（最新 LTS）。矩阵里**禁止**写 `22` / `24` 这类浮点 major —— 会被解析成该线
+#      最新值 ⇒ 永远绿、测不到下界 = 假绿。
+#   2. 每档必须**断言** `process.versions.node` 落在该档声明值内（防「矩阵写 22.19 实际跑 24」）。
+#   3. **禁止** `continue-on-error`：任何一档红都必须让整条流水线红。
+#
+# 为什么本版没有 `pnpm install` / `pnpm -r test`：
+#   V0.0.1 的产出是契约（`contracts/`，由 Python 抽取），按路线图 §2 与施工纪律 §4.8-3
+#   本版**不写任何 TS 业务代码**，仓库里没有 workspace 子包可装、可测。此时若写
+#   `pnpm -r test` 会因「无匹配包」直接失败，属于用假门禁冒充覆盖；因此本版只做两件事：
+#   ① 版本断言（真实可跑、可失败）；② 契约完整性 + 基线不变量 + 文档门禁（真实可跑、可失败）。
+#   首个 TS 版本（V0.1.0）引入 workspace 包后，再补 install / typecheck / test 档。
+#
+# 注意：契约档 `run.py check` 在 manifest 重建前会红（sha256 台账与产物不一致），
+#   这是**预期门禁**而非缺陷 —— 台账由 C-07 在收口时统一重建（`run.py export`）。
+#   该检查不依赖旧仓存在（`--source` 只在 export 时解析），因此在干净 runner 上可跑。
+
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 运行时地板三档：每档都断言「实际跑的 Node 就是声明的那一档」
+  # ---------------------------------------------------------------------------
+  runtime-floor:
+    name: node ${{ matrix.node }} · ${{ matrix.tier }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 地板：精确 patch，禁写 22
+          - node: "22.19.0"
+            mode: exact
+            tier: floor
+          # 桌面实际档 = Electron 内置 Node 精确值（与 .nvmrc 一致）
+          - node: "24.18.1"
+            mode: exact
+            tier: desktop
+          # 最新 LTS：允许 26.x 内取最新 patch
+          - node: "26.x"
+            mode: major
+            tier: latest-lts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Show runtime
+        shell: bash
+        run: |
+          echo "declared=${{ matrix.node }} tier=${{ matrix.tier }}"
+          node --version
+          node -p "process.versions.node"
+
+      - name: Assert runtime falls inside declared tier (anti-false-green)
+        shell: bash
+        env:
+          DECLARED: ${{ matrix.node }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          node <<'JS'
+          const declared = process.env.DECLARED || '';
+          const mode = process.env.MODE || '';
+          const actual = process.versions.node;
+          const parts = actual.split('.').map(Number);
+
+          // engines 区间 "^22.19.0 || >=24.0.0" 的两段式语义（不是简单 >= 地板）：
+          //   >=22.19.0 <23.0.0  或  >=24.0.0
+          //   22.0–22.18 与 23.x 全系不在支持范围。
+          const inEngines =
+            (parts[0] === 22 && (parts[1] > 19 || (parts[1] === 19 && parts[2] >= 0))) ||
+            parts[0] >= 24;
+
+          // 档位断言：exact 要求 major.minor.patch 全等；major 要求主版本相等。
+          const tierOk = mode === 'exact'
+            ? actual === declared
+            : (mode === 'major' ? String(parts[0]) === declared.split('.')[0] : false);
+
+          console.log(`declared=${declared} mode=${mode} actual=${actual} tier_ok=${tierOk} engines_ok=${inEngines}`);
+
+          if (!tierOk) {
+            console.error(`FAIL: runner node ${actual} does not fall inside declared tier ${declared} (mode=${mode})`);
+            process.exit(1);
+          }
+          if (!inEngines) {
+            console.error(`FAIL: runner node ${actual} is outside engines range "^22.19.0 || >=24.0.0"`);
+            process.exit(1);
+          }
+          console.log('OK: runtime matches declared tier and engines range');
+          JS
+
+  # ---------------------------------------------------------------------------
+  # 门禁：基线不变量 + 文档门禁（施工纪律 §4.6）+ 契约完整性（sha256 台账）
+  # ---------------------------------------------------------------------------
+  gates:
+    name: baseline · docs · contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Baseline invariants (version / engines.node / .nvmrc / CI matrix)
+        run: python scripts/check_baseline.py
+
+      - name: Docs gate (施工纪律 §4.6 「不做」栏 ①/②/③)
+        run: python scripts/check_docs.py
+
+      - name: Contracts integrity (sha256 ledger, no legacy repo needed)
+        run: python scripts/extract-from-py/run.py check
+
+      # 语义门禁：从产物重新计算数字并与 criteria 比对（纯 sha256 门禁查不出「改数字 + 同步重钉 sha」）。
+      # 两者职责不同，缺一不可：
+      #   run.py check           → 证明「文件没被偷改」
+      #   verify_semantics.py    → 证明「数字是对的」
+      - name: Contracts semantics (recompute from artifacts, not from ledger)
+        run: python scripts/verify_semantics.py

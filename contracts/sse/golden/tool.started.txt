@@ -1,0 +1,4 @@
+id: 1
+event: tool.started
+data: {"run_id":"run_01","tool_call_id":"toolcall_01","tool_name":"http.get","attempt":1,"arguments":{"url":"https://example.com"}}
+

@@ -1,0 +1,4 @@
+id: 1
+event: mcp.started
+data: {"run_id":"run_01","mcp_call_id":"mcpcall_01","server":"filesystem","tool_name":"http.get"}
+

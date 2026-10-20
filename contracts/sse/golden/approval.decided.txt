@@ -1,0 +1,4 @@
+id: 1
+event: approval.decided
+data: {"approval_id":"appr_01","status":"approved","decided_by":"user_01"}
+

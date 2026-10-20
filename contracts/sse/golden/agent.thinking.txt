@@ -1,0 +1,4 @@
+id: 1
+event: agent.thinking
+data: {"run_id":"run_01","iteration":1}
+

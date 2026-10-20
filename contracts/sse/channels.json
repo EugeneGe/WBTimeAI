@@ -1,0 +1,1408 @@
+{
+  "by_channel": {
+    "agent.completed": "agent.completed",
+    "agent.error": "agent.failed",
+    "agent.started": "agent.started",
+    "agent.thinking": "agent.thinking",
+    "approval.decided": "approval.decided",
+    "approval.requested": "approval.requested",
+    "knowledge.indexed": "knowledge.indexed",
+    "mcp.completed": "mcp_call.completed",
+    "mcp.started": "mcp_call.started",
+    "memory.written": "memory.written",
+    "message.delta": "agent.message",
+    "skill.resolved": "skill.resolved",
+    "tool.completed": "tool_call.completed",
+    "tool.started": "tool_call.started",
+    "workflow.completed": "workflow.completed",
+    "workflow.failed": "workflow.failed",
+    "workflow.node.completed": "workflow.node.completed",
+    "workflow.node.started": "workflow.node.started",
+    "workflow.started": "workflow.started"
+  },
+  "channels": [
+    {
+      "channel": "agent.started",
+      "constructor": {
+        "factory": "AgentStarted.create",
+        "kwargs": {
+          "agent_id": "agent_01",
+          "agent_version_id": "agentver_01",
+          "conversation_id": "conv_01",
+          "run_id": "run_01",
+          "run_mode": "inline"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "agent.started",
+      "event_class": "AgentStarted",
+      "event_module": "wbtime_ai_event.events.agent",
+      "frame": {
+        "bytes": 157,
+        "seq": 1,
+        "sha256": "bb0069e15c223137836df1b078e886b1de91d91ed84ad6e6b4ca7779630fc482"
+      },
+      "golden": "golden/agent.started.txt",
+      "golden_sha256": "bb0069e15c223137836df1b078e886b1de91d91ed84ad6e6b4ca7779630fc482",
+      "index": 1,
+      "payload_fields": {
+        "agent_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "agent_version_id": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "conversation_id": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "run_mode": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "agent_id",
+        "agent_version_id",
+        "conversation_id",
+        "run_mode"
+      ],
+      "phase": "core",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "run_id",
+        "agent_id",
+        "agent_version_id",
+        "conversation_id",
+        "run_mode"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "agent.thinking",
+      "constructor": {
+        "factory": "AgentThinking.create",
+        "kwargs": {
+          "iteration": 1,
+          "run_id": "run_01"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "agent.thinking",
+      "event_class": "AgentThinking",
+      "event_module": "wbtime_ai_event.events.agent",
+      "frame": {
+        "bytes": 69,
+        "seq": 1,
+        "sha256": "8fc9777a5418a54210d4df73680a8282784d11c4b9db9941db184cc165b6c592"
+      },
+      "golden": "golden/agent.thinking.txt",
+      "golden_sha256": "8fc9777a5418a54210d4df73680a8282784d11c4b9db9941db184cc165b6c592",
+      "index": 2,
+      "payload_fields": {
+        "iteration": {
+          "default": null,
+          "required": true,
+          "type": "int"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "iteration"
+      ],
+      "phase": "core",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "run_id",
+        "iteration"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "message.delta",
+      "constructor": {
+        "factory": "AgentMessage.create",
+        "kwargs": {
+          "content": "你好，世界",
+          "message_id": "msg_01",
+          "role": "assistant",
+          "run_id": "run_01"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "agent.message",
+      "event_class": "AgentMessage",
+      "event_module": "wbtime_ai_event.events.agent",
+      "frame": {
+        "bytes": 121,
+        "seq": 1,
+        "sha256": "9c14f455021eb04870af3ae30cad89c5cce8c284124b158d7414282957f180fa"
+      },
+      "golden": "golden/message.delta.txt",
+      "golden_sha256": "9c14f455021eb04870af3ae30cad89c5cce8c284124b158d7414282957f180fa",
+      "index": 3,
+      "payload_fields": {
+        "content": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "message_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "role": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "message_id",
+        "role",
+        "content"
+      ],
+      "phase": "core",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "run_id",
+        "message_id",
+        "role",
+        "delta"
+      ],
+      "projection": {
+        "added": [
+          "delta"
+        ],
+        "dropped": [
+          "content"
+        ],
+        "note": "该投影是通道专属逻辑，TS 侧必须逐字复刻。",
+        "rule": "content -> delta",
+        "source": "read:apps/api/src/wbtime_ai_api/sse/encoder.py::_project_payload"
+      }
+    },
+    {
+      "channel": "tool.started",
+      "constructor": {
+        "factory": "ToolCallStarted.create",
+        "kwargs": {
+          "arguments": {
+            "url": "https://example.com"
+          },
+          "attempt": 1,
+          "run_id": "run_01",
+          "tool_call_id": "toolcall_01",
+          "tool_name": "http.get"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "tool_call.started",
+      "event_class": "ToolCallStarted",
+      "event_module": "wbtime_ai_event.events.agent",
+      "frame": {
+        "bytes": 159,
+        "seq": 1,
+        "sha256": "09dd51bafdb1fc161763cf32387b413554ec6b12cebd4230d88f6c1ccc5af9e8"
+      },
+      "golden": "golden/tool.started.txt",
+      "golden_sha256": "09dd51bafdb1fc161763cf32387b413554ec6b12cebd4230d88f6c1ccc5af9e8",
+      "index": 4,
+      "payload_fields": {
+        "arguments": {
+          "default": null,
+          "required": false,
+          "type": "dict[str, Any] | null"
+        },
+        "attempt": {
+          "default": 1,
+          "required": false,
+          "type": "int"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "tool_call_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "tool_name": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "tool_call_id",
+        "tool_name",
+        "attempt",
+        "arguments"
+      ],
+      "phase": "core",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "run_id",
+        "tool_call_id",
+        "tool_name",
+        "attempt",
+        "arguments"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "tool.completed",
+      "constructor": {
+        "factory": "ToolCallCompleted.create",
+        "kwargs": {
+          "duration_ms": 12,
+          "error": "upstream returned 502",
+          "run_id": "run_01",
+          "status": "succeeded",
+          "tool_call_id": "toolcall_01",
+          "tool_name": "http.get"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "tool_call.completed",
+      "event_class": "ToolCallCompleted",
+      "event_module": "wbtime_ai_event.events.agent",
+      "frame": {
+        "bytes": 177,
+        "seq": 1,
+        "sha256": "843dd7cc6a030cf39f48842ce5c835dc4fc40071e84ab83531eddeba96ccbc3f"
+      },
+      "golden": "golden/tool.completed.txt",
+      "golden_sha256": "843dd7cc6a030cf39f48842ce5c835dc4fc40071e84ab83531eddeba96ccbc3f",
+      "index": 5,
+      "payload_fields": {
+        "duration_ms": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "error": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "status": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "tool_call_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "tool_name": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "tool_call_id",
+        "tool_name",
+        "status",
+        "duration_ms",
+        "error"
+      ],
+      "phase": "core",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "run_id",
+        "tool_call_id",
+        "tool_name",
+        "status",
+        "duration_ms",
+        "error"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "mcp.started",
+      "constructor": {
+        "factory": "MCPCallStarted.create",
+        "kwargs": {
+          "mcp_call_id": "mcpcall_01",
+          "run_id": "run_01",
+          "server": "filesystem",
+          "tool_name": "http.get"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "mcp_call.started",
+      "event_class": "MCPCallStarted",
+      "event_module": "wbtime_ai_event.events.agent",
+      "frame": {
+        "bytes": 124,
+        "seq": 1,
+        "sha256": "ef2ea4df41f2c800ebe60e07e9faa9bc24c9676ffd764181f3454131be4d6f52"
+      },
+      "golden": "golden/mcp.started.txt",
+      "golden_sha256": "ef2ea4df41f2c800ebe60e07e9faa9bc24c9676ffd764181f3454131be4d6f52",
+      "index": 6,
+      "payload_fields": {
+        "mcp_call_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "server": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "tool_name": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "mcp_call_id",
+        "server",
+        "tool_name"
+      ],
+      "phase": "core",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "run_id",
+        "mcp_call_id",
+        "server",
+        "tool_name"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "mcp.completed",
+      "constructor": {
+        "factory": "MCPCallCompleted.create",
+        "kwargs": {
+          "duration_ms": 12,
+          "error": "upstream returned 502",
+          "mcp_call_id": "mcpcall_01",
+          "run_id": "run_01",
+          "server": "filesystem",
+          "status": "succeeded"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "mcp_call.completed",
+      "event_class": "MCPCallCompleted",
+      "event_module": "wbtime_ai_event.events.agent",
+      "frame": {
+        "bytes": 173,
+        "seq": 1,
+        "sha256": "6816f03bdce1a1713541bb141d03802309e47492ba0225fe10d767e54547ae49"
+      },
+      "golden": "golden/mcp.completed.txt",
+      "golden_sha256": "6816f03bdce1a1713541bb141d03802309e47492ba0225fe10d767e54547ae49",
+      "index": 7,
+      "payload_fields": {
+        "duration_ms": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "error": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "mcp_call_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "server": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "status": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "mcp_call_id",
+        "server",
+        "status",
+        "duration_ms",
+        "error"
+      ],
+      "phase": "core",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "run_id",
+        "mcp_call_id",
+        "server",
+        "status",
+        "duration_ms",
+        "error"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "agent.completed",
+      "constructor": {
+        "factory": "AgentCompleted.create",
+        "kwargs": {
+          "duration_ms": 12,
+          "iterations": 1,
+          "run_id": "run_01"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "agent.completed",
+      "event_class": "AgentCompleted",
+      "event_module": "wbtime_ai_event.events.agent",
+      "frame": {
+        "bytes": 88,
+        "seq": 1,
+        "sha256": "e713717adad0a9e743672058854a31d79f75a823b6c994a1aafa078cdec9ce6d"
+      },
+      "golden": "golden/agent.completed.txt",
+      "golden_sha256": "e713717adad0a9e743672058854a31d79f75a823b6c994a1aafa078cdec9ce6d",
+      "index": 8,
+      "payload_fields": {
+        "duration_ms": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "iterations": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "duration_ms",
+        "iterations"
+      ],
+      "phase": "core",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "run_id",
+        "duration_ms",
+        "iterations"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "agent.error",
+      "constructor": {
+        "factory": "AgentFailed.create",
+        "kwargs": {
+          "duration_ms": 12,
+          "error": "upstream returned 502",
+          "error_type": "ToolTimeout",
+          "run_id": "run_01"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "agent.failed",
+      "event_class": "AgentFailed",
+      "event_module": "wbtime_ai_event.events.agent",
+      "frame": {
+        "bytes": 128,
+        "seq": 1,
+        "sha256": "a0710fea33982eb5482ce92e484bd08b1ee328b7cc0e522dd93f437aed4a413a"
+      },
+      "golden": "golden/agent.error.txt",
+      "golden_sha256": "a0710fea33982eb5482ce92e484bd08b1ee328b7cc0e522dd93f437aed4a413a",
+      "index": 9,
+      "payload_fields": {
+        "duration_ms": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "error": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "error_type": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "error_type",
+        "error",
+        "duration_ms"
+      ],
+      "phase": "core",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "run_id",
+        "error_type",
+        "error",
+        "duration_ms"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "skill.resolved",
+      "constructor": {
+        "factory": "SkillResolved.create",
+        "kwargs": {
+          "run_id": "run_01",
+          "skill_id": "skill_01",
+          "skill_name": "pdf",
+          "version": "1.0.0"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "skill.resolved",
+      "event_class": "SkillResolved",
+      "event_module": "wbtime_ai_event.events.skill",
+      "frame": {
+        "bytes": 114,
+        "seq": 1,
+        "sha256": "7c54b75f560468d722409d92b9d19fe75fb9299b7c1ab33ffba8ca4a6bf19838"
+      },
+      "golden": "golden/skill.resolved.txt",
+      "golden_sha256": "7c54b75f560468d722409d92b9d19fe75fb9299b7c1ab33ffba8ca4a6bf19838",
+      "index": 10,
+      "payload_fields": {
+        "run_id": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "skill_id": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "skill_name": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "version": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        }
+      },
+      "payload_keys_in_order": [
+        "skill_name",
+        "skill_id",
+        "version",
+        "run_id"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "skill_name",
+        "skill_id",
+        "version",
+        "run_id"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "workflow.started",
+      "constructor": {
+        "factory": "WorkflowStarted.create",
+        "kwargs": {
+          "run_id": "run_01",
+          "workflow_id": "wf_01",
+          "workflow_version_id": "wfver_01"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "workflow.started",
+      "event_class": "WorkflowStarted",
+      "event_module": "wbtime_ai_event.events.workflow",
+      "frame": {
+        "bytes": 112,
+        "seq": 1,
+        "sha256": "4d0bdd8f88168666046638286803e0d0f7d03e516109de4eba086c4e56b38b97"
+      },
+      "golden": "golden/workflow.started.txt",
+      "golden_sha256": "4d0bdd8f88168666046638286803e0d0f7d03e516109de4eba086c4e56b38b97",
+      "index": 11,
+      "payload_fields": {
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "workflow_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "workflow_version_id": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        }
+      },
+      "payload_keys_in_order": [
+        "workflow_id",
+        "run_id",
+        "workflow_version_id"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "workflow_id",
+        "run_id",
+        "workflow_version_id"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "workflow.node.started",
+      "constructor": {
+        "factory": "WorkflowNodeStarted.create",
+        "kwargs": {
+          "node_id": "node_01",
+          "node_type": "agent",
+          "run_id": "run_01",
+          "workflow_id": "wf_01"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "workflow.node.started",
+      "event_class": "WorkflowNodeStarted",
+      "event_module": "wbtime_ai_event.events.workflow",
+      "frame": {
+        "bytes": 124,
+        "seq": 1,
+        "sha256": "ac85b9bd41ab6cba51ffdeb7d67f60b8c44e5100b7db560545507d38bef9ec85"
+      },
+      "golden": "golden/workflow.node.started.txt",
+      "golden_sha256": "ac85b9bd41ab6cba51ffdeb7d67f60b8c44e5100b7db560545507d38bef9ec85",
+      "index": 12,
+      "payload_fields": {
+        "node_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "node_type": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "workflow_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "workflow_id",
+        "run_id",
+        "node_id",
+        "node_type"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "workflow_id",
+        "run_id",
+        "node_id",
+        "node_type"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "workflow.node.completed",
+      "constructor": {
+        "factory": "WorkflowNodeCompleted.create",
+        "kwargs": {
+          "duration_ms": 12,
+          "node_id": "node_01",
+          "run_id": "run_01",
+          "status": "succeeded",
+          "workflow_id": "wf_01"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "workflow.node.completed",
+      "event_class": "WorkflowNodeCompleted",
+      "event_module": "wbtime_ai_event.events.workflow",
+      "frame": {
+        "bytes": 144,
+        "seq": 1,
+        "sha256": "3ff5cf6e7976bdfa92a11a0864aace6bd1f1b68cb0f89d4ad0e7569b90f8e581"
+      },
+      "golden": "golden/workflow.node.completed.txt",
+      "golden_sha256": "3ff5cf6e7976bdfa92a11a0864aace6bd1f1b68cb0f89d4ad0e7569b90f8e581",
+      "index": 13,
+      "payload_fields": {
+        "duration_ms": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "node_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "status": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "workflow_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "workflow_id",
+        "run_id",
+        "node_id",
+        "status",
+        "duration_ms"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "workflow_id",
+        "run_id",
+        "node_id",
+        "status",
+        "duration_ms"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "workflow.completed",
+      "constructor": {
+        "factory": "WorkflowCompleted.create",
+        "kwargs": {
+          "duration_ms": 12,
+          "run_id": "run_01",
+          "workflow_id": "wf_01"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "workflow.completed",
+      "event_class": "WorkflowCompleted",
+      "event_module": "wbtime_ai_event.events.workflow",
+      "frame": {
+        "bytes": 98,
+        "seq": 1,
+        "sha256": "92eebb063c1011b2e85b758ed56e919743acca3ebb84babac0a1b2295f052ec5"
+      },
+      "golden": "golden/workflow.completed.txt",
+      "golden_sha256": "92eebb063c1011b2e85b758ed56e919743acca3ebb84babac0a1b2295f052ec5",
+      "index": 14,
+      "payload_fields": {
+        "duration_ms": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "workflow_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "workflow_id",
+        "run_id",
+        "duration_ms"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "workflow_id",
+        "run_id",
+        "duration_ms"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "workflow.failed",
+      "constructor": {
+        "factory": "WorkflowFailed.create",
+        "kwargs": {
+          "duration_ms": 12,
+          "error": "upstream returned 502",
+          "error_type": "ToolTimeout",
+          "run_id": "run_01",
+          "workflow_id": "wf_01"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "workflow.failed",
+      "event_class": "WorkflowFailed",
+      "event_module": "wbtime_ai_event.events.workflow",
+      "frame": {
+        "bytes": 154,
+        "seq": 1,
+        "sha256": "0fd533361af69a9520bc58184d03dfc9f425136faa1dee592919a319357df549"
+      },
+      "golden": "golden/workflow.failed.txt",
+      "golden_sha256": "0fd533361af69a9520bc58184d03dfc9f425136faa1dee592919a319357df549",
+      "index": 15,
+      "payload_fields": {
+        "duration_ms": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "error": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "error_type": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "workflow_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "workflow_id",
+        "run_id",
+        "error_type",
+        "error",
+        "duration_ms"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "workflow_id",
+        "run_id",
+        "error_type",
+        "error",
+        "duration_ms"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "knowledge.indexed",
+      "constructor": {
+        "factory": "KnowledgeIndexed.create",
+        "kwargs": {
+          "chunk_count": 3,
+          "document_id": "doc_01",
+          "kb_id": "kb_01",
+          "status": "indexed"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "knowledge.indexed",
+      "event_class": "KnowledgeIndexed",
+      "event_module": "wbtime_ai_event.events.knowledge",
+      "frame": {
+        "bytes": 114,
+        "seq": 1,
+        "sha256": "18a93e135c6e590d0ca34e984a827e998faa39dad686a0315458f773f8f2c1a7"
+      },
+      "golden": "golden/knowledge.indexed.txt",
+      "golden_sha256": "18a93e135c6e590d0ca34e984a827e998faa39dad686a0315458f773f8f2c1a7",
+      "index": 16,
+      "payload_fields": {
+        "chunk_count": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "document_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "kb_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "status": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        }
+      },
+      "payload_keys_in_order": [
+        "kb_id",
+        "document_id",
+        "chunk_count",
+        "status"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "kb_id",
+        "document_id",
+        "chunk_count",
+        "status"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "memory.written",
+      "constructor": {
+        "factory": "MemoryWritten.create",
+        "kwargs": {
+          "key": "favorite_color",
+          "memory_id": "mem_01",
+          "scope": "run"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "memory.written",
+      "event_class": "MemoryWritten",
+      "event_module": "wbtime_ai_event.events.memory",
+      "frame": {
+        "bytes": 95,
+        "seq": 1,
+        "sha256": "0e63282ad5b7fd43e2f376a234827c779e131d94b30553338c357f4f945e019d"
+      },
+      "golden": "golden/memory.written.txt",
+      "golden_sha256": "0e63282ad5b7fd43e2f376a234827c779e131d94b30553338c357f4f945e019d",
+      "index": 17,
+      "payload_fields": {
+        "key": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "memory_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "scope": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "memory_id",
+        "scope",
+        "key"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "memory_id",
+        "scope",
+        "key"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "approval.requested",
+      "constructor": {
+        "factory": "ApprovalRequested.create",
+        "kwargs": {
+          "approval_id": "appr_01",
+          "requested_by": "user_01",
+          "subject_ref": "toolcall_01",
+          "subject_type": "tool_call"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "approval.requested",
+      "event_class": "ApprovalRequested",
+      "event_module": "wbtime_ai_event.events.approval",
+      "frame": {
+        "bytes": 145,
+        "seq": 1,
+        "sha256": "d75d1966f91f79580a1a29c79ca600fa6c270dbdae865207a08ec5240ee4448f"
+      },
+      "golden": "golden/approval.requested.txt",
+      "golden_sha256": "d75d1966f91f79580a1a29c79ca600fa6c270dbdae865207a08ec5240ee4448f",
+      "index": 18,
+      "payload_fields": {
+        "approval_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "requested_by": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "subject_ref": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "subject_type": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "approval_id",
+        "subject_type",
+        "subject_ref",
+        "requested_by"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "approval_id",
+        "subject_type",
+        "subject_ref",
+        "requested_by"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "approval.decided",
+      "constructor": {
+        "factory": "ApprovalDecided.create",
+        "kwargs": {
+          "approval_id": "appr_01",
+          "decided_by": "user_01",
+          "status": "approved"
+        },
+        "kwargs_source": "export_sse.PARAM_VALUES / PARAM_OVERRIDES"
+      },
+      "domain_type": "approval.decided",
+      "event_class": "ApprovalDecided",
+      "event_module": "wbtime_ai_event.events.approval",
+      "frame": {
+        "bytes": 106,
+        "seq": 1,
+        "sha256": "e7434fb252893b1119c198e8aff0e6d99a4db607bac6e315a9561d4930c2c39e"
+      },
+      "golden": "golden/approval.decided.txt",
+      "golden_sha256": "e7434fb252893b1119c198e8aff0e6d99a4db607bac6e315a9561d4930c2c39e",
+      "index": 19,
+      "payload_fields": {
+        "approval_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "decided_by": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        },
+        "status": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "approval_id",
+        "status",
+        "decided_by"
+      ],
+      "phase": "phase2",
+      "phase_source": "read:encoder.py 分段注释（'Phase 2 · W3 / T2-16 新增通道'）",
+      "projected_fields": [
+        "approval_id",
+        "status",
+        "decided_by"
+      ],
+      "projection": null
+    }
+  ],
+  "contract_version": 1,
+  "frame_format": {
+    "content_type": "text/event-stream",
+    "data_frame": {
+      "bytes_note": "帧以空行结尾（两个 \\n），逐字节可比，不得追加换行。",
+      "line_layout": [
+        "id: <int>",
+        "event: <channel>",
+        "data: <json>",
+        "",
+        ""
+      ],
+      "seq_policy": "19 条 golden 统一 id: 1（SEQ=1）。真实流中 id 等于 agent_event.seq，由 EventDispatcher 投递前分配；golden 固定 1 是为了让 diff 只反映通道差异。",
+      "template": "id: {seq}\\nevent: {channel}\\ndata: {json}\\n\\n"
+    },
+    "heartbeat": {
+      "carries_id": false,
+      "default_interval_seconds": 15.0,
+      "note": "注释帧不带 id:，不污染 Last-Event-ID（§2.2）。",
+      "only_when_idle": true,
+      "sample": ": hb 1700000000000\n\n",
+      "sample_now_ms": 1700000000000,
+      "sha256": "714b4652a5b5698a9f4939a3739b1c89ae5e8c449d0e2a7d0d199634b5a70e16",
+      "template": ": hb {now_ms}\\n\\n"
+    },
+    "json": {
+      "ensure_ascii": false,
+      "indent": null,
+      "note": "ensure_ascii=False：CJK 原样输出，**不得**出现 \\uXXXX 转义；separators=(',',':')：紧凑无空格；sort_keys=False：键序 = payload 插入序，TS 侧必须保序（Object.keys 顺序即契约）。",
+      "separators": [
+        ",",
+        ":"
+      ],
+      "sort_keys": false
+    },
+    "line_endings": "LF only — 帧内不得出现 CR",
+    "wrapped_by_response_shell": false,
+    "wrapped_note": "§11.1 例外：SSE 帧不套 {code,message,data,request_id} 壳；request_id 仅经响应头下发。"
+  },
+  "generated_by": "scripts/extract-from-py/export_sse.py",
+  "guard": {
+    "base_instance": "AgentCompleted.create(...) + 注入浮点",
+    "channel": "agent.completed",
+    "domain_type": "agent.completed",
+    "file": "golden/_guard-float-normalization.txt",
+    "injected": {
+      "neg_zero": "-0.0",
+      "nested": "{'score': 0.25}",
+      "ratio": "1.0",
+      "score": "0.5"
+    },
+    "is_official_channel_golden": false,
+    "normalized_data_json": "{\"run_id\":\"run_01\",\"duration_ms\":12,\"iterations\":1,\"score\":\"0.500000\",\"ratio\":1,\"neg_zero\":0,\"nested\":{\"score\":\"0.250000\"}}",
+    "raw_data_json": "{\"run_id\":\"run_01\",\"duration_ms\":12,\"iterations\":1,\"score\":0.5,\"ratio\":1.0,\"neg_zero\":-0.0,\"nested\":{\"score\":0.25}}",
+    "seq": 1,
+    "sha256": "5e88718d569c001d0169c0bfb5b00fa011944a517e1f35f75919043e7cfa395c"
+  },
+  "meta": {
+    "channels_digest_sha256": "9edda3baea0cee3a7bf0fb9aa4036fe90b0423797141ab5936abdd1d2e350fc5",
+    "core_count": 9,
+    "count": 19,
+    "domain_types_without_channel": [
+      "system.default_tenant_initialized",
+      "system.shutdown",
+      "system.started",
+      "user.logged_in",
+      "user.logged_out",
+      "user.registered",
+      "workspace.created",
+      "workspace.updated"
+    ],
+    "domain_types_without_channel_count": 8,
+    "event_classes_total": 27,
+    "frame_bytes_total": 2402,
+    "golden_file_count": 19,
+    "golden_index_sha256": "aaea24d4c241f5674e844c5ad1165029af79669a648251a2385af51f59fdb513",
+    "guard_file_count": 1,
+    "phase2_count": 10,
+    "renamed_channel_count": 6
+  },
+  "numeric_format": {
+    "applied_where": "生成器在把 payload 交给 encode_data_frame **之前**归一化；encode_data_frame / encode_heartbeat 本体未做任何修改。",
+    "guard_explanation": "第 20 条样本：从**真实** AgentCompleted 实例出发，注入 score=0.5 / ratio=1.0 / neg_zero=-0.0 / nested={'score':0.25} 以证明两条分支都真的生效。它不属于 19 条正式通道 golden。",
+    "guard_frame": "golden/_guard-float-normalization.txt",
+    "official_note": "19 条正式 golden 的载荷中浮点数实测 0 个 ⇒ 归一化对它们是 no-op，golden 字节 == 旧仓服务端当前实际输出。",
+    "official_payload_float_count": 0,
+    "official_payloads_float_free": true,
+    "policy": "integers-only-on-the-wire",
+    "rule_version": 1,
+    "rules": [
+      {
+        "input": "bool",
+        "note": "bool 判定先于 int，避免 True -> 1",
+        "output": "unchanged"
+      },
+      {
+        "input": "int",
+        "output": "unchanged"
+      },
+      {
+        "example": "1.0 -> 1",
+        "input": "float, is_integer() 且 abs < 2**53",
+        "output": "int(value)"
+      },
+      {
+        "example": "0.5 -> \"0.500000\"",
+        "input": "float, 其余有限值",
+        "output": "定点十进制字符串，恰好 6 位小数"
+      },
+      {
+        "input": "Decimal",
+        "output": "先转 float，再按上面两条处理"
+      },
+      {
+        "input": "float nan / inf",
+        "output": "抛 ValueError（不可上线）"
+      },
+      {
+        "input": "dict / list / tuple",
+        "output": "递归处理；dict 键序不变"
+      }
+    ],
+    "why": "Python json.dumps(1.0) -> '1.0'，JS JSON.stringify(1.0) -> '1'；只要整数值浮点能上帧，「逐字节相同」在原理上不可达。"
+  },
+  "schema": "wbtimeai.contracts/sse-channels",
+  "source": "D:/WBT/WBTimeAI_old",
+  "sources": {
+    "channel_map": "apps/api/src/wbtime_ai_api/sse/encoder.py::SSE_CHANNEL_BY_DOMAIN_TYPE",
+    "encoder": "apps/api/src/wbtime_ai_api/sse/encoder.py::encode_data_frame / encode_heartbeat",
+    "events": "packages/event/src/wbtime_ai_event/events/*.py",
+    "stream": "apps/api/src/wbtime_ai_api/sse/stream.py::stream_run"
+  },
+  "sse_endpoints": [
+    {
+      "content_type": "text/event-stream",
+      "method": "POST",
+      "openapi_declares": "application/json",
+      "openapi_discrepancy": "OpenAPI 无法表达 SSE：冻结文档里这两个端点声明的是 application/json。TS 代码生成必须把它们排除在 JSON 客户端之外，按本文件的帧契约手写。",
+      "path": "/api/v1/agents/{agent_id}/run",
+      "router": "routers/v1/agents.py:347"
+    },
+    {
+      "content_type": "text/event-stream",
+      "method": "GET",
+      "openapi_declares": "application/json",
+      "openapi_discrepancy": "OpenAPI 无法表达 SSE：冻结文档里这两个端点声明的是 application/json。TS 代码生成必须把它们排除在 JSON 客户端之外，按本文件的帧契约手写。",
+      "path": "/api/v1/runs/{run_id}/events",
+      "router": "routers/v1/runs.py:146"
+    },
+    {
+      "content_type": "text/event-stream",
+      "method": "GET",
+      "openapi_declares": "application/json",
+      "openapi_discrepancy": "OpenAPI 无法表达 SSE：冻结文档里这两个端点声明的是 application/json。TS 代码生成必须把它们排除在 JSON 客户端之外，按本文件的帧契约手写。",
+      "path": "/api/v1/tasks/{task_id}/events",
+      "router": "routers/v1/tasks.py:402"
+    },
+    {
+      "content_type": "text/event-stream",
+      "method": "POST",
+      "openapi_declares": "application/json",
+      "openapi_discrepancy": "OpenAPI 无法表达 SSE：冻结文档里这两个端点声明的是 application/json。TS 代码生成必须把它们排除在 JSON 客户端之外，按本文件的帧契约手写。",
+      "path": "/api/v1/workflows/{workflow_id}/run",
+      "router": "routers/v1/workflows.py:382"
+    }
+  ],
+  "stream_semantics": {
+    "accept_negotiation": "POST /agents/{id}/run：Accept 含 text/event-stream 或缺省/*/* → SSE，否则 JSON",
+    "active_statuses": [
+      "PENDING",
+      "RUNNING"
+    ],
+    "dedupe": "实时事件若 seq <= 已产出 seq 则丢弃；无 seq 的事件按 (type,payload) 指纹兜底去重",
+    "disconnect": "生成器被关闭/取消 → 触发 cancel(run_id)（INLINE 断连即取消）",
+    "resume": "Last-Event-ID 请求头或 ?after_seq：只回放 seq > last 的事件",
+    "seq_source": "agent_event.seq（EventDispatcher 投递/落库前统一分配）",
+    "source": "apps/api/src/wbtime_ai_api/sse/stream.py",
+    "subscribe_types": [
+      "agent.started",
+      "agent.thinking",
+      "agent.message",
+      "tool_call.started",
+      "tool_call.completed",
+      "mcp_call.started",
+      "mcp_call.completed",
+      "agent.completed",
+      "agent.failed",
+      "skill.resolved",
+      "workflow.started",
+      "workflow.node.started",
+      "workflow.node.completed",
+      "workflow.completed",
+      "workflow.failed",
+      "knowledge.indexed",
+      "memory.written",
+      "approval.requested",
+      "approval.decided"
+    ],
+    "terminal_types": [
+      "agent.completed",
+      "agent.failed"
+    ],
+    "unmapped_domain_type": "channel_for() 返回 None ⇒ 不产帧（不是错误帧，也不是空帧）"
+  }
+}

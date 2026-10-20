@@ -1,0 +1,4 @@
+id: 1
+event: knowledge.indexed
+data: {"kb_id":"kb_01","document_id":"doc_01","chunk_count":3,"status":"indexed"}
+

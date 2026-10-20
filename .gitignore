@@ -53,6 +53,15 @@ desktop.ini
 .cache/
 *.local
 
+# ---- Python（契约抽取工具链 scripts/*.py）----
+__pycache__/
+*.py[cod]
+.venv/
+
+# ---- 生成物 / 临时产物（不入库）----
+# output/ 存放演示件与临时核对产物（如 QA 反例副本），非交付物
+output/
+
 # ---- 双仓约定：docs 走独立私有仓、.workbuddy 为本地项目数据 ----
 docs/
 .workbuddy/

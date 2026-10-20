@@ -1,0 +1,4 @@
+id: 1
+event: mcp.completed
+data: {"run_id":"run_01","mcp_call_id":"mcpcall_01","server":"filesystem","status":"succeeded","duration_ms":12,"error":"upstream returned 502"}
+

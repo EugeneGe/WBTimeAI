@@ -1,0 +1,4 @@
+id: 1
+event: tool.completed
+data: {"run_id":"run_01","tool_call_id":"toolcall_01","tool_name":"http.get","status":"succeeded","duration_ms":12,"error":"upstream returned 502"}
+
