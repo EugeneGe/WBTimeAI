@@ -237,3 +237,64 @@ jobs:
         run: python scripts/meta_gate.py
       - name: Meta gate · classifier self-test
         run: python scripts/meta_gate.py --self-test
+
+  # ---------------------------------------------------------------------------
+  # V0.1.0 门禁（数据层 + 域 + 契约层 + 前端 0 改动）
+  #
+  # 拆成两个 job 是有意的，不是遗漏：
+  #   * `v010-gates` 只跑**不依赖旧仓归档**的门禁，任何 runner 上都能红能绿；
+  #   * `v010-frontend-diff` 需要 `_old/apps/web/src/**`（⑤-a 的逐文件 hash 基准），
+  #     干净 runner 上没有该归档 ⇒ 沿用本文件既有惯例，用 `E2E_LEGACY_ROOT`
+  #     条件显式表达「依赖不可得时不跑」，**而不是假装跑过**。
+  # ⑤-a 在本地与「迁入 commit 落地后」的 `git diff` 判据承担，详见
+  # `docs/V1.0/V0.1.0-基座与契约层/03-台账/DoD-V0.1.0.md` §3。
+  # ---------------------------------------------------------------------------
+  v010-gates:
+    name: v0.1.0 gates (no legacy tree needed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.19.0"
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+      - name: Assert the matrix leg really runs the declared Node
+        run: node -e "const v=process.versions.node; if(!v.startsWith('22.19.0')){console.error('expected 22.19.0, got '+v);process.exit(1)}"
+      - name: T1-08 · page lighting matrix ≡ router
+        run: python scripts/check_page_matrix.py
+      - name: T1-02 · platform parity (errors / envelope / sse)
+        run: python scripts/check_platform_parity.py
+      - name: T1-04 · extension points ≡ legacy Protocol
+        run: python scripts/check_extension_point_signatures.py
+      - name: T1-06 · layering rules (3 rules, injections proven red)
+        run: node scripts/check_depcruiser.mjs
+      # ``output/`` is git-ignored on purpose (it holds regenerable artifacts), so a
+      # clean clone has no ``drizzle-introspect.*.json`` and the parity gate would
+      # fail with "USAGE/LOAD FAIL".  Regenerate it from source first — the gate
+      # itself refuses to fabricate a regression rather than passing vacuously.
+      - name: T1-03 · regenerate runtime introspection (output/ is git-ignored)
+        run: pnpm --filter @wbtime/db introspect
+      - name: T1-03 · drizzle DDL parity (dual dialect)
+        run: python scripts/check_drizzle_parity.py
+
+  v010-frontend-diff:
+    name: v0.1.0 ⑤-a frontend diff (needs legacy tree)
+    runs-on: ubuntu-latest
+    if: ${{ vars.E2E_LEGACY_ROOT != '' }}
+    env:
+      E2E_LEGACY_ROOT: ${{ vars.E2E_LEGACY_ROOT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ⑤-a · apps/web/src/** must be byte-identical to the archive
+        run: python scripts/check_frontend_diff.py --legacy-root "$E2E_LEGACY_ROOT"

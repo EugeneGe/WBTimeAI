@@ -25,26 +25,42 @@ declared-absence registry     a root that legitimately does not exist yet must b
                               ``INVALID``, not a skip
 ============================  ==================================================
 
-Scan surface (裁定 B, measured in T01)
---------------------------------------
-``packages/*/**`` — **the whole package**, not just ``tests/e2e/**``.  S-1 asks
-"can `msw` live in this package?", and `msw` can be declared in ``package.json``
+Scan surface — **redefined in V0.1.0 (user-approved, see below)**
+-----------------------------------------------------------------
+V0.0.2 scanned ``packages/*/**`` (every package).  That premise died the moment
+V0.1.0 landed: the repo now holds **eight** business packages whose *non-empty
+dependencies are normal* (``@sinclair/typebox``, ``pino``, ``drizzle-orm`` …), so
+the old surface reported **9 violations / EXIT 1** on a perfectly healthy tree::
+
+    VIOLATION: packages/*/**: non-empty dependencies in packages/{config,contracts,
+               core,domain,event,logging,ports}/package.json
+    VIOLATION: contracts/frontend-baseline/**: present but registered ABSENT
+    VIOLATION: apps/**: msw declared or imported in apps/web/package.json
+
+"Zero dependencies" was only ever a *proxy* for what S-1 actually claims: **the
+e2e runner talks to a real backend, so no mock library can exist on the surface it
+is allowed to touch**.  Narrowing the surface restores the real claim instead of
+disabling it (disabling it — option B — would leave CI permanently red; whitelisting
+the offending packages — option C — would hide a genuine ``msw`` hit inside them).
+
+``packages/e2e/**`` — **the whole package**, not just ``tests/e2e/**``.  S-1 asks
+"can `msw` live in *the runner*?", and `msw` can be declared in ``package.json``
 *or* imported from ``lib/``.  Scanning only the test directory would miss the
 lib-import case.  ``node_modules/**`` is excluded (vendored dependencies are not
-our source).
+our source).  This package **must stay zero-dependency** — that is the load-bearing
+premise, and it is now asserted on the one package where it is meaningful.
 
-``contracts/frontend-baseline/**`` — the second root.  It **cannot exist in
-V0.0.2**: adding a file under ``contracts/`` breaks ``manifest.sha256`` and turns
-``run.py check`` red, and every injection case in T04 asserts that ``check`` stays
-green on the clone (§1.7.3).  Its content is a *derived* frontend artifact
-(``openapi.subset.json`` / ``sse.channels.json`` / ``error-codes.ts``) owned by
-V0.1.0.  Hence ``ABSENT(declared; owner=V0.1.0)`` and **``S-1 = PARTIAL(1/2 根)``**
-— never "S-1 passed".
+``contracts/frontend-baseline/**`` — the second root.  It could not exist in
+V0.0.2 (adding a file under ``contracts/`` broke ``manifest.sha256``); V0.1.0
+produces it (``openapi.subset.json`` / ``sse.channels.json`` / ``error-codes.ts``),
+so it is registered **OK** and coverage becomes **2/2 roots effective**.
 
-``apps/web/src/**`` — an explicit exclusion (msw is a direct dependency of the
-app shell).  The directory does not exist in V0.0.2; when it does exist the
-exclusion must be present, otherwise its sources silently join the scanned
-surface.
+``apps/web/**`` — an explicit exclusion.  ``msw`` is a *direct dependency of the
+app shell* and ``src/**`` ships its own unit tests that legitimately use it.  The
+exclusion widened from ``apps/web/src/**`` to the whole app in V0.1.0 because the
+``msw`` **declaration lives in ``apps/web/package.json``**, which the narrow
+exclusion did not cover.  The exclusion must be *present and effective*; if it
+disappears, the app silently joins the scanned surface.
 
 Exit codes (design §3.3)::
 
@@ -98,15 +114,19 @@ TAG: Final[str] = "fbaseline"
 #: ``0`` and requires the mutation anchor to be unique.
 MIN_FILES = 6
 
-#: The two scan roots, in report order (裁定 B).
+#: The two scan roots, in report order.  V0.1.0 narrowed the code root from every
+#: package to the e2e runner alone: business packages legitimately carry runtime
+#: dependencies, and asserting "zero deps" on them was never what S-1 claimed.
 SCAN_ROOTS: Final[tuple[str, ...]] = (
-    "packages/*/**",
+    "packages/e2e/**",
     "contracts/frontend-baseline/**",
 )
 
 #: Roots removed from the scanned surface on purpose (must stay in sync with the
-#: registry document, otherwise a present ``apps/web/src`` joins the surface).
-EXCLUDE_GLOBS: Final[tuple[str, ...]] = ("apps/web/src/**",)
+#: registry document, otherwise a present ``apps/web`` joins the surface).  Widened
+#: from ``apps/web/src/**`` in V0.1.0 because the ``msw`` declaration sits in
+#: ``apps/web/package.json``, outside the old narrow exclusion.
+EXCLUDE_GLOBS: Final[tuple[str, ...]] = ("apps/web/**",)
 
 #: The implicit third surface: application shells.  Not a scan root (it carries no
 #: coverage weight), but it must be *seen* so the exclusion cannot silently rot.
@@ -122,7 +142,7 @@ REGISTRY_GLOB: Final[str] = "docs/**/03-台账/S-1-扫描面登记.md"
 #: Per-root minimum: the code root uses :data:`MIN_FILES`; a present contract root
 #: only has to be non-empty (its size is governed by the V0.1.0 deriver).
 ROOT_MIN_FILES: Final[dict[str, int]] = {
-    "packages/*/**": MIN_FILES,
+    "packages/e2e/**": MIN_FILES,
     "contracts/frontend-baseline/**": 1,
 }
 
@@ -497,7 +517,15 @@ def _report_root(root: str, repo_root: Path, registry: S1Registry) -> RootReport
         directory = repo_root / "contracts" / "frontend-baseline"
         exists = directory.is_dir()
     else:
-        directory = repo_root / "packages"
+        # Derive the concrete directory from the root pattern.  V0.1.0 narrowed the
+        # code root to ``packages/e2e/**``; hard-coding ``repo_root / "packages"``
+        # here would keep scanning *every* package and re-report the exact false
+        # positives the narrowing was meant to remove (measured: 7 violations on a
+        # healthy tree, 2026-10-21).
+        base = root.split("/**")[0].rstrip("/")
+        if base.endswith("/*"):
+            base = base[:-2]
+        directory = repo_root / base
         exists = directory.is_dir()
 
     if not exists:
@@ -772,6 +800,20 @@ def _prepare_clone(repo_root: Path, registry: S1Registry) -> Path:
         raise RuntimeError(f"cannot self-test: {packages.as_posix()} is missing")
     _copy_tree(packages, clone / "packages")
 
+    # The contract root is a *real* scan root since V0.1.0.  Cloning only
+    # ``packages/`` made every self-test case red for the wrong reason (the missing
+    # root, not the injection), which is how four injections silently stopped
+    # proving anything — measured 2/6 on 2026-10-21.  A fixture must contain every
+    # root the gate reports on, or the test measures the fixture.
+    contract_root = repo_root / "contracts" / "frontend-baseline"
+    if contract_root.is_dir():
+        _copy_tree(contract_root, clone / "contracts" / "frontend-baseline")
+
+    # ``apps/`` is the excluded surface; the exclusion cases need it to exist.
+    apps_root = repo_root / "apps"
+    if apps_root.is_dir():
+        _copy_tree(apps_root, clone / "apps")
+
     scripts = clone / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
     shutil.copy2(repo_root / "scripts" / "check_frontend_baseline.py", scripts)
@@ -892,25 +934,36 @@ def _self_test(repo_root: Path, registry: S1Registry) -> int:
     )
     shutil.rmtree(clone.parent, ignore_errors=True)
 
-    # --- 3: drop the ABSENT registration -> red ---------------------------
+    # --- 3: registration disagrees with the tree -> red -------------------
+    # V0.1.0 note: the old form of this injection *deleted* the ``ABSENT`` row for
+    # ``contracts/frontend-baseline/**``.  That root now exists and is registered
+    # ``OK``, so deleting its row leaves an unregistered-but-present root — which
+    # the gate deliberately allows (only an unregistered **absence** is INVALID).
+    # The injection therefore stopped moving the gate (measured ``exit=0``).
+    # Replaced by the equivalent, equally strict assertion: mark a *present* root
+    # as ``ABSENT`` and require red (registry and tree disagree).  Strength is
+    # preserved, not relaxed.
     clone = _prepare_clone(repo_root, registry)
     clone_registry = clone / registry.path.relative_to(repo_root) if registry.path else None
+    anchor = "| `contracts/frontend-baseline/**` | OK |"
     if clone_registry is not None and clone_registry.is_file():
-        text = clone_registry.read_text(encoding="utf-8")
-        kept_lines = [
-            line
-            for line in text.splitlines()
-            if not (line.strip().startswith("|") and "contracts/frontend-baseline" in line)
-        ]
-        clone_registry.write_text("\n".join(kept_lines) + "\n", encoding="utf-8")
-        code, output = _run_gate(clone)
-        record(
-            "drop the ABSENT registration -> red",
-            code == 1 and "INVALID" in output,
-            f"exit={code}",
-        )
+        try:
+            _replace_once(
+                clone_registry,
+                anchor,
+                "| `contracts/frontend-baseline/**` | ABSENT |",
+            )
+        except RuntimeError as error:
+            record("registry says ABSENT while the tree exists -> red", False, str(error))
+        else:
+            code, output = _run_gate(clone)
+            record(
+                "registry says ABSENT while the tree exists -> red",
+                code == 1 and "INVALID" in output,
+                f"exit={code}",
+            )
     else:  # pragma: no cover - registry missing means the control already failed
-        record("drop the ABSENT registration -> red", False, "registry not in clone")
+        record("registry says ABSENT while the tree exists -> red", False, "registry not in clone")
     shutil.rmtree(clone.parent, ignore_errors=True)
 
     # --- 4: apps/web/src exclusion ---------------------------------------
