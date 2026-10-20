@@ -1,0 +1,93 @@
+{
+  "contract": "extension-point-signatures/v1",
+  "generated_at": "2026-10-20T20:03:01Z",
+  "point_count": 9,
+  "points": {
+    "agent_executor": {
+      "interface": "AgentExecutor",
+      "members": {
+        "cancel": "cancel(string,ExtensionContext):AgentExecutionResult",
+        "health": "health():AgentExecutorHealth",
+        "id": "id():string",
+        "poll": "poll(string,ExtensionContext):AgentExecutionResult",
+        "stream_events": "stream_events(string,ExtensionContext):IterableIterator<AgentExecutionEvent>",
+        "submit": "submit(AgentExecutionRequest,ExtensionContext):AgentExecutionHandle",
+        "supports": "supports(string):boolean"
+      },
+      "version": "agent_executor/v1"
+    },
+    "audit_sink": {
+      "interface": "AuditSink",
+      "members": {
+        "flush": "flush():void",
+        "health": "health():SinkHealth",
+        "write": "write(AuditEvent):void"
+      },
+      "version": "audit_sink/v1"
+    },
+    "auth_provider": {
+      "interface": "AuthProvider",
+      "members": {
+        "authenticate": "authenticate(AuthCredential,ExtensionContext):Principal",
+        "logout": "logout(Principal):void",
+        "supports": "supports(string):boolean"
+      },
+      "version": "auth_provider/v1"
+    },
+    "connector": {
+      "interface": "Connector",
+      "members": {
+        "actions": "actions():ConnectorActionSpec[]",
+        "authorize": "authorize(AuthorizeParams,ExtensionContext):CredentialRef",
+        "execute": "execute(string,Record<string,unknown>,ExtensionContext):ConnectorResult",
+        "health": "health():ConnectorHealth",
+        "id": "id():string"
+      },
+      "version": "connector/v1"
+    },
+    "model_gateway": {
+      "interface": "ModelGateway",
+      "members": {
+        "on_result": "on_result(ModelRef,ChatResult|Error):void",
+        "route": "route(ChatMessage,ModelRef[],ExtensionContext):ModelRef"
+      },
+      "version": "model_gateway/v1"
+    },
+    "model_provider": {
+      "interface": "ModelProviderFactory",
+      "members": {
+        "capabilities": "capabilities():ModelCapability[]",
+        "create": "create(ProviderConfig):ModelProvider",
+        "provider_type": "provider_type():string"
+      },
+      "version": "model_provider/v1"
+    },
+    "policy_engine": {
+      "interface": "PolicyEngine",
+      "members": {
+        "evaluate": "evaluate(PolicyRequest,ExtensionContext):PolicyDecision",
+        "explain": "explain(PolicyRequest,ExtensionContext):PolicyExplanation"
+      },
+      "version": "policy_engine/v1"
+    },
+    "secret_provider": {
+      "interface": "SecretProvider",
+      "members": {
+        "decrypt": "decrypt(Uint8Array):Uint8Array",
+        "encrypt": "encrypt(Uint8Array):Uint8Array",
+        "master_key": "master_key():Uint8Array",
+        "rotate": "rotate():RotationResult"
+      },
+      "version": "secret_provider/v1"
+    },
+    "ui_extension": {
+      "interface": "UIExtension",
+      "members": {
+        "assets_base_url": "assets_base_url():string",
+        "slots": "slots():UISlot[]"
+      },
+      "version": "ui_extension/v1"
+    }
+  },
+  "sha256": "df08f6ce865b44786fc5d604669a4795db82a4ef14ba44d4ba88c1014b59ef88"
+}

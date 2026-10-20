@@ -1,0 +1,29 @@
+{
+  "name": "@wbtime/domain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WBTimeAI 域层 · Task 实体与状态机 —— 零 ORM / 零 Web import，字段以 contracts/schema.v0018.pg.normalized.json 实测列为准",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "tsc -b tsconfig.json",
+    "test": "tsc -b tsconfig.json && node --test \"tests/**/*.test.mjs\""
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

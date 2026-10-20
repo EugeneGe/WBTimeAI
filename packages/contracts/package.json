@@ -1,0 +1,29 @@
+{
+  "name": "@wbtime/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WBTimeAI 契约层 · 9 个插件扩展点的 interface 声明（纯类型，无 loader）—— 成员名与签名以旧线 Protocol 为唯一 oracle，由 scripts/check_extension_point_signatures.py 断言全等",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "tsc -b tsconfig.json",
+    "test": "tsc -b tsconfig.json && node --test \"tests/**/*.test.mjs\""
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -35,3 +35,8 @@ contracts/** -text -eol
 # 于是"字节全等"在重新 clone 后立刻失效 —— 本机绿、CI/他人红（假绿同型）。
 # 与 `contracts/**` 同理：**按原始字节入库与检出**。
 apps/web/src/** -text -eol
+
+# ---- 签名快照（V0.1.0 · T1-04）：门禁按 sha256 校验，行尾转换即失配 ----
+# check_extension_point_signatures.py 断言 snapshot 的 sha256 与索引一致；
+# 若被 autocrlf 转换（CRLF↔LF），sha 变化 ⇒ 门禁红，且红的原因与"签名漂移"无法区分。
+packages/contracts/signature-snapshot.json -text -eol
