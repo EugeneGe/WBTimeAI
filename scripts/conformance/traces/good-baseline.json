@@ -1,0 +1,16 @@
+{
+  "trace_id": "good-baseline",
+  "contract_version": "V0.3.0-draft",
+  "description": "Clean run: one worker, one lease, one tool call executed exactly once, budget exhausted and then a terminal state. This trace must stay green; it is the control for the six counterexamples.",
+  "expected_violations": [],
+  "events": [
+    {"seq": 1, "ts": 0.0, "run_id": "run-good", "type": "run.started", "worker_id": "w1"},
+    {"seq": 2, "ts": 0.1, "run_id": "run-good", "type": "run.lease.acquired", "worker_id": "w1", "lease": {"from_seq": 1, "to_seq": 8}},
+    {"seq": 3, "ts": 0.2, "run_id": "run-good", "type": "agent.thinking", "worker_id": "w1"},
+    {"seq": 4, "ts": 0.3, "run_id": "run-good", "type": "message.delta", "worker_id": "w1"},
+    {"seq": 5, "ts": 0.4, "run_id": "run-good", "type": "tool_call.started", "worker_id": "w1", "tool_call_id": "tc-1", "idempotency_key": "idem-1"},
+    {"seq": 6, "ts": 0.5, "run_id": "run-good", "type": "tool_call.completed", "worker_id": "w1", "tool_call_id": "tc-1", "idempotency_key": "idem-1"},
+    {"seq": 7, "ts": 0.6, "run_id": "run-good", "type": "budget.exhausted", "worker_id": "w1", "budget": {"tokens_used": 4096, "tokens_limit": 4096}},
+    {"seq": 8, "ts": 0.7, "run_id": "run-good", "type": "run.terminal", "worker_id": "w1", "status": "completed"}
+  ]
+}

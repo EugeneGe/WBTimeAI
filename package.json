@@ -1,8 +1,8 @@
 {
   "name": "wbtime-ai",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
-  "description": "WBTimeAI 社区线（ts/）重建仓 —— V0.0.1 契约继承与抽取（本版只产契约，不产 TS 业务代码）",
+  "description": "WBTimeAI 社区线（ts/）重建仓 —— V0.0.2 oracle 自证与假绿反例（契约零变更，只证明门禁会红）",
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
@@ -12,6 +12,19 @@
     "check:docs": "python scripts/check_docs.py",
     "check:contracts": "python scripts/extract-from-py/run.py check",
     "extract:contracts": "python scripts/extract-from-py/run.py export",
-    "check": "python scripts/check_baseline.py && python scripts/check_docs.py && python scripts/extract-from-py/run.py check"
+    "check": "python scripts/check_baseline.py && python scripts/check_docs.py && python scripts/extract-from-py/run.py check",
+    "gate:parity": "python scripts/check_ddl_parity.py",
+    "gate:openapi": "python scripts/compare_openapi.py",
+    "gate:bucket3": "python scripts/check_bucket3_coverage.py",
+    "gate:flow": "python scripts/check_control_flow.py",
+    "gate:fbaseline": "python scripts/check_frontend_baseline.py",
+    "gate:oracle": "python scripts/oracle_recompute.py --oracle legacy",
+    "gate:inject": "python scripts/inject_counterexample.py --all",
+    "gate:meta": "python scripts/meta_gate.py",
+    "gate:selfproof": "python scripts/selfproof/run_selfproof.py",
+    "gate:offline": "python scripts/check_ddl_parity.py && python scripts/compare_openapi.py && python scripts/check_bucket3_coverage.py && python scripts/check_control_flow.py && python scripts/check_frontend_baseline.py",
+    "gate:all": "python scripts/check_ddl_parity.py && python scripts/compare_openapi.py && python scripts/check_bucket3_coverage.py && python scripts/check_control_flow.py && python scripts/check_frontend_baseline.py && python scripts/oracle_recompute.py --oracle legacy && python scripts/inject_counterexample.py --all && python scripts/meta_gate.py && python scripts/selfproof/run_selfproof.py",
+    "test:e2e": "node --test \"packages/e2e/tests/e2e/**/*.test.mjs\"",
+    "test:e2e:selfproof": "python scripts/selfproof/run_selfproof.py"
   }
 }

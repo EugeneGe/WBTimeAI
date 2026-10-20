@@ -1,0 +1,13 @@
+{
+  "trace_id": "bad-seq-reuse",
+  "contract_version": "V0.3.0-draft",
+  "description": "I-6 counterexample: two different events of the same run carry seq=3, so a consumer that resumes from a sequence number would silently drop or reorder one of them. (The same invariant also fires on a non-monotonic seq, which the --self-test checks synthetically.)",
+  "expected_violations": ["I-6"],
+  "events": [
+    {"seq": 1, "ts": 0.0, "run_id": "run-seq", "type": "run.started", "worker_id": "w1"},
+    {"seq": 2, "ts": 0.1, "run_id": "run-seq", "type": "agent.thinking", "worker_id": "w1"},
+    {"seq": 3, "ts": 0.2, "run_id": "run-seq", "type": "message.delta", "worker_id": "w1"},
+    {"seq": 3, "ts": 0.3, "run_id": "run-seq", "type": "message.delta", "worker_id": "w1"},
+    {"seq": 5, "ts": 0.4, "run_id": "run-seq", "type": "run.terminal", "worker_id": "w1", "status": "completed"}
+  ]
+}

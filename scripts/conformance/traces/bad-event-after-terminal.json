@@ -1,0 +1,13 @@
+{
+  "trace_id": "bad-event-after-terminal",
+  "contract_version": "V0.3.0-draft",
+  "description": "I-2 counterexample: the run reached run.terminal, then two more events were emitted for it. Nothing may follow the terminal marker.",
+  "expected_violations": ["I-2"],
+  "events": [
+    {"seq": 1, "ts": 0.0, "run_id": "run-late", "type": "run.started", "worker_id": "w1"},
+    {"seq": 2, "ts": 0.1, "run_id": "run-late", "type": "agent.thinking", "worker_id": "w1"},
+    {"seq": 3, "ts": 0.2, "run_id": "run-late", "type": "run.terminal", "worker_id": "w1", "status": "completed"},
+    {"seq": 4, "ts": 0.3, "run_id": "run-late", "type": "agent.thinking", "worker_id": "w1"},
+    {"seq": 5, "ts": 0.4, "run_id": "run-late", "type": "message.delta", "worker_id": "w1"}
+  ]
+}

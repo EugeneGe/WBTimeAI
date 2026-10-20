@@ -1,0 +1,83 @@
+# WBTimeAI · 真后端自证（V0.0.2 · S-6）
+#
+# 这条流水线**只有在 `E2E_LEGACY_ROOT` 已配置时**才存在（`if:` 在 job 级）：
+# 它要读只读旧仓 `_old`（真后端源码 + SQLite 库 + `.venv`），干净 runner 上没有。
+# 未配置 ⇒ **整个 job 不进矩阵**（run summary 显示缺席），台账记 `BLOCKED`；
+# **不是**「跑但判红」——长期常红必然诱导后人加 `continue-on-error`，那正是本版要
+# 消灭的东西（`02-施工/README.md` §8.1 D-2 / `docs/V1.0/V0.0.2.../03-台账/真后端自证.md`）。
+#
+# 配置方式（repo → Settings → Variables）：`E2E_LEGACY_ROOT=/absolute/path/to/WBTimeAI_old`
+# 另可用 `E2E_LEGACY_PYTHON` 指定带 fastapi/uvicorn 的解释器（默认 `<root>/.venv/Scripts/python.exe`
+# 或 `<root>/.venv/bin/python`）。
+#
+# 硬纪律（与本版其余门禁一致）：
+#   * **禁止** `continue-on-error`、**禁止** `|| true`；
+#   * 只读树 `_old` **零字节写入**，由 `run_selfproof.py` 的前/后快照 + `find -newermt`
+#     等价物断言，被写即 `EXIT 36`；
+#   * 证据以 `.md` 内嵌（`03-台账/真后端自证-原始输出.md`），**不写 `.log`**（`.gitignore`
+#     忽略 `*.log`，写日志等于永远提交不上证据）。
+
+name: selfproof
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selfproof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selfproof:
+    name: forward 4/4 → kill → reverse ECONNREFUSED
+    # 未配置只读旧仓 ⇒ 整个 job 不进矩阵（D-2 裁定 (a)）。
+    if: ${{ vars.E2E_LEGACY_ROOT != '' }}
+    runs-on: ${{ vars.E2E_LEGACY_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    env:
+      E2E_LEGACY_ROOT: ${{ vars.E2E_LEGACY_ROOT }}
+      E2E_LEGACY_PYTHON: ${{ vars.E2E_LEGACY_PYTHON }}
+      E2E_PORT: "8099"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node (地板档)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.19.0"
+
+      - name: Show runtime and the read-only root
+        shell: bash
+        run: |
+          node --version
+          python -V
+          echo "E2E_LEGACY_ROOT=${E2E_LEGACY_ROOT}"
+          test -d "${E2E_LEGACY_ROOT}" || { echo "FAIL: E2E_LEGACY_ROOT is not a directory"; exit 1; }
+
+      - name: Launcher preconditions (G-1 / G-2 / G-3 / G-5 / G-6)
+        run: python -B scripts/selfproof/legacy_backend_launcher.py --check
+
+      - name: Self-proof (forward 4/4 → kill → reverse, read-only diff)
+        run: python -B scripts/selfproof/run_selfproof.py --port "${E2E_PORT}"
+
+      - name: Upload the embedded evidence (markdown, never *.log)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selfproof-evidence
+          path: |
+            docs/V1.0/V0.0.2-*/03-台账/真后端自证-原始输出.md
+          if-no-files-found: error
+          retention-days: 14

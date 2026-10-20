@@ -141,3 +141,99 @@ jobs:
       #   verify_semantics.py    → 证明「数字是对的」
       - name: Contracts semantics (recompute from artifacts, not from ledger)
         run: python scripts/verify_semantics.py
+
+      # 措辞红线：§8.1 的三条裁定（D-1 / D-4 / D-5）规定了台账必须写、且不得放宽的措辞。
+      # 此前只靠人读，而 check_docs.py 只扫 `01-计划/README.md` 的「不做」栏、
+      # 且 V0.0.2 在 EXEMPT_VERSIONS 里 ⇒ 对本版措辞零证明力（QA 复核 F-6）。
+      # 这条门禁的 W-4 已用两个注入自证会红（删 PARTIAL / 加放宽结论）。
+      - name: Wording redlines (D-1 / D-4 / D-5 must be written and not weakened)
+        run: python scripts/check_wording_redlines.py
+
+  # ---------------------------------------------------------------------------
+  # V0.0.2 新增：4 个离线门禁 job（DoD#1/#2/#3/#6 + S-1）。
+  #
+  # 全部 **required**：任何一红 ⇒ 流水线红。**禁止** `continue-on-error`、
+  # **禁止** `|| true`（等同 continue-on-error），这与本版主张一致：
+  # 「门禁必须会红，红得有理由」。
+  #
+  # 关于 `E2E_LEGACY_ROOT` 的条件：
+  #   本版有 3 条门禁的**真值来源**是只读旧仓 `_old`（外部 oracle：F1 paths /
+  #   F2 ddl / F3 sse / F4 errors）。干净 runner 上 `_old` 不存在 ⇒ 它们只能返回
+  #   「oracle 不可得」而不是绿（`oracle_recompute` = 21、`meta_gate` 第 2 探针 =
+  #   UNEVALUABLE、`inject` 的 ATK-2 用例 = 12）。把它们写成「跑但必红」等于让仓库
+  #   长期常红，而长期常红**必然**诱导后人加 `continue-on-error` —— 那正是本版要消灭
+  #   的东西（`02-施工/README.md` §8.1 D-2 的同一理由）。
+  #   ⇒ 处理方式与 `selfproof.yml` 一致：**未配置 `vars.E2E_LEGACY_ROOT` 时整个 job
+  #     不进矩阵**（run summary 显示缺席，台账记 BLOCKED），一旦配置则 **required**。
+  #   `frontend-baseline`（S-1）完全自足，**无条件 required**。
+  # ---------------------------------------------------------------------------
+  v002-frontend-baseline:
+    name: S-1 frontend baseline (frontend-baseline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: S-1 · per-root three-state scan + MIN_FILES floor
+        run: python scripts/check_frontend_baseline.py
+      - name: S-1 · injected counter-examples (msw / empty glob / missing registration / exclusion / floor)
+        run: python scripts/check_frontend_baseline.py --self-test
+      - name: S-1 · 口径 X (--strict) must be red, proving both stances really move
+        shell: bash
+        run: |
+          set +e
+          python scripts/check_frontend_baseline.py --strict
+          code=$?
+          set -e
+          echo "strict exit=$code"
+          if [ "$code" -ne 1 ]; then
+            echo "FAIL: --strict must exit 1 (口径 X: contracts/frontend-baseline/** is absent)"
+            exit 1
+          fi
+
+  v002-injection:
+    name: DoD#1/#2/#3 counter-examples (injection)
+    runs-on: ubuntu-latest
+    if: ${{ vars.E2E_LEGACY_ROOT != '' }}
+    env:
+      E2E_LEGACY_ROOT: ${{ vars.E2E_LEGACY_ROOT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Injection engine · every named tamper must turn its gate red
+        run: python scripts/inject_counterexample.py --all
+      - name: Injection engine · self-test
+        run: python scripts/inject_counterexample.py --self-test
+
+  v002-oracle:
+    name: N-2 external oracle (oracle)
+    runs-on: ubuntu-latest
+    if: ${{ vars.E2E_LEGACY_ROOT != '' }}
+    env:
+      E2E_LEGACY_ROOT: ${{ vars.E2E_LEGACY_ROOT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: External oracle · artifacts must match the read-only legacy tree
+        run: python scripts/oracle_recompute.py --oracle legacy
+
+  v002-meta:
+    name: S-7 meta gate (meta)
+    runs-on: ubuntu-latest
+    if: ${{ vars.E2E_LEGACY_ROOT != '' }}
+    env:
+      E2E_LEGACY_ROOT: ${{ vars.E2E_LEGACY_ROOT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Meta gate · every gate must notice it was mutated into green
+        run: python scripts/meta_gate.py
+      - name: Meta gate · classifier self-test
+        run: python scripts/meta_gate.py --self-test

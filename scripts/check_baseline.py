@@ -6,7 +6,7 @@ silently drift:
 ============================  ================================================  ==============
 Invariant                     Source                                            Enforcement
 ============================  ================================================  ==============
-``version == "0.0.1"``        roadmap §1.4 M-4 / C-3 联签                        exact
+``version == "0.0.2"``        V0.0.2 施工 README §5 T01（版本回写）/ C-3 联签  exact
 ``version != "0.4.8"``        0.4.8 是旧线 ``create_app().openapi()`` 的代码串，   forbidden
                               **从未发布**，不得作为 TS 线版本号
 ``engines.node``              `施工纪律.md` §4.7-1 / roadmap §7.2-15            exact string
@@ -46,7 +46,7 @@ __all__ = [
 ]
 
 EXPECTED_NAME = "wbtime-ai"
-EXPECTED_VERSION = "0.0.1"
+EXPECTED_VERSION = "0.0.2"
 FORBIDDEN_VERSION = "0.4.8"
 EXPECTED_ENGINES_NODE = "^22.19.0 || >=24.0.0"
 EXPECTED_NVMRC = "24.18.1"
