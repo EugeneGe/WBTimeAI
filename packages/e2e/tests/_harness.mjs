@@ -58,15 +58,76 @@ const ENV_BASE_URL = (process.env.E2E_BASE_URL ?? '').trim();
 /** True when `run_selfproof.py` owns the backend. */
 export const ORCHESTRATED = ENV_BASE_URL !== '';
 
-/** Read-only legacy tree (G-1). */
-export const LEGACY_ROOT = (process.env.E2E_LEGACY_ROOT ?? '').trim()
-  || (existsSync(join(REPO_ROOT, '..', 'WBTimeAI_old'))
-    ? resolve(REPO_ROOT, '..', 'WBTimeAI_old')
-    : 'D:/WBT/WBTimeAI_old');
+/**
+ * Resolve a bare command name against `PATH`, returning an absolute path or `null`.
+ *
+ * Needed because {@link LEGACY_PYTHON} is validated downstream with `existsSync`,
+ * which treats a bare name as a *relative file* and therefore never finds a
+ * command that lives on `PATH`. Returning `'python3'` as a fallback made the
+ * harness report `legacy 解释器不存在: python3` on a host that clearly *has*
+ * python3 — a false negative that hid the real cause (missing fastapi/uvicorn).
+ *
+ * @param {string} command Bare command name, e.g. `python3`.
+ * @returns {string|null} Absolute path, or `null` when not on `PATH`.
+ */
+function resolveOnPath(command) {
+  const pathEnv = process.env.PATH ?? '';
+  const separator = process.platform === 'win32' ? ';' : ':';
+  const suffixes = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+  for (const dir of pathEnv.split(separator)) {
+    if (!dir) continue;
+    for (const suffix of suffixes) {
+      const candidate = join(dir, command + suffix);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
 
-/** Interpreter that can import fastapi/uvicorn (the legacy venv; G-2). */
+/**
+ * Read-only legacy tree (G-1).
+ *
+ * Candidates, in order — mirroring `scripts/_gate_io.py::_default_legacy_root`:
+ *   1. `$E2E_LEGACY_ROOT`
+ *   2. `<repo>/_old`             — in-repo archive convention (V0.1.0+)
+ *   3. `<repo>/../WBTimeAI_old`  — sibling archive (older layout)
+ *   4. `<repo>/_old`             — the *expected* path, returned even when absent
+ *
+ * The last candidate is deliberately a repo-relative path, never a hard-coded
+ * absolute one. Until 2026-10-21 this fell back to `'D:/WBT/WBTimeAI_old'`, which
+ * on Linux produced `legacy 解释器不存在: D:/WBT/.../python.exe` — a message that
+ * names a Windows path no Linux host can satisfy, so the real cause ("the archive
+ * is elsewhere") was invisible. See `V0.1.0/03-台账/风险与决策.md` D-10.
+ */
+export const LEGACY_ROOT = (process.env.E2E_LEGACY_ROOT ?? '').trim()
+  || [join(REPO_ROOT, '_old'), resolve(REPO_ROOT, '..', 'WBTimeAI_old')]
+    .find((candidate) => existsSync(candidate))
+  || join(REPO_ROOT, '_old');
+
+/**
+ * Interpreter that can import fastapi/uvicorn (the legacy venv; G-2).
+ *
+ * Resolution order:
+ *   1. `$E2E_LEGACY_PYTHON` — explicit override.
+ *   2. The legacy venv interpreter, **by platform**: `.venv/Scripts/python.exe`
+ *      on Windows, `.venv/bin/python` / `python3` elsewhere.
+ *   3. `python3` / `python` resolved **against `PATH`** into an absolute path.
+ *   4. `<LEGACY_ROOT>/.venv/bin/python` — the expected location, absent on purpose.
+ *
+ * Steps 3 and 4 exist so the downstream `existsSync` check reports something
+ * actionable: with a real interpreter the failure becomes "cannot import fastapi"
+ * (the true blocker), and without one the message names the path the operator
+ * should create instead of an impossible Windows path.
+ */
 export const LEGACY_PYTHON = (process.env.E2E_LEGACY_PYTHON ?? '').trim()
-  || join(LEGACY_ROOT, '.venv', 'Scripts', 'python.exe');
+  || [
+    join(LEGACY_ROOT, '.venv', 'Scripts', 'python.exe'),
+    join(LEGACY_ROOT, '.venv', 'bin', 'python'),
+    join(LEGACY_ROOT, '.venv', 'bin', 'python3'),
+  ].find((candidate) => existsSync(candidate))
+  || resolveOnPath('python3')
+  || resolveOnPath('python')
+  || join(LEGACY_ROOT, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 
 /** How long a boot may take (ms). */
 const BOOT_TIMEOUT_MS = 90_000;

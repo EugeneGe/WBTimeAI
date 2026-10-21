@@ -166,8 +166,11 @@ EXIT_CODE_MEANINGS: Final[dict[int, str]] = {
 #: Environment variable holding the read-only legacy repo root (G-1).
 LEGACY_ROOT_ENV: Final[str] = "E2E_LEGACY_ROOT"
 
-#: Fallback location of the read-only legacy repo, used when no sibling exists.
-_DEFAULT_LEGACY_ROOT: Final[Path] = Path("D:/WBT/WBTimeAI_old")
+#: Name of the in-repo legacy archive (``<repo>/_old``), the V0.1.0+ convention.
+LEGACY_INREPO_DIRNAME: Final[str] = "_old"
+
+#: Name of the sibling legacy archive (``<repo>/../WBTimeAI_old``), the older layout.
+LEGACY_SIBLING_DIRNAME: Final[str] = "WBTimeAI_old"
 
 #: Everything K-7 wants collapsed into one line.
 _LINE_BREAK_RE: Final[re.Pattern[str]] = re.compile(r"\r\n|\r|\n")
@@ -323,21 +326,41 @@ def _posix_to_native(relative: str) -> Path:
 def _default_legacy_root(repo_root: Path) -> Path:
     """Resolve the read-only legacy root when the caller did not pass one.
 
+    Candidates, in order:
+
+    1. ``$E2E_LEGACY_ROOT`` — explicit operator override, always wins.
+    2. ``<repo>/_old`` — the in-repo archive convention (V0.1.0+).
+    3. ``<repo>/../WBTimeAI_old`` — the sibling archive (legacy layout).
+    4. ``<repo>/_old`` — the *expected* location, returned even when absent.
+
     Args:
-        repo_root: Repository root, used to look for a sibling ``_old`` tree.
+        repo_root: Repository root, used to look for the archive.
 
     Returns:
-        ``$E2E_LEGACY_ROOT`` when set; else the sibling ``WBTimeAI_old`` when it
-        exists; else the hard-coded fallback (which may not exist — callers must
-        check and degrade honestly).
+        The first existing candidate; otherwise ``<repo>/_old`` so the caller's
+        error message names a path the operator can actually act on.
+
+    Note:
+        Until 2026-10-21 this function fell back to a hard-coded
+        ``D:/WBT/WBTimeAI_old``.  On Linux that produced a failure message naming
+        a Windows path that could never exist there, which reads like a config
+        error while the real cause is "the archive lives somewhere else on this
+        host".  Two gates (``check_extension_point_signatures`` and
+        ``check_frontend_diff``) inherited the same defect and reported
+        ``0/9 points`` / ``common=0`` on an otherwise healthy tree — see
+        ``V0.1.0/03-台账/风险与决策.md`` D-10 and D-12.  A path that is *guessed*
+        must never masquerade as a path that was *found*.
     """
     from_env = os.environ.get(LEGACY_ROOT_ENV, "").strip()
     if from_env:
         return Path(from_env).expanduser().resolve()
-    sibling = repo_root.parent / "WBTimeAI_old"
-    if sibling.is_dir():
-        return sibling.resolve()
-    return _DEFAULT_LEGACY_ROOT
+    for candidate in (
+        repo_root / LEGACY_INREPO_DIRNAME,
+        repo_root.parent / LEGACY_SIBLING_DIRNAME,
+    ):
+        if candidate.is_dir():
+            return candidate.resolve()
+    return (repo_root / LEGACY_INREPO_DIRNAME).resolve()
 
 
 def load_json(path: Path) -> Any:

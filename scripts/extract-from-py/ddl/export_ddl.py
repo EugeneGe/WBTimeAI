@@ -77,7 +77,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--source",
         default=None,
-        help="旧仓根目录（默认 $WBTIME_SOURCE 或 D:/WBT/WBTimeAI_old）",
+        help="旧仓根目录（默认 $WBTIME_SOURCE，其次 <repo>/_old，再次 <repo>/../WBTimeAI_old）",
     )
     parser.add_argument(
         "--out-dir",

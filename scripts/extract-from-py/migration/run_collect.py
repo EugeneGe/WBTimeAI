@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--source",
         metavar="PATH",
         default=None,
-        help="legacy repository root (default: $WBTIME_SOURCE or D:/WBT/WBTimeAI_old)",
+        help="legacy repository root (default: $WBTIME_SOURCE, else <repo>/_old, else <repo>/../WBTimeAI_old)",
     )
     parser.add_argument(
         "--out",

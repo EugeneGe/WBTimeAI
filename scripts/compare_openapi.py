@@ -959,7 +959,7 @@ def _parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         "--legacy-root",
         default=None,
         metavar="DIR",
-        help="read-only legacy repository root (default: $E2E_LEGACY_ROOT or D:/WBT/WBTimeAI_old)",
+        help="read-only legacy repository root (default: $E2E_LEGACY_ROOT, else <repo>/_old, else <repo>/../WBTimeAI_old)",
     )
     parser.add_argument(
         "--url",
