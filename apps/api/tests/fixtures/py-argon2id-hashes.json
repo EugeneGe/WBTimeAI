@@ -1,0 +1,31 @@
+{
+  "_comment": "J-2 的 py 侧基准（**非手写**）：py 线同参数 argon2id 生成的 PHC 串，供 TS verify 使用。",
+  "generated_by": "D:/WBT/WBTimeAI_old/.venv/Scripts/python.exe（argon2-cffi 25.1.0）",
+  "generated_at": "2026-10-21",
+  "params": {
+    "type": "Argon2id",
+    "time_cost": 3,
+    "memory_cost": 65536,
+    "parallelism": 4,
+    "hash_len": 32,
+    "salt_len": 16
+  },
+  "regenerate": "python D:/Temp/WBTimeAI/2026-10-21-T2-04/py-argon2.py generate（脚本全文见 T2-04 施工记录 §J-2）",
+  "fixtures": [
+    {
+      "password": "correct horse battery staple",
+      "hash": "$argon2id$v=19$m=65536,t=3,p=4$hDvrgbg5wNZ9Iw7OhXJhQg$Y2SK68pI3YNiz/3+pY96egDKkywLyIwUNskGzNsLVXE",
+      "salt_len": 16
+    },
+    {
+      "password": "wb-time-admin-2026",
+      "hash": "$argon2id$v=19$m=65536,t=3,p=4$xLu6y/SiekDJAJVMLLGtDQ$LxBenJ0M5jFE3oc9wW8WACMX4uDSVTcCO/J3FQca7qY",
+      "salt_len": 16
+    },
+    {
+      "password": "口令含中文与空格 ok",
+      "hash": "$argon2id$v=19$m=65536,t=3,p=4$hCr3jAIFnt3UDiHwfp/A/w$1JzId3aAncpf1hlstyxNsKIkMHu5Zz1EdmDnDGO5VUE",
+      "salt_len": 16
+    }
+  ]
+}

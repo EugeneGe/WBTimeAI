@@ -1,0 +1,477 @@
+{
+  "_comment": "J-11 的 py 侧期望值（**非手写**）：py 线真运行时采集，19/19。T2-11 比对执行器直接消费本文件。",
+  "_provenance": {
+    "origin": "D:/Temp/WBTimeAI/2026-10-21-T2-11-oracle/expected-19ops.json",
+    "captured_at": "2026-10-21T06:34:27.323Z",
+    "py_version": "见 health.data.version",
+    "base_url": "http://127.0.0.1:8099",
+    "oracle_kind": "runtime",
+    "source": "WBTimeAI_old py 线（FastAPI）真运行时",
+    "collector": "D:/Temp/WBTimeAI/2026-10-21-T2-06-T2-11/collect-oracle.mjs（临时工具，见 T2-11-oracle.md §1.2）",
+    "method": "真实 uvicorn + 本仓冻结 DDL 建表 + py /openapi.json 取必填字段自动填充（非 OpenAPI 推导）"
+  },
+  "input_policy": "固定输入集：body 仅填 openapi 必填字段（自动填充规则见 collector），路径参数统一 00000000-0000-4000-8000-000000000000；auth 为采集链中 register/login 得到的 access_token。",
+  "ops": [
+    {
+      "id": "register",
+      "operation": "POST /api/v1/auth/register",
+      "request": {
+        "auth": false,
+        "body": {
+          "username": "oracle_second",
+          "email": "oracle2@example.com",
+          "password": "Oracle#12345"
+        },
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 201,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "access_token",
+          "expires_in",
+          "refresh_token",
+          "token_type"
+        ],
+        "body_bytes": 1006,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMWExNWQyYi0xNDEyLTdmODEtYmU0My03ZDgzNDJjOTgxMzciLCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzkyNTY0NDY2LCJleHAiOjE3OTI1NjUzNjYsImp0aSI6IjAxYTE1ZDJiLTE0NjAtNzg1My05MmE5LTdmYTg5NWI5YmQ5NCIsImlzcyI6IndidGltZS1haSIsInRlbmFudF9pZCI6IjAxYTE1ZDJiLTBlMDItN2NiMC1iYTNkLWZkMGE5NTU0ZDQ5NiIsInNpZCI6IjAxYTE1ZDJiLTE0NWEtN2Q0MS1iZGVkLTI0YTNhYmM1NDE1NSJ9.i1SHEEVq8QzWXhvz4aI8Wh-vu6-U5yWAByQBfGu-og4\",\"refresh_token\":\"eyJhbGciOiJ"
+      }
+    },
+    {
+      "id": "login",
+      "operation": "POST /api/v1/auth/login",
+      "request": {
+        "auth": false,
+        "body": {
+          "username": "oracle_second",
+          "password": "Oracle#12345"
+        },
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "access_token",
+          "expires_in",
+          "refresh_token",
+          "token_type"
+        ],
+        "body_bytes": 1006,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMWExNWQyYi0xNDEyLTdmODEtYmU0My03ZDgzNDJjOTgxMzciLCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzkyNTY0NDY2LCJleHAiOjE3OTI1NjUzNjYsImp0aSI6IjAxYTE1ZDJiLTE1MGYtN2ZhMi1iZGMzLWZlZTAzMGE2ZTAwNCIsImlzcyI6IndidGltZS1haSIsInRlbmFudF9pZCI6IjAxYTE1ZDJiLTBlMDItN2NiMC1iYTNkLWZkMGE5NTU0ZDQ5NiIsInNpZCI6IjAxYTE1ZDJiLTE1MGItN2JmMi04YzU5LWZiMDRjY2NlNTU0ZiJ9.ORw6vBsh4YuWi9_vjsZEfZJis_gt-UTxjSUmgsoDlZw\",\"refresh_token\":\"eyJhbGciOiJ"
+      }
+    },
+    {
+      "id": "get_me",
+      "operation": "GET /api/v1/users/me",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "created_at",
+          "display_name",
+          "email",
+          "id",
+          "is_active",
+          "is_superuser",
+          "tenant_id",
+          "username"
+        ],
+        "body_bytes": 338,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"id\":\"01a15d2b-1412-7f81-be43-7d8342c98137\",\"tenant_id\":\"01a15d2b-0e02-7cb0-ba3d-fd0a9554d496\",\"username\":\"oracle_second\",\"email\":\"oracle2@example.com\",\"display_name\":null,\"is_active\":true,\"is_superuser\":false,\"created_at\":\"2026-10-21T06:34:26.706222\"},\"request_id\":\"01a15d2b-1530-7f13-a27b-f6f55831e00f\"}"
+      }
+    },
+    {
+      "id": "update_me",
+      "operation": "PUT /api/v1/users/me",
+      "request": {
+        "auth": true,
+        "body": {},
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "created_at",
+          "display_name",
+          "email",
+          "id",
+          "is_active",
+          "is_superuser",
+          "tenant_id",
+          "username"
+        ],
+        "body_bytes": 338,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"id\":\"01a15d2b-1412-7f81-be43-7d8342c98137\",\"tenant_id\":\"01a15d2b-0e02-7cb0-ba3d-fd0a9554d496\",\"username\":\"oracle_second\",\"email\":\"oracle2@example.com\",\"display_name\":null,\"is_active\":true,\"is_superuser\":false,\"created_at\":\"2026-10-21T06:34:26.706222\"},\"request_id\":\"01a15d2b-153c-7562-a8af-2f314a9d610e\"}"
+      }
+    },
+    {
+      "id": "list_devices",
+      "operation": "GET /api/v1/users/me/devices",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "array",
+        "data_keys": null,
+        "body_bytes": 500,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":[{\"id\":\"01a15d2b-150b-7bf2-8c59-fb04ccce554f\",\"device\":null,\"ip_address\":\"127.0.0.1\",\"user_agent\":\"node\",\"created_at\":\"2026-10-21T06:34:26.955472\",\"expires_at\":\"2026-11-04T06:34:26.954453\",\"revoked_at\":null},{\"id\":\"01a15d2b-145a-7d41-bded-24a3abc54155\",\"device\":null,\"ip_address\":\"127.0.0.1\",\"user_agent\":\"node\",\"created_at\":\"2026-10-21T06:34:26.779725\",\"expires_at\":\"2026-11-04T06:34:26.777708\",\"revoked_at\":null}],\"request_id\":\"01a15d2b-156b-71f3-ba20-597a2a38c2f3\"}"
+      }
+    },
+    {
+      "id": "check_permission",
+      "operation": "GET /api/v1/permissions/check",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": {
+          "cap": "evaluation:run"
+        },
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "allowed",
+          "capability",
+          "effect",
+          "reason",
+          "source"
+        ],
+        "body_bytes": 205,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"capability\":\"evaluation:run\",\"allowed\":false,\"effect\":\"DENY\",\"reason\":\"默认拒绝（deny-by-default）\",\"source\":\"default_deny\"},\"request_id\":\"01a15d2b-1573-7663-93f5-17010eac20bd\"}"
+      }
+    },
+    {
+      "id": "list_organizations",
+      "operation": "GET /api/v1/organizations",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "array",
+        "data_keys": null,
+        "body_bytes": 217,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":[{\"id\":\"01a15d2b-0e09-76e0-ba5b-1293e23131e3\",\"tenant_id\":\"01a15d2b-0e02-7cb0-ba3d-fd0a9554d496\",\"name\":\"Default\",\"slug\":\"default\"}],\"request_id\":\"01a15d2b-157d-7171-9a34-27acf0dc1964\"}"
+      }
+    },
+    {
+      "id": "get_organization",
+      "operation": "GET /api/v1/organizations/{organization_id}",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": null,
+        "params": {
+          "organization_id": "00000000-0000-4000-8000-000000000000"
+        }
+      },
+      "expected": {
+        "status": 404,
+        "code": "ORGANIZATION_NOT_FOUND",
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "organization_id"
+        ],
+        "body_bytes": 169,
+        "raw_preview": "{\"code\":\"ORGANIZATION_NOT_FOUND\",\"message\":\"组织不存在\",\"data\":{\"organization_id\":\"00000000-0000-4000-8000-000000000000\"},\"request_id\":\"01a15d2b-1585-7b72-8363-029cd8d9d0ec\"}"
+      }
+    },
+    {
+      "id": "list_tool_permissions",
+      "operation": "GET /api/v1/tools/permissions",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 422,
+        "code": "VALIDATION_ERROR",
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "errors"
+        ],
+        "body_bytes": 219,
+        "raw_preview": "{\"code\":\"VALIDATION_ERROR\",\"message\":\"Request validation failed\",\"data\":{\"errors\":[{\"type\":\"missing\",\"loc\":[\"query\",\"agent_id\"],\"msg\":\"Field required\",\"input\":null}]},\"request_id\":\"01a15d2b-158c-7c33-8ebb-a6f8cfdef101\"}"
+      }
+    },
+    {
+      "id": "create_tool_permission",
+      "operation": "POST /api/v1/tools/permissions",
+      "request": {
+        "auth": true,
+        "body": {
+          "tool_id": "oracle-value"
+        },
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 201,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "action",
+          "agent_id",
+          "agent_version_id",
+          "created_at",
+          "effect",
+          "id",
+          "scope",
+          "tenant_id",
+          "tool_id"
+        ],
+        "body_bytes": 336,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"id\":\"01a15d2b-1597-70d0-8f16-35da05f45a3e\",\"tenant_id\":\"01a15d2b-0e02-7cb0-ba3d-fd0a9554d496\",\"agent_id\":null,\"agent_version_id\":null,\"tool_id\":\"oracle-value\",\"action\":\"EXECUTE\",\"effect\":\"ALLOW\",\"scope\":{},\"created_at\":\"2026-10-21T06:34:27.097329Z\"},\"request_id\":\"01a15d2b-1593-75d2-9417-475c141b02d2\"}"
+      }
+    },
+    {
+      "id": "delete_tool_permission",
+      "operation": "DELETE /api/v1/tools/permissions/{permission_id}",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": null,
+        "params": {
+          "permission_id": "00000000-0000-4000-8000-000000000000"
+        }
+      },
+      "expected": {
+        "status": 404,
+        "code": "NOT_FOUND",
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "permission_id"
+        ],
+        "body_bytes": 154,
+        "raw_preview": "{\"code\":\"NOT_FOUND\",\"message\":\"权限不存在\",\"data\":{\"permission_id\":\"00000000-0000-4000-8000-000000000000\"},\"request_id\":\"01a15d2b-15c5-7950-9aaf-8187e71f4e5f\"}"
+      }
+    },
+    {
+      "id": "list_credentials",
+      "operation": "GET /api/v1/models/credentials",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "array",
+        "data_keys": null,
+        "body_bytes": 87,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":[],\"request_id\":\"01a15d2b-15ca-78e0-a44a-70cb28647713\"}"
+      }
+    },
+    {
+      "id": "create_credential",
+      "operation": "POST /api/v1/models/credentials",
+      "request": {
+        "auth": true,
+        "body": {
+          "provider": "oracle-value",
+          "value": "oracle-value"
+        },
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 201,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "created_at",
+          "id",
+          "key_type",
+          "masked_value",
+          "provider",
+          "workspace_id"
+        ],
+        "body_bytes": 269,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"id\":\"01a15d2b-15d4-7002-ae7f-b4b78245adbe\",\"provider\":\"oracle-value\",\"key_type\":\"api_key\",\"masked_value\":\"orac...alue\",\"workspace_id\":null,\"created_at\":\"2026-10-21T06:34:27.156914Z\"},\"request_id\":\"01a15d2b-15d1-7022-b43a-35f3278e97df\"}"
+      }
+    },
+    {
+      "id": "delete_credential",
+      "operation": "DELETE /api/v1/models/credentials/{credential_id}",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": null,
+        "params": {
+          "credential_id": "00000000-0000-4000-8000-000000000000"
+        }
+      },
+      "expected": {
+        "status": 404,
+        "code": "CREDENTIAL_NOT_FOUND",
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "credential_id"
+        ],
+        "body_bytes": 165,
+        "raw_preview": "{\"code\":\"CREDENTIAL_NOT_FOUND\",\"message\":\"凭证不存在\",\"data\":{\"credential_id\":\"00000000-0000-4000-8000-000000000000\"},\"request_id\":\"01a15d2b-15f3-72a1-b5b2-006fb178bb41\"}"
+      }
+    },
+    {
+      "id": "bind_credential",
+      "operation": "POST /api/v1/models/providers/{provider_id}/credential",
+      "request": {
+        "auth": true,
+        "body": {
+          "credential_id": "oracle-value"
+        },
+        "query": null,
+        "params": {
+          "provider_id": "00000000-0000-4000-8000-000000000000"
+        }
+      },
+      "expected": {
+        "status": 404,
+        "code": "NOT_FOUND",
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "provider_id"
+        ],
+        "body_bytes": 153,
+        "raw_preview": "{\"code\":\"NOT_FOUND\",\"message\":\"提供方不存在\",\"data\":{\"provider_id\":\"00000000-0000-4000-8000-000000000000\"},\"request_id\":\"01a15d2b-15f9-7730-8bdd-972a73a480c2\"}"
+      }
+    },
+    {
+      "id": "unbind_credential",
+      "operation": "DELETE /api/v1/models/providers/{provider_id}/credential",
+      "request": {
+        "auth": true,
+        "body": null,
+        "query": null,
+        "params": {
+          "provider_id": "00000000-0000-4000-8000-000000000000"
+        }
+      },
+      "expected": {
+        "status": 404,
+        "code": "NOT_FOUND",
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "provider_id"
+        ],
+        "body_bytes": 153,
+        "raw_preview": "{\"code\":\"NOT_FOUND\",\"message\":\"提供方不存在\",\"data\":{\"provider_id\":\"00000000-0000-4000-8000-000000000000\"},\"request_id\":\"01a15d2b-1600-7882-959b-5ad86f866ca8\"}"
+      }
+    },
+    {
+      "id": "refresh",
+      "operation": "POST /api/v1/auth/refresh",
+      "request": {
+        "auth": false,
+        "body": {
+          "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMWExNWQyYi0xNDEyLTdmODEtYmU0My03ZDgzNDJjOTgxMzciLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc5MjU2NDQ2NiwiZXhwIjoxNzkzNzc0MDY2LCJqdGkiOiIwMWExNWQyYi0xNTBlLTdlZjItOTMzNS1jZDE3OThjZDhjZjciLCJpc3MiOiJ3YnRpbWUtYWkiLCJ0ZW5hbnRfaWQiOiIwMWExNWQyYi0wZTAyLTdjYjAtYmEzZC1mZDBhOTU1NGQ0OTYiLCJzaWQiOiIwMWExNWQyYi0xNTBiLTdiZjItOGM1OS1mYjA0Y2NjZTU1NGYifQ.lkd6t1lQzGyORom56JuqwzheeHYNIF66ZPtTzP9GGuo"
+        },
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "access_token",
+          "expires_in",
+          "refresh_token",
+          "token_type"
+        ],
+        "body_bytes": 1006,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMWExNWQyYi0xNDEyLTdmODEtYmU0My03ZDgzNDJjOTgxMzciLCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzkyNTY0NDY3LCJleHAiOjE3OTI1NjUzNjcsImp0aSI6IjAxYTE1ZDJiLTE2MjUtNzE1MS1hNTFjLTVhODY2M2MyMzA1ZSIsImlzcyI6IndidGltZS1haSIsInRlbmFudF9pZCI6IjAxYTE1ZDJiLTBlMDItN2NiMC1iYTNkLWZkMGE5NTU0ZDQ5NiIsInNpZCI6IjAxYTE1ZDJiLTE2MjItN2RmMC1iMmFhLTI3MWViOTVhMzc5OSJ9.kfW0c_Mo4ZdP6kC0dvB4aRFIp_tq1ILKyZWFyAzjyYw\",\"refresh_token\":\"eyJhbGciOiJ"
+      }
+    },
+    {
+      "id": "logout",
+      "operation": "POST /api/v1/auth/logout",
+      "request": {
+        "auth": true,
+        "body": {},
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "message"
+        ],
+        "body_bytes": 102,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"message\":\"已登出\"},\"request_id\":\"01a15d2b-1640-7920-bd6f-8ee2199d8c8a\"}"
+      }
+    },
+    {
+      "id": "logout_all",
+      "operation": "POST /api/v1/users/me/logout-all",
+      "request": {
+        "auth": true,
+        "body": {},
+        "query": null,
+        "params": null
+      },
+      "expected": {
+        "status": 200,
+        "code": 0,
+        "shell": true,
+        "data_type": "object",
+        "data_keys": [
+          "message"
+        ],
+        "body_bytes": 108,
+        "raw_preview": "{\"code\":0,\"message\":\"ok\",\"data\":{\"message\":\"已撤销 1 个会话\"},\"request_id\":\"01a15d2b-165d-7312-9638-7b8f08aa00bf\"}"
+      }
+    }
+  ]
+}
