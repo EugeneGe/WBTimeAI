@@ -2901,7 +2901,7 @@
       "generated_by": null,
       "path": "README.md",
       "requirement": "V0.0.1/DoD#6 版本号联签登记（M-4）",
-      "sha256": "f4e15d72d690ed653da9414117dd8cbb2fbcdc26af8739382341a9701aa96fe6",
+      "sha256": "29f540e6057f86e6e10ff0a1b0bdb7810b75cc6911d97d0e2fca226643814d66",
       "source": "manual"
     },
     {
@@ -3001,6 +3001,14 @@
       "source": "metadata"
     },
     {
+      "dialect_only": null,
+      "generated_by": null,
+      "path": "openapi.v1.frozen.v0019.json",
+      "requirement": "V0.3.0/DoD#8 契约增量（stop_reason / status 七值枚举）",
+      "sha256": "39b3400713b5f6a931bd7a3b594f1dad59f975dca000cfb16e82542dd1a06475",
+      "source": "manual"
+    },
+    {
       "dialect_only": "pg",
       "generated_by": "scripts/extract-from-py/ddl/export_ddl.py",
       "path": "schema.v0018.pg.normalized.json",
@@ -3031,6 +3039,42 @@
       "requirement": "V0.0.1/DoD#3 DDL 三源合并·176 索引对象·双侧快照（SQLite 含 FTS5）",
       "sha256": "65ee733d230e224e824e68691f0f20c62ff776f58fca6d594f3f0d5aa0ffeb15",
       "source": "metadata"
+    },
+    {
+      "derived_by": "scripts/contracts/gen-v0019-normalized.py",
+      "derived_from": "schema.v0018.pg.normalized.json",
+      "dialect_only": "pg",
+      "generated_by": null,
+      "path": "schema.v0019.pg.normalized.json",
+      "requirement": "V0.3.0/DoD#8 契约增量 v0019 规范化快照（PG 档：agent_run.stop_reason）",
+      "sha256": "94c897c7bb1d4a491e67a72fe9dc34e2f602a725aebd5831f2732738b414d5b8",
+      "source": "manual"
+    },
+    {
+      "dialect_only": "pg",
+      "generated_by": null,
+      "path": "schema.v0019.pg.sql",
+      "requirement": "V0.3.0/DoD#8 agent_run.stop_reason（PG 档）",
+      "sha256": "c2045fc067212afff5c12d9ce0bfadc22f7333f198b6e7c530cce6e7880aeac5",
+      "source": "manual"
+    },
+    {
+      "derived_by": "scripts/contracts/gen-v0019-normalized.py",
+      "derived_from": "schema.v0018.sqlite.normalized.json",
+      "dialect_only": "sqlite",
+      "generated_by": null,
+      "path": "schema.v0019.sqlite.normalized.json",
+      "requirement": "V0.3.0/DoD#8 契约增量 v0019 规范化快照（SQLite 档：agent_run.stop_reason）",
+      "sha256": "116d5f53e37c0a67743615bdb5f9dc2d2bfe406f5719acd9d02625fa4c1bdc7a",
+      "source": "manual"
+    },
+    {
+      "dialect_only": "sqlite",
+      "generated_by": null,
+      "path": "schema.v0019.sqlite.sql",
+      "requirement": "V0.3.0/DoD#8 agent_run.stop_reason（SQLite 档）",
+      "sha256": "7f3a407248d83f54fd581d0ed61d89304ccf1c72ad5c51df6ccad189672c4894",
+      "source": "manual"
     },
     {
       "dialect_only": null,
@@ -3223,6 +3267,22 @@
       "requirement": "DoD#5 口径登记（collected/selected/passed 三口径 + 分布 + 输入输出 sha256）",
       "sha256": "af07f021dd9850d10471eb1e803cbcc7594a51c414d003f2e310e8cdfb49cd87",
       "source": "metadata"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": null,
+      "path": "v0019.README.md",
+      "requirement": "V0.3.0/DoD#8 增量登记（施工纪律 §4.5.1 五项）",
+      "sha256": "6fdf1763a70bfa28b18eecace089bd8141b306704bba30f80226a13a861ca0ef",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": null,
+      "path": "v0019.manifest.sha256",
+      "requirement": "V0.3.0/DoD#8 v0019 字节台账",
+      "sha256": "2b68b184668f0e7e866423431df48dafd82f19bd4213763adff6d2ec8c2d0224",
+      "source": "manual"
     }
   ],
   "schema": {
@@ -3246,7 +3306,7 @@
     "frozen_contract": "V0.0.1 / C-07",
     "generated_by": "scripts/extract-from-py/contract_manifest.py",
     "name": "wbtime-ai contract manifest",
-    "object_count": 41,
+    "object_count": 48,
     "version": 1
   },
   "status_semantics": {

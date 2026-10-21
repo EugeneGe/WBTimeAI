@@ -16,22 +16,36 @@ M-02), and any one of them going missing silently shrinks the contract:
 sha" is invisible to it (evidence: ``V0.0.1`` 验收报告-回归 §4.2).  This gate is the
 one that compares the *content* of the four artifacts against each other:
 
-1. ``schema.v0018.pg.normalized.json``     <-> ``schema.v0018.pg.sql``
-2. ``schema.v0018.sqlite.normalized.json`` <-> ``schema.v0018.sqlite.sql``
-3. ``schema.v0018.pg.normalized.json``     <-> ``schema.v0018.sqlite.normalized.json``
+1. ``schema.<v>.pg.normalized.json``     <-> ``schema.<v>.pg.sql``
+2. ``schema.<v>.sqlite.normalized.json`` <-> ``schema.<v>.sqlite.sql``
+3. ``schema.<v>.pg.normalized.json``     <-> ``schema.<v>.sqlite.normalized.json``
    (table names / column names / nullability must agree; **types must not** — they
    are dialect-specific by definition: ``UUID`` vs ``CHAR(36)``, ``JSONB`` vs ``JSON``);
 4. ``counts`` blocks vs the structures they claim to count.
 
+``<v>`` is selected by ``--schema`` (:data:`SCHEMAS`), defaulting to ``v0018`` so the
+gate's historical behaviour is byte-for-byte unchanged.  Every schema version is
+compared by the **same** functions, so a new frozen face (``v0019``: the
+``agent_run.stop_reason`` increment) cannot get a weaker check than the baseline.
+
 Hard assertions (the reason this gate exists)
 ---------------------------------------------
 * ``raw_indexes`` filtered by ``method == "hnsw"`` must be **exactly 2** in
-  ``schema.v0018.pg.normalized.json``;
-* ``CREATE INDEX ... USING hnsw`` must be **exactly 2** in ``schema.v0018.pg.sql``;
+  ``schema.<v>.pg.normalized.json``;
+* ``CREATE INDEX ... USING hnsw`` must be **exactly 2** in ``schema.<v>.pg.sql``;
 * both name sets must be identical.
 
 Comparing only "columns and ordinary indexes" cannot see "one ``hnsw`` went
 missing" — that is exactly the hole this gate closes.
+
+Where the extra schemas come from
+---------------------------------
+``v0018`` is the py-line freeze (ORM metadata + migration-chain raw DDL).  ``v0019``
+is the TS-line increment; its normalized snapshots have no ORM to compile from, so
+``scripts/contracts/gen-v0019-normalized.py`` derives them from the ``v0018``
+snapshots plus the unique increment, lifting the new column's type/nullability out
+of the frozen ``.sql`` text.  This gate is what makes that derivation *checkable*:
+it re-parses all four artifacts independently and compares them.
 
 Exit codes (§3.3 of the design doc)
 -----------------------------------
@@ -43,9 +57,12 @@ Exit codes (§3.3 of the design doc)
 
 ``--self-test``
 ---------------
-Never touches the real ``contracts/`` tree: it copies the four artifacts into a
-:class:`tempfile.TemporaryDirectory`, then applies two named injections and
-asserts that each one turns this gate red **for the right reason**:
+Never touches the real ``contracts/`` tree: it copies the four artifacts of a
+schema version into a :class:`tempfile.TemporaryDirectory`, then applies two named
+injections and asserts that each one turns this gate red **for the right reason**.
+It always covers ``v0018`` (the historical injection cases, so the default
+behaviour is unchanged); passing a different ``--schema`` adds that artifact set
+as a second target, it never replaces the baseline one.
 
 * injection 1 — narrow one column's type (``VARCHAR(255)`` -> ``VARCHAR(64)``) in
   the **normalized JSON only**; the ``.sql`` text still says the old width, so the
@@ -88,25 +105,90 @@ __all__ = [
     "TAG",
     "EXPECTED_HNSW_PG",
     "DIALECT_ONLY_KINDS",
+    "DEFAULT_SCHEMA",
+    "SCHEMAS",
+    "SchemaArtifacts",
     "ColumnDef",
     "TableDef",
     "SchemaEntities",
     "parse_pg_sql",
     "parse_sqlite_sql",
     "parity",
+    "load_sources",
     "collect_diffs",
+    "self_test_targets",
     "main",
 ]
 
 #: Log tag (K-7).
 TAG = "parity"
 
-#: The four frozen artifacts this gate reads, relative to ``contracts/``.
-PG_NORMALIZED = "schema.v0018.pg.normalized.json"
-SQLITE_NORMALIZED = "schema.v0018.sqlite.normalized.json"
-PG_SQL = "schema.v0018.pg.sql"
-SQLITE_SQL = "schema.v0018.sqlite.sql"
-ARTIFACTS: tuple[str, ...] = (PG_NORMALIZED, SQLITE_NORMALIZED, PG_SQL, SQLITE_SQL)
+@dataclass(frozen=True)
+class SchemaArtifacts:
+    """The four frozen artifacts of **one** schema version, relative to ``contracts/``.
+
+    Attributes:
+        label: Version label used on the command line (``v0018`` / ``v0019``).
+        pg_normalized: PG ``*.normalized.json`` file name.
+        sqlite_normalized: SQLite ``*.normalized.json`` file name.
+        pg_sql: PG ``.sql`` file name.
+        sqlite_sql: SQLite ``.sql`` file name.
+        description: One line explaining what that version froze.
+    """
+
+    label: str
+    pg_normalized: str
+    sqlite_normalized: str
+    pg_sql: str
+    sqlite_sql: str
+    description: str
+
+    @property
+    def files(self) -> tuple[str, ...]:
+        """Return the four file names in a fixed order (normalized first)."""
+        return (
+            self.pg_normalized,
+            self.sqlite_normalized,
+            self.pg_sql,
+            self.sqlite_sql,
+        )
+
+
+#: Every schema face this gate can compare. Adding a version here is the **only**
+#: way to widen coverage: the comparison rules below stay single-instance, so a new
+#: version can never be checked by a weaker (copied) rule set.
+SCHEMAS: dict[str, SchemaArtifacts] = {
+    "v0018": SchemaArtifacts(
+        label="v0018",
+        pg_normalized="schema.v0018.pg.normalized.json",
+        sqlite_normalized="schema.v0018.sqlite.normalized.json",
+        pg_sql="schema.v0018.pg.sql",
+        sqlite_sql="schema.v0018.sqlite.sql",
+        description="py 线冻结面：ORM metadata 编译 + 迁移链 raw hnsw + SQLite FTS5",
+    ),
+    "v0019": SchemaArtifacts(
+        label="v0019",
+        pg_normalized="schema.v0019.pg.normalized.json",
+        sqlite_normalized="schema.v0019.sqlite.normalized.json",
+        pg_sql="schema.v0019.pg.sql",
+        sqlite_sql="schema.v0019.sqlite.sql",
+        description="TS 线增量面：v0018 + agent_run.stop_reason VARCHAR(50) NULL",
+    ),
+}
+
+#: Default schema version — the historical behaviour of this gate.
+DEFAULT_SCHEMA = "v0018"
+
+#: The default artifact set (``--schema`` omitted).
+DEFAULT_ARTIFACTS = SCHEMAS[DEFAULT_SCHEMA]
+
+#: The four frozen artifacts this gate reads **by default**, relative to
+#: ``contracts/``.  Kept as module constants for callers that import them.
+PG_NORMALIZED = DEFAULT_ARTIFACTS.pg_normalized
+SQLITE_NORMALIZED = DEFAULT_ARTIFACTS.sqlite_normalized
+PG_SQL = DEFAULT_ARTIFACTS.pg_sql
+SQLITE_SQL = DEFAULT_ARTIFACTS.sqlite_sql
+ARTIFACTS: tuple[str, ...] = DEFAULT_ARTIFACTS.files
 
 #: Roadmap §3.3.1: the PG face must carry **exactly two** ``hnsw`` indexes
 #: (``ix_embedding_vector_hnsw`` / ``ix_memory_vector_hnsw``).  Anything else is a
@@ -862,10 +944,10 @@ def _canonical_fk(
 # §3.2 public parsers
 # ---------------------------------------------------------------------------
 def parse_pg_sql(text: str) -> SchemaEntities:
-    """Parse ``schema.v0018.pg.sql``.
+    """Parse the PostgreSQL ``.sql`` artifact of the selected schema version.
 
     Args:
-        text: Raw SQL file content.
+        text: Raw SQL file content (``schema.<v>.pg.sql``).
 
     Returns:
         The PostgreSQL face.
@@ -874,14 +956,14 @@ def parse_pg_sql(text: str) -> SchemaEntities:
 
 
 def parse_sqlite_sql(text: str) -> SchemaEntities:
-    """Parse ``schema.v0018.sqlite.sql``.
+    """Parse the SQLite ``.sql`` artifact of the selected schema version.
 
     Recognises the ``-- [sqlite_master]`` declarations for the FTS5 shadow tables
     and merges ``CREATE TRIGGER ... BEGIN <stmts> END;`` bodies that the shared
     ``';'`` splitter breaks apart.
 
     Args:
-        text: Raw SQL file content.
+        text: Raw SQL file content (``schema.<v>.sqlite.sql``).
 
     Returns:
         The SQLite face.
@@ -1157,13 +1239,16 @@ def parity(
 ) -> list[Diff]:
     """Compare the three (optionally four) DDL sources.
 
+    The rule set is dialect-and-version agnostic: the same function judges every
+    entry of :data:`SCHEMAS`, so no version can be checked more leniently.
+
     Args:
-        pg_norm: PostgreSQL, from ``schema.v0018.pg.normalized.json``.
-        sqlite_norm: SQLite, from ``schema.v0018.sqlite.normalized.json``.
-        pg_sql: PostgreSQL, from ``schema.v0018.pg.sql``.
+        pg_norm: PostgreSQL, from the ``schema.<v>.pg.normalized.json`` face.
+        sqlite_norm: SQLite, from the ``schema.<v>.sqlite.normalized.json`` face.
+        pg_sql: PostgreSQL, from the ``schema.<v>.pg.sql`` face.
         dialect_only: Object kinds allowed to exist on one dialect only.
-        sqlite_sql: SQLite, from ``schema.v0018.sqlite.sql``.  Optional so the
-            function matches §3.2 of the design doc exactly; when supplied the
+        sqlite_sql: SQLite, from the ``schema.<v>.sqlite.sql`` face.  Optional so
+            the function matches §3.2 of the design doc exactly; when supplied the
             SQLite normalized-vs-text face is checked too (the design's "各自对应
             的 ``.sql`` 文本" requirement).
 
@@ -1220,11 +1305,14 @@ class Sources:
     sqlite_sql: SchemaEntities
 
 
-def load_sources(contracts_dir: Path) -> Sources:
-    """Load and parse all four DDL artifacts.
+def load_sources(
+    contracts_dir: Path, artifacts: SchemaArtifacts = DEFAULT_ARTIFACTS
+) -> Sources:
+    """Load and parse the four DDL artifacts of one schema version.
 
     Args:
         contracts_dir: Directory holding the frozen artifacts.
+        artifacts: Which schema version to read (default: ``v0018``).
 
     Returns:
         The parsed :class:`Sources`.
@@ -1232,22 +1320,27 @@ def load_sources(contracts_dir: Path) -> Sources:
     Raises:
         GateIOError: An artifact is missing or unparsable.
     """
-    pg_norm = SchemaEntities.from_normalized(load_json(contracts_dir / PG_NORMALIZED))
-    sqlite_norm = SchemaEntities.from_normalized(
-        load_json(contracts_dir / SQLITE_NORMALIZED)
+    pg_norm = SchemaEntities.from_normalized(
+        load_json(contracts_dir / artifacts.pg_normalized)
     )
-    pg_sql = parse_pg_sql(load_text(contracts_dir / PG_SQL))
-    sqlite_sql = parse_sqlite_sql(load_text(contracts_dir / SQLITE_SQL))
+    sqlite_norm = SchemaEntities.from_normalized(
+        load_json(contracts_dir / artifacts.sqlite_normalized)
+    )
+    pg_sql = parse_pg_sql(load_text(contracts_dir / artifacts.pg_sql))
+    sqlite_sql = parse_sqlite_sql(load_text(contracts_dir / artifacts.sqlite_sql))
     return Sources(
         pg_norm=pg_norm, sqlite_norm=sqlite_norm, pg_sql=pg_sql, sqlite_sql=sqlite_sql
     )
 
 
-def collect_diffs(contracts_dir: Path) -> tuple[list[Diff], Sources]:
-    """Run the whole three-source parity check against ``contracts_dir``.
+def collect_diffs(
+    contracts_dir: Path, artifacts: SchemaArtifacts = DEFAULT_ARTIFACTS
+) -> tuple[list[Diff], Sources]:
+    """Run the whole parity check against ``contracts_dir`` for one schema version.
 
     Args:
         contracts_dir: Directory holding the frozen artifacts.
+        artifacts: Which schema version to read (default: ``v0018``).
 
     Returns:
         ``(diffs, sources)`` where ``diffs`` is empty when the sources agree.
@@ -1255,7 +1348,7 @@ def collect_diffs(contracts_dir: Path) -> tuple[list[Diff], Sources]:
     Raises:
         GateIOError: An artifact is missing or unparsable.
     """
-    sources = load_sources(contracts_dir)
+    sources = load_sources(contracts_dir, artifacts)
     diffs = parity(
         sources.pg_norm,
         sources.sqlite_norm,
@@ -1318,6 +1411,16 @@ def _parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         help="contracts directory to read (default: <repo>/contracts)",
     )
     parser.add_argument(
+        "--schema",
+        default=DEFAULT_SCHEMA,
+        choices=sorted(SCHEMAS),
+        metavar="{v0018,v0019}",
+        help=(
+            "schema version to compare (default: "
+            f"{DEFAULT_SCHEMA}; the default behaviour is unchanged)"
+        ),
+    )
+    parser.add_argument(
         "--self-test",
         action="store_true",
         help="run the two named injections on a temporary clone (exit 9 on failure)",
@@ -1346,13 +1449,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_USAGE if exit_error.code else EXIT_OK
 
     paths = GatePaths.resolve(contracts_dir=arguments.contracts)
+    artifacts = SCHEMAS[arguments.schema]
 
     if arguments.self_test:
-        return _self_test(paths.contracts_dir)
+        return _self_test(paths.contracts_dir, self_test_targets(artifacts))
 
     log(TAG, f"contracts: {paths.contracts_dir.as_posix()}")
+    log(
+        TAG,
+        f"schema: {artifacts.label} — {artifacts.description} "
+        f"({artifacts.pg_normalized}, {artifacts.sqlite_normalized}, "
+        f"{artifacts.pg_sql}, {artifacts.sqlite_sql})",
+    )
     try:
-        diffs, sources = collect_diffs(paths.contracts_dir)
+        diffs, sources = collect_diffs(paths.contracts_dir, artifacts)
     except GateIOError as error:
         log(TAG, f"ERROR: cannot load DDL artifacts: {error}")
         return EXIT_USAGE
@@ -1379,12 +1489,35 @@ def main(argv: Sequence[str] | None = None) -> int:
 # ---------------------------------------------------------------------------
 # --self-test
 # ---------------------------------------------------------------------------
-def _clone(contracts_dir: Path, destination: Path) -> Path:
-    """Copy the four DDL artifacts into a scratch directory.
+def self_test_targets(selected: SchemaArtifacts) -> tuple[SchemaArtifacts, ...]:
+    """Return the artifact sets ``--self-test`` must cover.
+
+    ``v0018`` is always covered (it carries the historical injection cases, so the
+    default ``--self-test`` behaves exactly as before).  A non-default ``--schema``
+    is **added** to the list, never substituted: a new version must not be able to
+    borrow the baseline's self-test credit without being exercised itself.
+
+    Args:
+        selected: The artifact set chosen by ``--schema``.
+
+    Returns:
+        One or two artifact sets, baseline first.
+    """
+    baseline = SCHEMAS[DEFAULT_SCHEMA]
+    if selected.label == baseline.label:
+        return (baseline,)
+    return (baseline, selected)
+
+
+def _clone(
+    contracts_dir: Path, destination: Path, artifacts: SchemaArtifacts = DEFAULT_ARTIFACTS
+) -> Path:
+    """Copy the four DDL artifacts of one schema version into a scratch directory.
 
     Args:
         contracts_dir: Source ``contracts/`` directory (read-only in spirit).
         destination: Fresh scratch directory.
+        artifacts: Which schema version to copy (default: ``v0018``).
 
     Returns:
         The scratch directory.
@@ -1393,7 +1526,7 @@ def _clone(contracts_dir: Path, destination: Path) -> Path:
         GateIOError: An artifact is missing.
     """
     destination.mkdir(parents=True, exist_ok=True)
-    for relative in ARTIFACTS:
+    for relative in artifacts.files:
         source = contracts_dir / relative
         if not source.is_file():
             raise GateIOError(f"missing artifact: {source.as_posix()}")
@@ -1401,11 +1534,14 @@ def _clone(contracts_dir: Path, destination: Path) -> Path:
     return destination
 
 
-def _inject_narrow_column(clone_dir: Path) -> str:
+def _inject_narrow_column(
+    clone_dir: Path, artifacts: SchemaArtifacts = DEFAULT_ARTIFACTS
+) -> str:
     """Injection 1: narrow one column type in the normalized JSON only.
 
     Args:
         clone_dir: Scratch ``contracts/`` copy.
+        artifacts: Which schema version the clone holds (default: ``v0018``).
 
     Returns:
         A description of what was changed.
@@ -1413,7 +1549,7 @@ def _inject_narrow_column(clone_dir: Path) -> str:
     Raises:
         GateIOError: No ``VARCHAR(255)`` column is available to narrow.
     """
-    target = clone_dir / PG_NORMALIZED
+    target = clone_dir / artifacts.pg_normalized
     document = load_json(target)
     for table in document.get("tables") or []:
         for column in table.get("columns") or []:
@@ -1425,12 +1561,15 @@ def _inject_narrow_column(clone_dir: Path) -> str:
                 )
                 return (
                     f"narrowed {table['name']}.{column['name']} "
-                    "VARCHAR(255)->VARCHAR(64) in pg.normalized only"
+                    f"VARCHAR(255)->VARCHAR(64) in {artifacts.pg_normalized} only"
                 )
     raise GateIOError("no VARCHAR(255) column found to narrow")
 
 
-def _inject_drop_hnsw(clone_dir: Path) -> str:
+
+def _inject_drop_hnsw(
+    clone_dir: Path, artifacts: SchemaArtifacts = DEFAULT_ARTIFACTS
+) -> str:
     """Injection 2: drop one ``hnsw`` index from the normalized ``raw_indexes``.
 
     Only ``raw_indexes`` is touched: neither ``counts`` nor the ``.sql`` text is
@@ -1439,6 +1578,7 @@ def _inject_drop_hnsw(clone_dir: Path) -> str:
 
     Args:
         clone_dir: Scratch ``contracts/`` copy.
+        artifacts: Which schema version the clone holds (default: ``v0018``).
 
     Returns:
         A description of what was changed.
@@ -1446,7 +1586,7 @@ def _inject_drop_hnsw(clone_dir: Path) -> str:
     Raises:
         GateIOError: There is no ``hnsw`` index to drop.
     """
-    target = clone_dir / PG_NORMALIZED
+    target = clone_dir / artifacts.pg_normalized
     document = load_json(target)
     raw_indexes = document.get("raw_indexes") or []
     victim = next(
@@ -1468,12 +1608,17 @@ def _inject_drop_hnsw(clone_dir: Path) -> str:
             None,
         )
     if victim is None:
-        raise GateIOError("no hnsw entry in pg.normalized raw_indexes to drop")
+        raise GateIOError(
+            f"no hnsw entry in {artifacts.pg_normalized} raw_indexes to drop"
+        )
     document["raw_indexes"] = [entry for entry in raw_indexes if entry is not victim]
     target.write_text(
         json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    return f"dropped raw index {victim['name']} from pg.normalized raw_indexes only"
+    return (
+        f"dropped raw index {victim['name']} from {artifacts.pg_normalized} "
+        "raw_indexes only"
+    )
 
 
 def _expect(
@@ -1519,15 +1664,19 @@ def _expect(
     return True
 
 
-def _self_test(contracts_dir: Path) -> int:
-    """Run both named injections on a temporary clone.
+def _self_test(
+    contracts_dir: Path, targets: Sequence[SchemaArtifacts] = (DEFAULT_ARTIFACTS,)
+) -> int:
+    """Run both named injections on a temporary clone, per schema version.
 
     Args:
         contracts_dir: The real (read-only) ``contracts/`` directory.
+        targets: Artifact sets to exercise (see :func:`self_test_targets`); the
+            default single target reproduces the historical behaviour exactly.
 
     Returns:
-        ``0`` when both injections turn the gate red for the right reason,
-        ``9`` otherwise.
+        ``0`` when both injections turn the gate red for the right reason on every
+        target, ``9`` otherwise.
     """
     log(TAG, f"self-test: cloning artifacts from {contracts_dir.as_posix()}")
     failures = 0
@@ -1535,58 +1684,66 @@ def _self_test(contracts_dir: Path) -> int:
         with tempfile.TemporaryDirectory(prefix="wbtime-parity-") as scratch:
             root = Path(scratch)
 
-            # Step 0 — the clone must be green, otherwise "red" would prove nothing.
-            baseline_dir = _clone(contracts_dir, root / "baseline")
-            baseline_diffs, _ = collect_diffs(baseline_dir)
-            if baseline_diffs:
+            for artifacts in targets:
+                tag = artifacts.label
                 log(
                     TAG,
-                    "SELFTEST FAIL [baseline]: the untouched clone is already red "
-                    f"({len(baseline_diffs)} diffs)",
+                    f"self-test[{tag}]: {artifacts.description} "
+                    f"(files: {', '.join(artifacts.files)})",
                 )
-                _emit_diffs(baseline_diffs[:10])
-                failures += 1
-            else:
-                log(TAG, "SELFTEST OK [baseline]: untouched clone is green")
 
-            # Step 1 — narrow one column type, normalized JSON only.
-            narrow_dir = _clone(contracts_dir, root / "narrow")
-            description = _inject_narrow_column(narrow_dir)
-            log(TAG, f"self-test injection 1: {description}")
-            narrow_diffs, _ = collect_diffs(narrow_dir)
-            if not _expect(
-                label="inject-1 column narrowed",
-                diffs=narrow_diffs,
-                must_contain_kind="pg.column-type",
-            ):
-                failures += 1
+                # Step 0 — the clone must be green, else "red" would prove nothing.
+                baseline_dir = _clone(contracts_dir, root / f"{tag}-baseline", artifacts)
+                baseline_diffs, _ = collect_diffs(baseline_dir, artifacts)
+                if baseline_diffs:
+                    log(
+                        TAG,
+                        f"SELFTEST FAIL [{tag}/baseline]: the untouched clone is "
+                        f"already red ({len(baseline_diffs)} diffs)",
+                    )
+                    _emit_diffs(baseline_diffs[:10])
+                    failures += 1
+                else:
+                    log(TAG, f"SELFTEST OK [{tag}/baseline]: untouched clone is green")
 
-            # Step 2 — drop one hnsw index, normalized raw_indexes only.
-            drop_dir = _clone(contracts_dir, root / "drop-hnsw")
-            description = _inject_drop_hnsw(drop_dir)
-            log(TAG, f"self-test injection 2: {description}")
-            drop_diffs, _ = collect_diffs(drop_dir)
-            if not _expect(
-                label="inject-2 hnsw dropped (hard count assertion)",
-                diffs=drop_diffs,
-                must_contain_kind="hnsw-count",
-                must_name="pg.normalized.hnsw_indexes",
-            ):
-                failures += 1
-            if not _expect(
-                label="inject-2 hnsw dropped (name-set assertion)",
-                diffs=drop_diffs,
-                must_contain_kind="hnsw-name",
-                must_name="ix_memory_vector_hnsw",
-            ):
-                failures += 1
-            if not _expect(
-                label="inject-2 hnsw dropped (ordinary index diff)",
-                diffs=drop_diffs,
-                must_contain_kind="pg.index",
-                must_name="ix_memory_vector_hnsw",
-            ):
-                failures += 1
+                # Step 1 — narrow one column type, normalized JSON only.
+                narrow_dir = _clone(contracts_dir, root / f"{tag}-narrow", artifacts)
+                description = _inject_narrow_column(narrow_dir, artifacts)
+                log(TAG, f"self-test[{tag}] injection 1: {description}")
+                narrow_diffs, _ = collect_diffs(narrow_dir, artifacts)
+                if not _expect(
+                    label=f"{tag}/inject-1 column narrowed",
+                    diffs=narrow_diffs,
+                    must_contain_kind="pg.column-type",
+                ):
+                    failures += 1
+
+                # Step 2 — drop one hnsw index, normalized raw_indexes only.
+                drop_dir = _clone(contracts_dir, root / f"{tag}-drop-hnsw", artifacts)
+                description = _inject_drop_hnsw(drop_dir, artifacts)
+                log(TAG, f"self-test[{tag}] injection 2: {description}")
+                drop_diffs, _ = collect_diffs(drop_dir, artifacts)
+                if not _expect(
+                    label=f"{tag}/inject-2 hnsw dropped (hard count assertion)",
+                    diffs=drop_diffs,
+                    must_contain_kind="hnsw-count",
+                    must_name="pg.normalized.hnsw_indexes",
+                ):
+                    failures += 1
+                if not _expect(
+                    label=f"{tag}/inject-2 hnsw dropped (name-set assertion)",
+                    diffs=drop_diffs,
+                    must_contain_kind="hnsw-name",
+                    must_name="ix_memory_vector_hnsw",
+                ):
+                    failures += 1
+                if not _expect(
+                    label=f"{tag}/inject-2 hnsw dropped (ordinary index diff)",
+                    diffs=drop_diffs,
+                    must_contain_kind="pg.index",
+                    must_name="ix_memory_vector_hnsw",
+                ):
+                    failures += 1
     except GateIOError as error:
         log(TAG, f"SELFTEST FAIL: {error}")
         return EXIT_SELFTEST
@@ -1594,7 +1751,11 @@ def _self_test(contracts_dir: Path) -> int:
     if failures:
         log(TAG, f"SELFTEST VERDICT: FAIL ({failures} assertion(s) did not hold)")
         return EXIT_SELFTEST
-    log(TAG, "SELFTEST VERDICT: PASS (both injections go red on the expected reason)")
+    log(
+        TAG,
+        "SELFTEST VERDICT: PASS (both injections go red on the expected reason for "
+        f"{', '.join(artifacts.label for artifacts in targets)})",
+    )
     return EXIT_OK
 
 

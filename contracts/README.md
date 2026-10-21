@@ -2,6 +2,8 @@
 
 本目录存放从**旧 Python 仓**（`D:/WBT/WBTimeAI_old`，只读）抽取的运行时契约产物，用于 TS 线开工前的「契约继承与抽取」。除本文件与 `sse/README.md` 两份说明外，所有文件均为**机器生成**，请勿手改；改动请改抽取器并重跑。
 
+> **V0.3.0 增量（2026-10-21，用户批准）**：`v0019` 在 `v0018` 之上加 `agent_run.stop_reason` 1 列、`RunResponse`/`RunOut` 的 `stop_reason` 与 `status` 七值枚举；来源 `manual`，v0018 五文件**未改**。登记与复现见 [`v0019.README.md`](v0019.README.md)。
+
 ## 产物登记
 
 | 文件 | 内容 | 生成方式 |
