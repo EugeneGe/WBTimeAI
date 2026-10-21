@@ -43,14 +43,28 @@ import { hashRefreshToken } from "../dist/modules/auth/refresh.js";
 /** 第二个租户（用于 scope 隔离用例）。 */
 const OTHER_TENANT_ID = "22222222-2222-4222-8222-222222222222";
 
-/** 固定时钟（断言时间戳可精确）。 */
-const FIXED_NOW = new Date("2026-10-21T12:00:00.000Z");
+/**
+ * 固定时钟：**锚在本次运行的秒级时刻**，而不是硬编码的日历时刻。
+ *
+ * 为什么必须这样（2026-10-21 实测缺陷）：访问令牌的 `exp` 由**注入时钟**决定
+ * （`FIXED_NOW + 900s`），但 `jose.jwtVerify` 校验 `exp` 用的是**真实时钟**。
+ * 原先硬编码 `2026-10-21T12:00:00Z` ⇒ 令牌 `exp = 12:15Z`，任何在 UTC 12:15 之后
+ * 跑这条用例的时段都会拿到 `AUTH_TOKEN_EXPIRED`（本日 23:2x 全量跑时 5 条红，13:xx 跑时全绿）。
+ * 锚在运行时刻后，`exp` 恒晚于真实时间 15 分钟，断言的**确定性**不受影响（同一文件内
+ * 所有时间列都由这一个 `FIXED_NOW` 派生）。
+ */
+const FIXED_NOW = new Date(Math.floor(Date.now() / 1000) * 1000);
+
+/** `YYYY-MM-DD HH:MM:SS`（UTC）——SQLite 档的时间列文本格式。 */
+const toStamp = (d) =>
+  `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ` +
+  `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`;
 
 /** 时间列字面量（SQLite 档是 `YYYY-MM-DD HH:MM:SS` 文本，UTC）。 */
-const STAMP = "2026-10-21 12:00:00";
+const STAMP = toStamp(FIXED_NOW);
 
-/** 会话/令牌的过期时刻（远晚于固定时钟，保证"有效"）。 */
-const EXPIRES_AT = "2026-11-20 12:00:00";
+/** 会话/令牌的过期时刻（固定时钟 + 30 天，保证"有效"）。 */
+const EXPIRES_AT = toStamp(new Date(FIXED_NOW.getTime() + 30 * 24 * 3600 * 1000));
 
 /** 一次性口令（满足域层策略即可）。 */
 const PASSWORD = "alice-password-2026";
@@ -251,7 +265,7 @@ test("FIX-06 ④ · 幂等：二次 logout-all 不改写 revoked_at 时间戳（
       .join("|");
 
   const firstPass = readStamps();
-  assert.match(firstPass, /2026-10-21 12:00:00/, "首次撤销必须落在注入时钟上");
+  assert.ok(firstPass.includes(STAMP), `首次撤销必须落在注入时钟上（期望 ${STAMP}）`);
 
   // 时钟推进 10 分钟：若二次调用真的改写了行，时间戳就会变
   clock.now = new Date(FIXED_NOW.getTime() + 10 * 60 * 1000);
