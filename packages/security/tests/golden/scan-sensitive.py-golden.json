@@ -1,0 +1,124 @@
+{
+  "_comment": "M-04 / J-9 的 py 侧基准。**本文件内容不是手写**：由 py 线 `scan_sensitive` 真跑 8 fixture 得出，再用 `node` 机械改写为带溯源的 golden（见 regenerate）。",
+  "generated_by": "D:/WBT/WBTimeAI_old/.venv/Scripts/python.exe",
+  "generated_at": "2026-10-21",
+  "source": "D:/WBT/WBTimeAI_old/packages/plugin/src/wbtime_ai_plugin/marketplace/import_.py → scan_sensitive / _value_finding / 常量（唯一语义来源）",
+  "regenerate": "python D:/Temp/WBTimeAI/2026-10-21-T2-01-py-fixtures.py（脚本全文见 T2-01 施工记录「验证证据」段，可直接重放）",
+  "compare_scope": "只比 {是否抛, findings 的 path+reason 序列, count} 与常量字面量 —— 不比 message、不比 entropy（py 4.2 与 JS 4.2 序列化不同，见计划 §6「浮点陷阱规避」）",
+  "note_on_plugin_side": "计划 §6 原文的 J-9 还要断言 plugin.scanSensitive === security.scanSensitive；本仓 V0.1.0 未迁入 packages/plugin，该半条本版无法落地（降级，见 T2-01 施工记录 D-1）。本文件承接「行为全等」那一半，并把它从「作者自述的期望值」升级为「py 真跑出来的值」。",
+  "fixtures": [
+    {
+      "id": "hit-sk-prefix",
+      "threw": true,
+      "findings": [
+        {
+          "path": "providers[0].api_key",
+          "reason": "token-prefix"
+        }
+      ],
+      "count": 1,
+      "code": "VALIDATION_ERROR"
+    },
+    {
+      "id": "hit-akia",
+      "threw": true,
+      "findings": [
+        {
+          "path": "credentials.aws_access_key_id",
+          "reason": "token-prefix"
+        }
+      ],
+      "count": 1,
+      "code": "VALIDATION_ERROR"
+    },
+    {
+      "id": "hit-high-entropy",
+      "threw": true,
+      "findings": [
+        {
+          "path": "models[0].header",
+          "reason": "high-entropy"
+        }
+      ],
+      "count": 1,
+      "code": "VALIDATION_ERROR"
+    },
+    {
+      "id": "hit-sensitive-key",
+      "threw": true,
+      "findings": [
+        {
+          "path": "database.password",
+          "reason": "sensitive-key"
+        }
+      ],
+      "count": 1,
+      "code": "VALIDATION_ERROR"
+    },
+    {
+      "id": "miss-change-me",
+      "threw": false,
+      "findings": [],
+      "count": null
+    },
+    {
+      "id": "miss-example",
+      "threw": false,
+      "findings": [],
+      "count": null
+    },
+    {
+      "id": "miss-credential-ref",
+      "threw": false,
+      "findings": [],
+      "count": null
+    },
+    {
+      "id": "miss-chinese-prose",
+      "threw": false,
+      "findings": [],
+      "count": null
+    }
+  ],
+  "too_deep": {
+    "threw": true,
+    "data": {
+      "reason": "too_deep",
+      "limit": 200
+    }
+  },
+  "constants": {
+    "sensitive_key_source": "(SECRET|TOKEN|PASSWORD|PASSWD|PWD|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIAL)",
+    "sensitive_key_flags": 34,
+    "sensitive_key_ignore_case": true,
+    "token_sources": [
+      "sk-[A-Za-z0-9]{20,}",
+      "gh[pousr]_[A-Za-z0-9]{20,}",
+      "AKIA[0-9A-Z]{16}",
+      "xox[baprs]-[A-Za-z0-9-]{10,}",
+      "-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"
+    ],
+    "high_entropy_min_len": 20,
+    "high_entropy_threshold": 4.2,
+    "max_scan_depth": 200,
+    "placeholder_markers": [
+      "change-me",
+      "changeme",
+      "replace",
+      "example",
+      "placeholder",
+      "your-",
+      "dummy",
+      "todo",
+      "<",
+      ">",
+      "xxx",
+      "****"
+    ],
+    "reference_prefixes": [
+      "credential:",
+      "secret:",
+      "$ref:"
+    ]
+  }
+}

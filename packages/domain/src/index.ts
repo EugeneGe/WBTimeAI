@@ -6,6 +6,15 @@
 export { DOMAIN_ERROR_CODES, DomainError, invariant } from "./errors.js";
 export type { DomainErrorCode } from "./errors.js";
 
+// T2-04：口令**策略**（纯函数）。哈希实现在 apps/api（原生模块不进域层，见该文件头注）。
+export {
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  assertAcceptablePassword,
+  codePointLength,
+  isAcceptablePassword,
+} from "./password.js";
+
 export {
   ALLOWED_TRANSITIONS,
   TERMINAL_STATUSES,

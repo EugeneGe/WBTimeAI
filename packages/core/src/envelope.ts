@@ -66,6 +66,53 @@ export function isErrorEnvelopeShape(value: unknown): value is ErrorResponse {
 }
 
 /**
+ * 「已是成功壳」的**值判定**（契约 `not_wrapped.already_shell` 的口径）。
+ *
+ * 判定式与契约原文逐字一致：`code === 0 && message === "ok" && hasOwn(data) &&
+ * hasOwn(request_id)`。**不是键判定** —— 只看键会把 `{code:"NOT_FOUND", …}`
+ * 误判成成功壳，从而二次包裹（旧仓 `tests/unit/test_response_shell_value_judgement.py`
+ * 就是这个陷阱的反例库）。
+ *
+ * 与 `isOkEnvelopeShape()` 的分工：后者是 **typebox 全量形状校验**（会深入校验
+ * `data` 的类型与 `additionalProperties: false`），本函数是**中间件幂等闸门**的
+ * 快速值判定，两者的「成功壳」语义一致但用途不同；此处刻意不复用 `Value.Check`
+ * 以避免对 `data` 做深度校验（序列化后的业务对象可能含 typebox 不认识的形态，
+ * 例如 `Date` 序列化后的字符串数组的联合边界），并且必须容忍壳外多出的键不存在
+ * —— `additionalProperties: false` 的严格性由 `isOkEnvelopeShape()` 负责。
+ *
+ * @param value 任意待判定值（通常是 `JSON.parse` 后的响应体）。
+ * @returns 命中成功壳值为 `true`；非对象 / 数组 / `code!==0` / `message!=="ok"` /
+ *   缺 `data` 或 `request_id` 键均为 `false`。
+ */
+export function isSuccessShell(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const shell = value as Record<string, unknown>;
+  return (
+    shell["code"] === 0 &&
+    shell["message"] === "ok" &&
+    Object.hasOwn(shell, "data") &&
+    Object.hasOwn(shell, "request_id")
+  );
+}
+
+/**
+ * 「已是失败壳」的**值判定**：`code` 是字符串且四顶层键俱在。
+ *
+ * 注意「四键俱在」是键判定 + `code` 的类型判定，**不含** `data` 的形态校验
+ * （契约 `errorEnvelope.data` 是 object，但中间件只需要判断「别二次包裹」，
+ * 深校验交给 `isErrorEnvelopeShape()`）。
+ *
+ * @param value 任意待判定值。
+ * @returns 命中失败壳为 `true`。
+ */
+export function isErrorShell(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const shell = value as Record<string, unknown>;
+  if (typeof shell["code"] !== "string") return false;
+  return ENVELOPE_FIELD_NAMES.every((field) => Object.hasOwn(shell, field));
+}
+
+/**
  * 顶层键集合（运行时可读）。与 `ENVELOPE_FIELD_NAMES` 同源，
  * 供 `scripts/check_platform_parity.py` 与契约逐项比对。
  */

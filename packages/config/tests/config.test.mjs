@@ -121,3 +121,84 @@ test("端口取值非法：抛 ConfigError（不是 TypeError —— 启动期�
     },
   );
 });
+
+// ---------------------------------------------------------------------------
+// shutdownTimeoutMs（FIX-07）：优雅关闭的兜底时长必须是**活配置**
+// ---------------------------------------------------------------------------
+
+test("shutdownTimeoutMs：缺省 10_000ms（兜底必须默认生效，不能靠部署方记得配）", () => {
+  assert.equal(loadConfig({}).shutdownTimeoutMs, 10000);
+});
+
+test("shutdownTimeoutMs：显式取值生效，`0` 表示不设兜底（合法）", () => {
+  assert.equal(loadConfig({ [ENV_KEYS.shutdownTimeoutMs]: "2500" }).shutdownTimeoutMs, 2500);
+  assert.equal(loadConfig({ [ENV_KEYS.shutdownTimeoutMs]: "0" }).shutdownTimeoutMs, 0);
+});
+
+test("shutdownTimeoutMs：负数抛 ConfigError（无语义的值必须当场炸）", () => {
+  assert.throws(
+    () => loadConfig({ [ENV_KEYS.shutdownTimeoutMs]: "-1" }),
+    (error) => {
+      assert.ok(error instanceof ConfigError);
+      assert.equal(error.code, "CONFIGURATION_ERROR");
+      assert.match(error.message, /WBTIME_SHUTDOWN_TIMEOUT_MS/);
+      return true;
+    },
+  );
+});
+
+test("shutdownTimeoutMs：非整数抛 ConfigError（与端口同一口径）", () => {
+  assert.throws(
+    () => loadConfig({ [ENV_KEYS.shutdownTimeoutMs]: "10s" }),
+    (error) => {
+      assert.ok(error instanceof ConfigError);
+      assert.equal(error.code, "CONFIGURATION_ERROR");
+      assert.match(error.message, /WBTIME_SHUTDOWN_TIMEOUT_MS/);
+      return true;
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// registerRateLimitPerMinute（FIX-04）：未认证注册的限速阈值
+// ---------------------------------------------------------------------------
+
+test("registerRateLimitPerMinute：缺省 20（限速必须默认生效，不能靠部署方记得配）", () => {
+  assert.equal(loadConfig({}).registerRateLimitPerMinute, 20);
+});
+
+test("registerRateLimitPerMinute：显式取值生效，`0` 表示关闭（合法，仅测试）", () => {
+  assert.equal(loadConfig({ [ENV_KEYS.registerRateLimitPerMinute]: "0" }).registerRateLimitPerMinute, 0);
+  assert.equal(loadConfig({ [ENV_KEYS.registerRateLimitPerMinute]: "5" }).registerRateLimitPerMinute, 5);
+});
+
+test("registerRateLimitPerMinute：负数抛 ConfigError（无语义的值必须当场炸）", () => {
+  assert.throws(
+    () => loadConfig({ [ENV_KEYS.registerRateLimitPerMinute]: "-1" }),
+    (error) => {
+      assert.ok(error instanceof ConfigError);
+      assert.equal(error.code, "CONFIGURATION_ERROR");
+      assert.match(error.message, /WBTIME_REGISTER_RATE_LIMIT_PER_MINUTE/);
+      return true;
+    },
+  );
+});
+
+test("registerRateLimitPerMinute：非数字/非整数抛 ConfigError", () => {
+  for (const raw of ["abc", "1.5", ""]) {
+    if (raw === "") {
+      // 空串按「未提供」处理 ⇒ 回落默认值（与 readEnv 的既有口径一致）
+      assert.equal(loadConfig({ [ENV_KEYS.registerRateLimitPerMinute]: raw }).registerRateLimitPerMinute, 20);
+      continue;
+    }
+    assert.throws(
+      () => loadConfig({ [ENV_KEYS.registerRateLimitPerMinute]: raw }),
+      (error) => {
+        assert.ok(error instanceof ConfigError, `${raw} 必须抛 ConfigError`);
+        assert.equal(error.code, "CONFIGURATION_ERROR");
+        assert.match(error.message, /WBTIME_REGISTER_RATE_LIMIT_PER_MINUTE/);
+        return true;
+      },
+    );
+  }
+});

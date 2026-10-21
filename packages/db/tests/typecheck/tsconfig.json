@@ -1,0 +1,16 @@
+{
+  // J-8 专用夹具 —— 目的只有一个：证明「裸 id 在类型层不可通过」。
+  //
+  // 口径调整（见 T2-03 施工记录 D-3）：计划原文写 `tsc --noEmit -p tsconfig.app.json`，
+  // 但那是 apps/web 的前端闸门、不覆盖 packages/db；语义（裸 id 类型层不可通过）不变，
+  // 落法改为本专用夹具。本文件只 include 一个「必须报错」的文件。
+  // 相对路径以**本文件所在目录**为基准：tests/typecheck → ../.. = packages/db → ../../.. = packages
+  // → ../../../.. = 仓库根。因此继承根上的 tsconfig.base.json 需要 4 层（任务卡写 3 层是笔误，
+  // 3 层会解析到 packages/tsconfig.base.json 而 TS5083 直接读不到文件；已登记在记录里）。
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false
+  },
+  "include": ["./naked-id.ts"]
+}

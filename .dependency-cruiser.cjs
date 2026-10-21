@@ -47,7 +47,9 @@ module.exports = {
           "^packages/db/src/repositories/",
           "^packages/db/src/schema/",
           "^packages/db/src/index\\.ts$",
-          "^packages/db/src/client",
+          // R-20 / L-7：`connection.ts` 是 db 句柄工厂（`drizzle(...)` 的宿主），
+          // 与 `client*` 同角色。补上它，否则新建的连接工厂只能靠"规则看不见"过关。
+          "^packages/db/src/(client|connection)",
         ],
       },
       to: {

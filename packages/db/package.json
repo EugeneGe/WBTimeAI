@@ -18,6 +18,10 @@
     "./repositories": {
       "types": "./dist/repositories/index.d.ts",
       "default": "./dist/repositories/index.js"
+    },
+    "./connection": {
+      "types": "./dist/connection.d.ts",
+      "default": "./dist/connection.js"
     }
   },
   "files": [
@@ -30,7 +34,8 @@
     "build": "tsc -b tsconfig.json",
     "typecheck": "tsc -b tsconfig.json",
     "introspect": "tsc -b tsconfig.json && node dist/schema/_introspect.js --out ../../output",
-    "test": "tsc -b tsconfig.json && node --experimental-sqlite --test \"tests/**/*.test.mjs\""
+    "test": "tsc -b tsconfig.json && node --experimental-sqlite --test \"tests/**/*.test.mjs\"",
+    "test:typecheck": "node tests/typecheck/run.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",
