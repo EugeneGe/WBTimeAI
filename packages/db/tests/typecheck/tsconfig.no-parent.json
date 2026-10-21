@@ -1,0 +1,16 @@
+{
+  // T3-03 · R3-22 专用夹具 —— 目的只有一个：证明「子表仓储不接受裸 id / 缺父引用」。
+  //
+  // 与 `tsconfig.json`（J-8 裸 id）**分开**成两个 config 是刻意的：合在一起时
+  // 只能断言"总错误数"，某一条反例意外编译通过会被另一条的报错掩盖（假绿）。
+  // 分治后可以逐条断言"该文件恰好 N 条 error TS"。
+  //
+  // 相对路径以**本文件所在目录**为基准：tests/typecheck → ../.. = packages/db
+  // → ../../.. = packages → ../../../.. = 仓库根（根上有 tsconfig.base.json）。
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false
+  },
+  "include": ["./no-parent.ts"]
+}
