@@ -61,6 +61,8 @@ export interface SseChannelSpec {
   readonly domainType: string;
   readonly phase: string;
   readonly payloadKeysInOrder: readonly string[];
+  /** 必填键（契约 payload_fields[*].required === true），按 payloadKeysInOrder 顺序。 */
+  readonly requiredPayloadKeys: readonly string[];
 }
 
 export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
@@ -76,6 +78,10 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "conversation_id",
       "run_mode",
     ],
+    requiredPayloadKeys: [
+      "run_id",
+      "agent_id",
+    ],
   },
   "agent.thinking": {
     channel: "agent.thinking",
@@ -83,6 +89,10 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
     domainType: "agent.thinking",
     phase: "core",
     payloadKeysInOrder: [
+      "run_id",
+      "iteration",
+    ],
+    requiredPayloadKeys: [
       "run_id",
       "iteration",
     ],
@@ -98,6 +108,11 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "role",
       "content",
     ],
+    requiredPayloadKeys: [
+      "run_id",
+      "message_id",
+      "role",
+    ],
   },
   "tool.started": {
     channel: "tool.started",
@@ -110,6 +125,11 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "tool_name",
       "attempt",
       "arguments",
+    ],
+    requiredPayloadKeys: [
+      "run_id",
+      "tool_call_id",
+      "tool_name",
     ],
   },
   "tool.completed": {
@@ -125,6 +145,12 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "duration_ms",
       "error",
     ],
+    requiredPayloadKeys: [
+      "run_id",
+      "tool_call_id",
+      "tool_name",
+      "status",
+    ],
   },
   "mcp.started": {
     channel: "mcp.started",
@@ -136,6 +162,11 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "mcp_call_id",
       "server",
       "tool_name",
+    ],
+    requiredPayloadKeys: [
+      "run_id",
+      "mcp_call_id",
+      "server",
     ],
   },
   "mcp.completed": {
@@ -151,6 +182,12 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "duration_ms",
       "error",
     ],
+    requiredPayloadKeys: [
+      "run_id",
+      "mcp_call_id",
+      "server",
+      "status",
+    ],
   },
   "agent.completed": {
     channel: "agent.completed",
@@ -161,6 +198,9 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "run_id",
       "duration_ms",
       "iterations",
+    ],
+    requiredPayloadKeys: [
+      "run_id",
     ],
   },
   "agent.error": {
@@ -174,6 +214,10 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "error",
       "duration_ms",
     ],
+    requiredPayloadKeys: [
+      "run_id",
+      "error_type",
+    ],
   },
   "skill.resolved": {
     channel: "skill.resolved",
@@ -186,6 +230,9 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "version",
       "run_id",
     ],
+    requiredPayloadKeys: [
+      "skill_name",
+    ],
   },
   "workflow.started": {
     channel: "workflow.started",
@@ -196,6 +243,10 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "workflow_id",
       "run_id",
       "workflow_version_id",
+    ],
+    requiredPayloadKeys: [
+      "workflow_id",
+      "run_id",
     ],
   },
   "workflow.node.started": {
@@ -208,6 +259,11 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "run_id",
       "node_id",
       "node_type",
+    ],
+    requiredPayloadKeys: [
+      "workflow_id",
+      "run_id",
+      "node_id",
     ],
   },
   "workflow.node.completed": {
@@ -222,6 +278,12 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "status",
       "duration_ms",
     ],
+    requiredPayloadKeys: [
+      "workflow_id",
+      "run_id",
+      "node_id",
+      "status",
+    ],
   },
   "workflow.completed": {
     channel: "workflow.completed",
@@ -232,6 +294,10 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "workflow_id",
       "run_id",
       "duration_ms",
+    ],
+    requiredPayloadKeys: [
+      "workflow_id",
+      "run_id",
     ],
   },
   "workflow.failed": {
@@ -246,6 +312,11 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "error",
       "duration_ms",
     ],
+    requiredPayloadKeys: [
+      "workflow_id",
+      "run_id",
+      "error_type",
+    ],
   },
   "knowledge.indexed": {
     channel: "knowledge.indexed",
@@ -258,6 +329,10 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "chunk_count",
       "status",
     ],
+    requiredPayloadKeys: [
+      "kb_id",
+      "document_id",
+    ],
   },
   "memory.written": {
     channel: "memory.written",
@@ -268,6 +343,10 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "memory_id",
       "scope",
       "key",
+    ],
+    requiredPayloadKeys: [
+      "memory_id",
+      "scope",
     ],
   },
   "approval.requested": {
@@ -281,6 +360,11 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "subject_ref",
       "requested_by",
     ],
+    requiredPayloadKeys: [
+      "approval_id",
+      "subject_type",
+      "subject_ref",
+    ],
   },
   "approval.decided": {
     channel: "approval.decided",
@@ -291,6 +375,10 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
       "approval_id",
       "status",
       "decided_by",
+    ],
+    requiredPayloadKeys: [
+      "approval_id",
+      "status",
     ],
   },
 };

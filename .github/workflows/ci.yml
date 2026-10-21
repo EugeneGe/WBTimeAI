@@ -14,7 +14,11 @@
 #   本版**不写任何 TS 业务代码**，仓库里没有 workspace 子包可装、可测。此时若写
 #   `pnpm -r test` 会因「无匹配包」直接失败，属于用假门禁冒充覆盖；因此本版只做两件事：
 #   ① 版本断言（真实可跑、可失败）；② 契约完整性 + 基线不变量 + 文档门禁（真实可跑、可失败）。
-#   首个 TS 版本（V0.1.0）引入 workspace 包后，再补 install / typecheck / test 档。
+#
+#   ⚠️ 上述「无 workspace」只对 V0.0.1 成立。**V0.1.0 起 workspace 已存在**
+#   （`packages/*` + `apps/*`，实测 10 个成员 = 9 个 packages + 1 个 app），
+#   install / typecheck / test / lint 一律见下面的 `v010-ts` job —— 那一档才是
+#   「TS 代码真的能跑」的证明，本段历史说明不构成任何豁免。
 #
 # 注意：契约档 `run.py check` 在 manifest 重建前会红（sha256 台账与产物不一致），
 #   这是**预期门禁**而非缺陷 —— 台账由 C-07 在收口时统一重建（`run.py export`）。
@@ -141,6 +145,18 @@ jobs:
       #   verify_semantics.py    → 证明「数字是对的」
       - name: Contracts semantics (recompute from artifacts, not from ledger)
         run: python scripts/verify_semantics.py
+
+      # 下面两条是 V0.1.0 审计补的门禁（M-4 / B-1），职责与上面的契约档不重叠：
+      #   前者证明「i18n 两语言键集真的对等」，后者证明「TS 侧错误码字面量真的来自契约」。
+      # 两者都带 --self-test：先证明检测器会红，再用它判绿（只绿不红 = 没有门禁）。
+      - name: M-4 · i18n key parity (en ↔ zh-CN, placeholders included)
+        run: python scripts/check_i18n_keys.py
+      - name: M-4 · i18n detector self-test (missing / extra / placeholder / duplicate)
+        run: python scripts/check_i18n_keys.py --self-test
+      - name: B-1 · TS error codes ≡ contracts/errors.json
+        run: python scripts/check_error_codes.py
+      - name: B-1 · error-code detector self-test (unknown / drift / status drift / empty)
+        run: python scripts/check_error_codes.py --self-test
 
       # 措辞红线：§8.1 的三条裁定（D-1 / D-4 / D-5）规定了台账必须写、且不得放宽的措辞。
       # 此前只靠人读，而 check_docs.py 只扫 `01-计划/README.md` 的「不做」栏、
@@ -284,6 +300,54 @@ jobs:
         run: pnpm --filter @wbtime/db introspect
       - name: T1-03 · drizzle DDL parity (dual dialect)
         run: python scripts/check_drizzle_parity.py
+
+  # ---------------------------------------------------------------------------
+  # V0.1.0 · TS 档：install / test / typecheck / lint
+  #
+  # 为什么必须单独一档（而不是塞进 v010-gates）：
+  #   `v010-gates` 是「离线门禁」档，靠 Python 比对产物与契约，**从不编译 TS**。
+  #   一个 workspace 里所有 TS 都编译不过、所有单测都红，`v010-gates` 依然可以全绿 ——
+  #   这就是审计 D-1 记的「测试/类型/lint 档缺失」。本档补的正是那条证据链：
+  #   packages 单测（排除需要真服务的 e2e 与前端）→ packages 类型 → 前端单测 →
+  #   前端类型 → 前端 lint。
+  #
+  # 为什么排除 `@wbtime/e2e` 与 `@wbtime/web` 的第一批命令：
+  #   e2e 需要真实后端进程，本档不带服务起；web 的测试是 vitest（需要 jsdom），
+  #   与 node:test 不是同一套 runner，故各用各的命令，不混在一个 `-r` 里假装统一。
+  #
+  # 全部 **required**：禁止 `continue-on-error`、禁止 `|| true`。
+  # ---------------------------------------------------------------------------
+  v010-ts:
+    name: v0.1.0 ts (install · test · typecheck · lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.19.0"
+          cache: pnpm
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+      - name: Assert the runner really runs the declared Node
+        run: node -e "const v=process.versions.node; if(!v.startsWith('22.19.0')){console.error('expected 22.19.0, got '+v);process.exit(1)}"
+      - name: packages · unit tests (e2e / web excluded)
+        run: pnpm -r --filter "!@wbtime/e2e" --filter "!@wbtime/web" test
+      - name: packages · typecheck
+        run: pnpm -r --filter "!@wbtime/e2e" --filter "!@wbtime/web" typecheck
+      # R-7：apps/web 全量 vitest 有**既有**资源争抢型 flake —— 默认 testTimeout=5000ms，
+      # 全量跑时 setup/environment 开销会把长用例推到临界（两轮 500/502，失败集合每次不同，
+      # 单文件复跑全绿）。故 `--retry=1` 只吸收时序抖动：**确定性失败第二次仍红**，
+      # 它不是 continue-on-error，也不放宽任何断言。根治（显式 testTimeout / 收敛 pool）
+      # 需改 `apps/web/vitest.config.ts`，属本版硬边界（前端 0 改动），留给 V0.8.0。
+      - name: web · unit tests (vitest)
+        run: pnpm --filter @wbtime/web test -- --retry=1
+      - name: web · typecheck
+        run: pnpm --filter @wbtime/web typecheck
+      - name: web · lint
+        run: pnpm --filter @wbtime/web lint
 
   v010-frontend-diff:
     name: v0.1.0 ⑤-a frontend diff (needs legacy tree)

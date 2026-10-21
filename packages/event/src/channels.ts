@@ -47,6 +47,29 @@ export function isSseChannel(value: string): value is SseChannel {
   return (SSE_CHANNEL_LIST as readonly string[]).includes(value);
 }
 
+/**
+ * payload 与契约不符（多余键 / 缺必填键）。
+ *
+ * 为什么单独一个错误类而不是复用 `UnknownChannelError`：通道**是**已知的，
+ * 错的是 payload 形状；两者在排障与 HTTP 映射上的归因完全不同，混用会让
+ * 「通道名写错了」和「字段漏传了」在日志里长得一样。错误码仍统一走契约的
+ * VALIDATION_ERROR（同源，不另立码）。
+ */
+export class EventPayloadError extends Error {
+  readonly name = "EventPayloadError";
+  readonly code = ERROR_CODES.VALIDATION_ERROR;
+  readonly channel: SseChannel;
+
+  constructor(channel: SseChannel, message: string) {
+    super(message);
+    this.channel = channel;
+  }
+
+  get httpStatus(): number {
+    return httpStatusFor(this.code);
+  }
+}
+
 /** 取通道规格；未知通道抛错（不静默降级）。 */
 export function channelSpec(channel: SseChannel): SseChannelSpec {
   const spec = SSE_CHANNEL_SPECS[channel];
@@ -57,11 +80,14 @@ export function channelSpec(channel: SseChannel): SseChannelSpec {
 /**
  * 按契约键序装配事件 payload。
  *
- * 两件事在这里定死：
+ * 三件事在这里定死：
  *   1. 键序 = `payload_keys_in_order`（契约 `sort_keys: false`，字节可比的前提）；
- *   2. 每个值先过 `normalizePayload`（数值上线格式定死）。
+ *   2. 每个值先过 `normalizePayload`（数值上线格式定死）；
+ *   3. 契约标了 `required: true` 的键**必须**在场 —— 缺了就抛错。
  *
- * 未出现在键序里的多余键一律拒绝 —— 多一个键，golden 帧就对不上。
+ * 未出现在键序里的多余键一律拒绝 —— 多一个键，golden 帧就对不上；
+ * 缺必填键同样拒绝 —— 以前是「静默少写一个键」，帧照样生成、只是与契约不符，
+ * 属本项目明令禁止的哑失败。可选键缺席仍然允许（契约 `required: false` 即此意）。
  */
 export function buildEventPayload(
   channel: SseChannel,
@@ -70,7 +96,17 @@ export function buildEventPayload(
   const spec = channelSpec(channel);
   const extra = Object.keys(values).filter((k) => !spec.payloadKeysInOrder.includes(k));
   if (extra.length > 0) {
-    throw new UnknownChannelError(`${channel}: payload 含非契约键 ${extra.join(", ")}`);
+    throw new EventPayloadError(channel, `${channel}: payload 含非契约键 ${extra.join(", ")}`);
+  }
+  const missing = spec.requiredPayloadKeys.filter(
+    (key) => !Object.prototype.hasOwnProperty.call(values, key),
+  );
+  if (missing.length > 0) {
+    throw new EventPayloadError(
+      channel,
+      `${channel}: payload 缺少契约必填键 ${missing.join(", ")}` +
+        `（契约 payload_fields[*].required === true）`,
+    );
   }
   const ordered: Record<string, unknown> = {};
   for (const key of spec.payloadKeysInOrder) {

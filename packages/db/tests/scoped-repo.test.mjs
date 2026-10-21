@@ -170,3 +170,38 @@ test("无 tenant_id 的表（agent_event）禁止直接建仓储", () => {
   }
   assert.throws(() => new BadRepo(), ScopeError, "子表必须经父表 scope 查询，不得直接建仓储");
 });
+
+// ---------------------------------------------------------------------------
+// limit：非法值必须**拒绝**，不得静默夹取（过去的 Math.min/Math.max 会给出
+// "看起来正常、行数却少了" 的哑结果）
+// ---------------------------------------------------------------------------
+
+test("limit 非法值一律抛 ScopeError（0 / 9999 / 501 / 1.5）", async () => {
+  const { db } = freshDb();
+  const repo = new SqliteTaskRepo(db, new Scope("tenant-l"));
+  await repo.create(taskRow({ id: "task-l1" }));
+
+  for (const bad of [0, 9999, 501, 1.5]) {
+    await assert.rejects(
+      () => repo.list({ limit: bad }),
+      (error) => {
+        assert.ok(error instanceof ScopeError, `limit=${bad} 必须抛 ScopeError`);
+        assert.match(error.message, /limit 非法/, `limit=${bad} 的消息必须指明非法`);
+        assert.match(error.message, new RegExp(String(bad).replace(".", "\\.")));
+        return true;
+      },
+      `limit=${bad} 必须被拒绝，而不是被夹到 1..500`,
+    );
+  }
+});
+
+test("limit 合法边界值（1 / 500）正常返回", async () => {
+  const { db } = freshDb();
+  const repo = new SqliteTaskRepo(db, new Scope("tenant-m"));
+  await repo.create(taskRow({ id: "task-m1" }));
+  await repo.create(taskRow({ id: "task-m2" }));
+
+  assert.equal((await repo.list({ limit: 1 })).length, 1, "limit=1 是合法下界");
+  assert.equal((await repo.list({ limit: 500 })).length, 2, "limit=500 是合法上界");
+  assert.equal((await repo.list()).length, 2, "未传 limit 仍走 DEFAULT_LIMIT，不受影响");
+});

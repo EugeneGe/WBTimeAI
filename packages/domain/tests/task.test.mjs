@@ -163,3 +163,44 @@ test("fromRecord：脏行（非法状态值）不得进入域", () => {
     (err) => err.code === "VALIDATION_ERROR",
   );
 });
+
+// ---------------------------------------------------------------------------
+// completeWith：注释写的是「仅 RUNNING 路径的结果落库」，实现必须同样窄
+// ---------------------------------------------------------------------------
+
+test("completeWith：非 RUNNING 状态写入结果一律 VALIDATION_ERROR", () => {
+  const created = Task.create(baseInput);
+
+  // PENDING → FAILED 在状态机上是**合法**迁移，但不该带执行结果。
+  const pending = created.transitionTo("PENDING", LATER);
+  assert.throws(
+    () => pending.completeWith("FAILED", { reason: "x" }, LATER),
+    (err) => {
+      assert.equal(err.name, "DomainError");
+      assert.equal(err.code, "VALIDATION_ERROR");
+      assert.equal(err.data.from, "PENDING");
+      assert.equal(err.data.to, "FAILED");
+      assert.match(err.message, /RUNNING/);
+      return true;
+    },
+  );
+
+  // CREATED → CANCELLED 同样合法，同样不允许携带结果。
+  assert.throws(
+    () => created.completeWith("CANCELLED", null, LATER),
+    (err) => {
+      assert.equal(err.code, "VALIDATION_ERROR");
+      assert.equal(err.data.from, "CREATED");
+      assert.equal(err.data.to, "CANCELLED");
+      return true;
+    },
+  );
+});
+
+test("completeWith：RUNNING → SUCCESS 仍正常写入结果（收窄不误伤主路径）", () => {
+  const running = Task.create(baseInput).transitionTo("RUNNING", LATER);
+  const done = running.completeWith("SUCCESS", { ok: true }, LATER);
+  assert.equal(done.status, "SUCCESS");
+  assert.deepEqual(done.result, { ok: true });
+  assert.equal(running.result, null, "实体不可变：原实例结果不变");
+});

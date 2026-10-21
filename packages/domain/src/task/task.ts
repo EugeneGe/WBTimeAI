@@ -302,9 +302,21 @@ export class Task {
   /**
    * 写入执行结果（仅 `RUNNING → SUCCESS|FAILED|CANCELLED` 路径的结果落库）。
    *
-   * @throws DomainError `VALIDATION_ERROR` —— 非法迁移。
+   * 为什么要在这里额外断言 `status === "RUNNING"`（而不是只依赖状态机）：
+   * 状态机允许 `PENDING → FAILED`、`CREATED → CANCELLED` 这类**未经过执行**的迁移，
+   * 它们由 `transitionTo` 负责，语义是「任务还没跑就终结了」——此时没有执行结果可言。
+   * 若 `completeWith` 只调 `transitionTo`，`PENDING → FAILED` 会连同一个 result 一起成功，
+   * 即「没跑过的任务却有执行结果」，实现比注释宽。这里先收窄到 RUNNING，
+   * 让「结果只能由执行中的任务写入」成为可执行断言，而不是注释里的一句话。
+   *
+   * @throws DomainError `VALIDATION_ERROR` —— 当前状态不是 RUNNING，或迁移本身非法。
    */
   completeWith(next: TaskStatus, result: JsonValue | null, at?: string): Task {
+    invariant(
+      this.props.status === "RUNNING",
+      `只有 RUNNING 状态的任务可以写入执行结果：${this.props.status} → ${next}`,
+      { from: this.props.status, to: next },
+    );
     const moved = this.transitionTo(next, at);
     return new Task({ ...moved.props, result });
   }

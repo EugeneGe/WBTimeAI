@@ -35,25 +35,62 @@ export function normalizeWireNumber(value: number): WireNumber {
  * 键序保持插入序（契约 `sort_keys: false`，键序 == 契约 `payload_keys_in_order`）。
  * 非 plain object（Date / Map / 类实例等）原样透出 —— 它们不在契约数值规则覆盖范围内，
  * 交给上层的 JSON 序列化处理，避免这里静默改语义。
+ *
+ * 遇到 `undefined` 一律抛 `RangeError`（对象属性值、数组元素同罪），`null` 合法。
+ * 理由：`JSON.stringify({a: undefined}) === "{}"`、`JSON.stringify([undefined]) === "[null]"`，
+ * 也就是说 undefined 会在序列化阶段**被悄悄吞掉或改写**，帧里的键序 / 键数随之漂移 ——
+ * 而「键序 == 契约 payload_keys_in_order」正是 golden 帧逐字节可比的前提。
+ * 既然这里承诺了键序，就不能放过任何会让键消失的值；宁可当场红，也不要产出
+ * 一个「看起来对、其实少了键」的帧。
  */
 export function normalizePayload(value: unknown): unknown {
-  if (typeof value === "boolean" || typeof value === "string" || value === null || value === undefined) {
+  if (value === undefined) {
+    throw new RangeError(
+      "payload 含 undefined：undefined 会被 JSON 序列化丢弃（对象属性）/ 改写（数组元素），" +
+        "破坏契约键序；要表达空值请用 null",
+    );
+  }
+  if (typeof value === "boolean" || typeof value === "string" || value === null) {
     return value;
   }
   if (typeof value === "number") {
     return normalizeWireNumber(value);
   }
   if (Array.isArray(value)) {
-    return value.map((item) => normalizePayload(item));
+    return value.map((item, index) => normalizeIndexed(item, index));
   }
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
-      out[key] = normalizePayload(item);
+      out[key] = normalizeProperty(key, item);
     }
     return out;
   }
   return value;
+}
+
+/** 数组元素归一化：把 `RangeError` 的文案补上下标，便于定位是哪个元素出错。 */
+function normalizeIndexed(item: unknown, index: number): unknown {
+  try {
+    return normalizePayload(item);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw new RangeError(`payload[${index}] ${error.message}`);
+    }
+    throw error;
+  }
+}
+
+/** 对象属性归一化：同上，补上键名。 */
+function normalizeProperty(key: string, item: unknown): unknown {
+  try {
+    return normalizePayload(item);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw new RangeError(`payload.${key} ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

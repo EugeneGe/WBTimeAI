@@ -90,3 +90,49 @@ test("装配时拒绝非契约键（多一个键 golden 帧就对不上）", () 
     /非契约键/,
   );
 });
+
+// ---------------------------------------------------------------------------
+// 缺必填键：契约 payload_fields[*].required === true 的键必须在场
+// ---------------------------------------------------------------------------
+
+test("装配时缺必填键即抛错（不再静默少写一个键）", () => {
+  assert.throws(
+    () => buildEventPayload("agent.completed", {}),
+    (error) => {
+      assert.equal(error.name, "EventPayloadError");
+      assert.equal(error.code, "VALIDATION_ERROR");
+      assert.match(error.message, /缺少契约必填键/);
+      assert.match(error.message, /run_id/, "缺失的键必须被点名");
+      return true;
+    },
+  );
+});
+
+test("可选键缺席合法：agent.started 只给两个必填键", () => {
+  const payload = buildEventPayload("agent.started", { run_id: "r", agent_id: "a" });
+  assert.deepEqual(Object.keys(payload), ["run_id", "agent_id"], "键序 == 契约键序");
+  assert.equal(JSON.stringify(payload), '{"run_id":"r","agent_id":"a"}');
+});
+
+// ---------------------------------------------------------------------------
+// undefined：会被 JSON 序列化丢弃 / 改写 ⇒ 必须当场拒绝（null 仍合法）
+// ---------------------------------------------------------------------------
+
+test("undefined 不得进入 payload（键会被序列化吞掉，破坏契约键序）", () => {
+  assert.throws(
+    () => normalizePayload({ a: undefined }),
+    (error) => {
+      assert.ok(error instanceof RangeError);
+      assert.match(error.message, /undefined/);
+      assert.match(error.message, /破坏契约键序/);
+      return true;
+    },
+  );
+  assert.throws(() => normalizePayload([1, undefined]), RangeError, "数组元素里的 undefined 同罪");
+});
+
+test("null 仍合法（与 undefined 区别对待）", () => {
+  assert.deepEqual(normalizePayload({ a: null }), { a: null });
+  assert.deepEqual(normalizePayload([null]), [null]);
+  assert.equal(JSON.stringify(normalizePayload({ a: null })), '{"a":null}');
+});

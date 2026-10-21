@@ -128,6 +128,7 @@ export type TenantScopedPatch<TRow> = Partial<Omit<TRow, "id" | "tenant_id">>;
 
 /** 列表查询的公共选项（刻意**不**暴露裸 where —— 过滤条件只能经 scope 拼接）。 */
 export interface ListOptions {
+  /** 上限条数。缺省 100，合法区间 1..500；**非法值抛 ScopeError，不静默修正**。 */
   readonly limit?: number;
   readonly orderBy?: "created_at" | "updated_at" | "id";
   readonly descending?: boolean;
@@ -234,13 +235,33 @@ export abstract class ScopedRepo<TRow extends object> {
 
   /** 在 scope 内列举。 */
   protected async findManyWhere(condition: SQL | undefined, options: ListOptions = {}): Promise<TRow[]> {
-    const limit = Math.min(Math.max(options.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
+    const limit = this.#resolveLimit(options.limit);
     let chain = this.#db.select().from(this.#table).where(this.scopedWhere(condition));
     const orderColumn = this.#columns[options.orderBy ?? "created_at"];
     if (orderColumn) {
       chain = chain.orderBy(options.descending === false ? asc(orderColumn) : desc(orderColumn));
     }
     return (await (chain.limit(limit) as unknown as PromiseLike<TRow[]>)).slice();
+  }
+
+  /**
+   * 解析 limit：显式传入必须是 `1..MAX_LIMIT` 的整数，否则抛错。
+   *
+   * 为什么不再 `Math.min(Math.max(...))` 静默夹取：
+   * 静默修正会把调用方的**编程错误**变成「行为看起来正常、结果却少了行」。
+   * 典型后果是 `limit: 0` 被夹成 1（少查）、`limit: 9999` 被夹成 500（悄悄截断
+   * 分页）——两种都不会报错，只会安静地给出不完整数据，正是本项目要消灭的哑失败。
+   * 缺省（未传）仍走 DEFAULT_LIMIT，那是**约定值**而非对非法值的兜底。
+   */
+  #resolveLimit(limit: number | undefined): number {
+    if (limit === undefined) return DEFAULT_LIMIT;
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+      throw new ScopeError(
+        `表 ${this.#tableName}：list limit 非法（实测 ${String(limit)}，类型 ${typeof limit}），` +
+          `合法区间为 1..${MAX_LIMIT} 的整数 —— 非法值直接拒绝，不静默夹取`
+      );
+    }
+    return limit;
   }
 
   // -------------------------------------------------------------------------
@@ -298,7 +319,8 @@ export abstract class ScopedRepo<TRow extends object> {
     }
   }
 
-  #assertRef(ref: ScopedRef): void {    if (!isScopedRef(ref)) {
+  #assertRef(ref: ScopedRef): void {
+    if (!isScopedRef(ref)) {
       throw new ScopeError(
         `表 ${this.#tableName}：findById/update/remove 只接受 Scope#ref(id) 产出的 ScopedRef，` +
           "裸 id 字符串在类型层就不该通过 —— 拿到运行时说明绕过了类型系统"

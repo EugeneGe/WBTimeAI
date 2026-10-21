@@ -290,6 +290,30 @@ function genChannels() {
   const specEntries = list
     .map((c) => {
       const keys = (c.payload_keys_in_order ?? []).map((k) => `      ${q(k)},`).join("\n");
+      // 必填键：从 payload_fields 里取 required === true 的键，**按契约键序**排列。
+      //
+      // 为什么必须由生成器算而不是运行期现算：payload_fields 是「字段 → 元信息」的
+      // 字典，JS 对象遍历序虽然通常等于插入序，但契约并没有把这一点写进承诺；
+      // 键序是 `payload_keys_in_order` 独有的事实，所以这里以它为遍历轴再查
+      // payload_fields 的 required 标记 —— 顺序可证，不是撞运气。
+      const payloadFields = c.payload_fields ?? {};
+      const requiredKeys = (c.payload_keys_in_order ?? []).filter(
+        (k) => payloadFields[k]?.required === true,
+      );
+      // 契约自洽性守卫：required 键必须落在键序里，否则「按键序输出必填键」这条
+      // 规则本身失效（会静默丢键）。生成期红，比运行期少一个必填校验要好。
+      const strayRequired = Object.keys(payloadFields).filter(
+        (k) => payloadFields[k]?.required === true && !(c.payload_keys_in_order ?? []).includes(k),
+      );
+      if (strayRequired.length > 0) {
+        throw new Error(
+          `channels.json: ${c.channel} 的必填键 [${strayRequired}] 不在 payload_keys_in_order 中，需裁定`,
+        );
+      }
+      const requiredRows =
+        requiredKeys.length === 0
+          ? ""
+          : `\n${requiredKeys.map((k) => `      ${q(k)},`).join("\n")}\n    `;
       const domainType = byChannel[c.channel] ?? c.domain_type ?? c.channel;
       const eventClass = c.event_class ?? "";
       const phase = c.phase ?? "unknown";
@@ -302,6 +326,7 @@ function genChannels() {
         `    payloadKeysInOrder: [`,
         keys,
         `    ],`,
+        `    requiredPayloadKeys: [${requiredRows}],`,
         `  },`,
       ].join("\n");
     })
@@ -336,6 +361,8 @@ export interface SseChannelSpec {
   readonly domainType: string;
   readonly phase: string;
   readonly payloadKeysInOrder: readonly string[];
+  /** 必填键（契约 payload_fields[*].required === true），按 payloadKeysInOrder 顺序。 */
+  readonly requiredPayloadKeys: readonly string[];
 }
 
 export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {

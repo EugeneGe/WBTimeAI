@@ -44,6 +44,12 @@ export function childLogger(bindings: Record<string, unknown>, parent: Logger = 
 /**
  * 错误落日志：带错误码与其 HTTP 状态（错误码 → 状态映射来自 contracts/errors.json）。
  * 这样排查时不必再翻码表。
+ *
+ * 关键约定：`Error` 实例整只放进 `err` 字段，**由 pino 默认的 `err` 序列化器**
+ * 输出 `type` / `message` / `stack`。为什么不自己拼 `{ name, message }`：
+ * 那样堆栈直接丢失，日志里只剩一句话，线上排查时无法定位抛出点 —— 而堆栈恰恰是
+ * 错误日志唯一不可替代的信息。非 `Error` 抛出物（字符串 / 数字 / 普通对象）没有
+ * `stack`，但同样不能只剩固定文案，故把原始值记进 `thrown` 与它的 `typeof`。
  */
 export function logError(
   log: Logger,
@@ -57,10 +63,10 @@ export function logError(
     payload["error_http_status"] = ERROR_HTTP_STATUS[code];
   }
   if (error instanceof Error) {
-    log.error({ ...payload, err: { name: error.name, message: error.message } }, error.message);
+    log.error({ ...payload, err: error }, error.message);
     return;
   }
-  log.error(payload, "非 Error 实例被抛出");
+  log.error({ ...payload, thrown: String(error), thrown_type: typeof error }, "非 Error 实例被抛出");
 }
 
 function extractErrorCode(error: unknown): ErrorCode | undefined {
