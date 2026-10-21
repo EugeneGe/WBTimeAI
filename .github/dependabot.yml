@@ -1,0 +1,78 @@
+# FIX-08 · Dependabot 配置（20xx 审计 #6「零 SCA」的可维护性部分）。
+#
+# 为什么需要它：`scripts/audit-gate.mjs` 只在 CI 跑的那一刻给结论，**不会**主动告诉你
+# 「有新版本可以升」。Dependabot 补的是"持续发现"，门禁补的是"阻断"。两者职责不同。
+#
+# ⚠️ 关于 ignore 里的 major 升级（这不是「忽略安全」，而是**版本纪律**）
+# --------------------------------------------------------------------
+# 依据 Q-5 + 本版硬边界：1.0 内**禁止**升级 React / Vite / Vitest / Tailwind 的 major，
+# 且「前端 0 改动」是本版可证点。Dependabot 若为这些包开 major 升级 PR，会持续制造
+# 「明知不能合、又天天挂着」的噪音 —— 最终会被整批忽略掉，连 patch 升级也一起被忽略。
+# 所以这里只屏蔽 **major**（`version-update:semver-major`），patch / minor 照常提 PR。
+#
+# 关于「安全更新会不会被这条 ignore 一起屏蔽」—— 按官方文档写，不按印象写：
+#   * Dependabot 选项参考（`ignore` → `update-types`）原文：
+#     "Security updates are unaffected by this setting."（安全更新不受该设置影响）
+#   * 同一页另有一条 caveat：显式写了 `update-types` 时规则只作用于**版本更新**；
+#     若把 `ignore` 写成不带 `update-types` 的裸规则（只给 `versions`），它会连
+#     **安全更新**的 PR 一起挡掉 —— 本文件刻意只写 `update-types`，就是为了留在
+#     "只挡版本更新"这一侧。
+#   * 因此本配置的一个**验证动作**（收口/首次出现安全公告时必做）：打开
+#     Insights → Dependency graph → Dependabot → Recent update jobs，安全更新那一跑的
+#     日志应出现 "version-update:semver-major - from dependabot.yml (doesn't apply to
+#     security update)"；若日志显示 "All updates for X were ignored"，则说明作用域写宽了，
+#     必须先修配置再谈验收。
+#   这条不是可选项：本仓纪律要求"验证必须给证据"，把语义写成注释而从不核对，
+#   等于把一条安全通道寄托在记忆上。
+#
+# 复评时点：V1.0 解锁框架升级时，**必须**同步删掉下面这段 ignore，否则 patch 升级之外
+# 永远不会有人提醒"该升 major 了"。该动作登记在收口清单里。
+version: 2
+
+updates:
+  # ---- npm（workspace 根；pnpm-lock.yaml 由 root 统一管理）----
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+    groups:
+      # patch/minor 合成一个 PR：单个 PR 比 12 个独立 PR 更容易在 CI 里活下来。
+      npm-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+
+  # ---- GitHub Actions（workflow 里用到的 action 也要跟版本）----
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+    labels:
+      - "dependencies"
+      - "ci"

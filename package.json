@@ -27,6 +27,7 @@
     "gate:depcruiser": "node scripts/check_depcruiser.mjs",
     "gate:i18n": "python scripts/check_i18n_keys.py",
     "gate:errors": "python scripts/check_error_codes.py",
+    "gate:sse": "pnpm -C packages/event test",
     "test:unit": "pnpm -r --filter \"!@wbtime/e2e\" --filter \"!@wbtime/web\" test && pnpm --filter @wbtime/web test",
     "typecheck": "pnpm -r --filter \"!@wbtime/e2e\" --filter \"!@wbtime/web\" typecheck && pnpm --filter @wbtime/web typecheck",
     "lint:web": "pnpm --filter @wbtime/web lint",
@@ -37,8 +38,15 @@
     "gate:selfproof": "python scripts/selfproof/run_selfproof.py",
     "gate:offline": "python scripts/check_ddl_parity.py && python scripts/compare_openapi.py && python scripts/check_bucket3_coverage.py && python scripts/check_control_flow.py && python scripts/check_frontend_baseline.py",
     "gate:all": "python scripts/check_ddl_parity.py && python scripts/compare_openapi.py && python scripts/check_bucket3_coverage.py && python scripts/check_control_flow.py && python scripts/check_frontend_baseline.py && python scripts/oracle_recompute.py --oracle legacy && python scripts/inject_counterexample.py --all && python scripts/meta_gate.py && python scripts/selfproof/run_selfproof.py",
-    "test:e2e": "node --test \"packages/e2e/tests/e2e/**/*.test.mjs\"",
-    "test:e2e:selfproof": "python scripts/selfproof/run_selfproof.py"
+    "test:e2e": "pnpm --filter @wbtime/e2e run test:forward",
+    "test:e2e:selfproof": "python scripts/selfproof/run_selfproof.py",
+    "test:smoke": "node scripts/run-smoke.mjs",
+    "test:conformance": "node scripts/run-conformance.mjs",
+    "test:legacy": "node scripts/run-legacy.mjs",
+    "test:e2e:all": "node scripts/run-all.mjs",
+    "test:all:self-test": "node scripts/run-all.mjs --self-test",
+    "test:parity:pg": "node scripts/run-parity-pg.mjs",
+    "test:ts": "pnpm --filter @wbtime/api... build && pnpm run test:smoke && pnpm run test:conformance"
   },
   "devDependencies": {
     "dependency-cruiser": "^18.7.0"
