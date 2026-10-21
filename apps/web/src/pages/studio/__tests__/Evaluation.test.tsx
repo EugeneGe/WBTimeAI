@@ -139,14 +139,14 @@ const RESULT = {
   error_type: null,
 };
 
-/** 回归对比报告夹具（`CompareReport`）——`cost` 缺失 → `N/A`。 */
+/** 回归对比报告夹具（`CompareReport`）——`mean_score` 缺失 → `N/A`；`cost` 已不在 UI 展示。 */
 const COMPARE = {
   dataset_id: "ds1",
   dataset_version: 1,
   agent_version_a: "v1",
   agent_version_b: "v2",
   pass_rate: { a: 1, b: 0.5, delta: -0.5 },
-  mean_score: { a: 0.9, b: 0.8, delta: -0.1 },
+  mean_score: { a: 0.9, b: null, delta: null },
   fails: { only_a: [], only_b: ["q2"], both: [] },
   duration_ms: { a: 120, b: 130, delta: 10 },
   token_usage: { a: 100, b: 120, delta: 20 },
@@ -252,10 +252,11 @@ describe("Evaluation", () => {
     expect(screen.getByTestId("compare-pass-rate-delta")).toHaveTextContent("-0.5");
     // 失败 case 分组。
     expect(screen.getByTestId("compare-fails-only-b")).toHaveTextContent("q2");
-    // 🔴 缺失指标 → `N/A`（不得视为 0）。
-    expect(screen.getByTestId("compare-cost-a")).toHaveTextContent("N/A");
-    expect(screen.getByTestId("compare-cost-b")).toHaveTextContent("N/A");
-    expect(screen.getByTestId("compare-cost-delta")).toHaveTextContent("N/A");
+    // 🔴 缺失指标 → `N/A`（不得视为 0）—— 用 mean_score 覆盖该语义（cost 指标已移除）。
+    expect(screen.getByTestId("compare-mean-score-b")).toHaveTextContent("N/A");
+    // 成本展示已按 V0.3.0 决策移除：不渲染成本卡片/列。
+    expect(screen.queryByTestId("compare-cost-a")).toBeNull();
+    expect(screen.queryByText("平均成本")).toBeNull();
   });
 
   it("can() 守卫：无 evaluation:write / evaluation:run 权限被拦", async () => {

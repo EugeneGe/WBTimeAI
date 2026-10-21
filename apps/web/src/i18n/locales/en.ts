@@ -1156,7 +1156,6 @@ export const en: Record<string, string> = {
   "studio.evaluation.metric.meanScore": "Mean score",
   "studio.evaluation.metric.durationMs": "Mean duration (ms)",
   "studio.evaluation.metric.tokenUsage": "Mean tokens",
-  "studio.evaluation.metric.cost": "Mean cost",
   "studio.evaluation.metric.passRateB": "Pass rate (B)",
   "studio.evaluation.metric.meanScoreB": "Mean score (B)",
   "studio.evaluation.feedback.datasetCreated": "Created dataset {name}",

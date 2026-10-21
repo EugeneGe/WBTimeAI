@@ -1112,7 +1112,6 @@ export const zhCN: Record<string, string> = {
   "studio.evaluation.metric.meanScore": "平均分",
   "studio.evaluation.metric.durationMs": "平均耗时 (ms)",
   "studio.evaluation.metric.tokenUsage": "平均 Token",
-  "studio.evaluation.metric.cost": "平均成本",
   "studio.evaluation.metric.passRateB": "通过率（B）",
   "studio.evaluation.metric.meanScoreB": "平均分（B）",
   "studio.evaluation.feedback.datasetCreated": "已新建数据集 {name}",

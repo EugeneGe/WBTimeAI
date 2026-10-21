@@ -147,7 +147,8 @@ function CompareReportView({ report }: { report: CompareReport }) {
             labelKey: "studio.evaluation.metric.tokenUsage",
             value: report.token_usage.b,
           },
-          { key: "cost", labelKey: "studio.evaluation.metric.cost", value: report.cost.b },
+          // ⚠️ 成本指标已按 V0.3.0 决策移除：本版不启用价目，`cost` 恒为 null，
+          // 展示它只会得到一片 N/A。token 用量保留。
         ].map((metric) => (
           <div key={metric.key} className="rounded-lg border bg-card p-2">
             <div className="text-xs text-muted-foreground">{t(metric.labelKey)}</div>
@@ -181,10 +182,6 @@ function CompareReportView({ report }: { report: CompareReport }) {
           <TableRow>
             <TableCell>{t("studio.evaluation.metric.tokenUsage")}</TableCell>
             <MetricCells metricKey="token-usage" triple={report.token_usage} />
-          </TableRow>
-          <TableRow>
-            <TableCell>{t("studio.evaluation.metric.cost")}</TableCell>
-            <MetricCells metricKey="cost" triple={report.cost} />
           </TableRow>
         </TableBody>
       </Table>
