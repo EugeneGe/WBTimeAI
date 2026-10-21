@@ -22,6 +22,11 @@ import { BudgetLedger } from "@wbtime/domain";
 import { buildApp, buildModelStack } from "../dist/app.js";
 import { ModelGateway } from "../dist/modules/model/gateway.js";
 import { DEFAULT_FAKE_TEXT } from "../dist/modules/model/fake-provider.js";
+import {
+  PROVIDER_KINDS,
+  assertKnownProviderKind,
+  createSdkProviderAdapter,
+} from "../dist/modules/model/providers/factory.js";
 
 /** 断言抛的是 `ConfigError`（码 `CONFIGURATION_ERROR`）且消息命中。 */
 function assertConfigError(fn, pattern) {
@@ -95,11 +100,27 @@ test("生产装配 fake ⇒ CONFIGURATION_ERROR（不得静默放行）", () => 
   );
 });
 
-test("同步通道不接受 fake：createSdkProviderAdapter 走 fake 也会炸（闸门不可绕过）", () => {
-  // 装配期若误把 fake 当"真实厂商"直接建，必须炸而不是产出假模型。
+test("buildModelStack：fake 被禁时在 assertFakeProviderAllowed 分支就被拦下（未进同步通道）", () => {
+  // 曾用名「同步通道不接受 fake —— createSdkProviderAdapter 走 fake 也会炸」是**名不副实**：
+  // 这条在 assertFakeProviderAllowed 就返回了，根本没走到 createSdkProviderAdapter
+  // （QA F-1：靠它的话，摘掉同步通道的 fake 闸门全量仍 0 fail）。
+  // 同步通道那条闸由下面「createSdkProviderAdapter 直接拒 fake」这条独立用例锁住。
   assertConfigError(
     () => buildModelStack({ kind: "fake", env: PROD_ENV, allowFakeProvider: false }),
     /只允许在 NODE_ENV=test/,
+  );
+});
+
+test("createSdkProviderAdapter 直接拒 fake（同步通道的闸门，绕过装配层也炸）", () => {
+  // 直接打在最底层：即使调用方显式放行 fake、且 env 是测试档，同步通道也不接受。
+  assertConfigError(
+    () =>
+      createSdkProviderAdapter({
+        kind: "fake",
+        env: TEST_ENV,
+        allowFakeProvider: true,
+      }),
+    /同步通道不接受 fake/,
   );
 });
 
@@ -151,6 +172,71 @@ test("NODE_ENV=test 但缺 key ⇒ 仍然炸（测试档也不许静默回落 fa
   assertConfigError(
     () => buildModelStack({ kind: "openai", env: TEST_ENV }),
     /未配置 OPENAI_API_KEY/,
+  );
+});
+
+test("未知 kind ⇒ CONFIGURATION_ERROR，绝不静默降级为 openai-compatible（QA F-2）", () => {
+  // 给足 apiKey 是为了逼出真正的坑：旧实现会拿着未知 kind 走 createSdkAdapter 的兜底
+  // 分支，当成 openai-compatible 建适配器，并**跳过**它的 baseURL 强制检查 ⇒ 启动期不响，
+  // 直到第一个请求在 new URL("undefined/...") 上炸。
+  assertConfigError(
+    () => buildModelStack({ kind: "bogus", apiKey: "fixture-key-not-real", env: PROD_ENV }),
+    /未知的 provider kind/,
+  );
+  // 缺 key 时也必须报「未知 kind」而不是「未配置 undefined」（QA F-3）
+  assertConfigError(
+    () => buildModelStack({ kind: "bogus", env: PROD_ENV }),
+    /未知的 provider kind/,
+  );
+});
+
+test("未知 kind 不得产生「未配置 undefined」这类误导文案（QA F-3）", () => {
+  let message = "";
+  try {
+    buildModelStack({ kind: "no-such-vendor", apiKey: "fixture-key-not-real", env: PROD_ENV });
+  } catch (error) {
+    message = String(error.message);
+  }
+  assert.ok(message.length > 0, "未知 kind 必须抛错");
+  assert.ok(!message.includes("undefined"), `错误文案不得出现 undefined，实测：${message}`);
+  assert.ok(message.includes("openai | anthropic"), `应列出合法值，实测：${message}`);
+});
+
+test("createSdkProviderAdapter 也认白名单（绕过装配层的直连路径同样 fail loud）", () => {
+  assertConfigError(
+    () =>
+      createSdkProviderAdapter({
+        kind: "bogus",
+        apiKey: "fixture-key-not-real",
+        env: PROD_ENV,
+      }),
+    /未知的 provider kind/,
+  );
+});
+
+test("assertKnownProviderKind：白名单成员全放行，其余全拒", () => {
+  assert.deepEqual([...PROVIDER_KINDS], [
+    "openai",
+    "anthropic",
+    "google",
+    "openai-compatible",
+    "fake",
+  ]);
+  for (const kind of PROVIDER_KINDS) {
+    assert.equal(assertKnownProviderKind(kind), kind);
+  }
+  assert.throws(() => assertKnownProviderKind(""), /未知的 provider kind/);
+  assert.throws(() => assertKnownProviderKind("OpenAI"), /未知的 provider kind/, "大小写敏感");
+});
+
+test("buildApp({ model }) 未知 kind ⇒ 构建期即 CONFIGURATION_ERROR", () => {
+  assertConfigError(
+    () =>
+      buildApp({
+        enableLogging: false,
+        model: { kind: "bogus", apiKey: "fixture-key-not-real", env: PROD_ENV },
+      }),
+    /未知的 provider kind/,
   );
 });
 

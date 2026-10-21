@@ -180,6 +180,9 @@ function createSdkAdapter(
   kind: Exclude<ProviderKind, "fake">,
   options: ProviderFactoryOptions,
 ): ProviderAdapter {
+  // 纵深防御：`buildModelStack` 入口已经判过一次，这里是**出厂口**——任何绕过装配层
+  // 直接调工厂的路径（含 T3-09 拿 DB 字符串直连）也必须在建适配器之前被拦住。
+  assertKnownProviderKind(kind);
   const env = options.env ?? process.env;
   const keyEnv = kind === "openai-compatible" ? COMPATIBLE_KEY_ENV : PROVIDER_KEY_ENV[kind];
   const apiKey = options.apiKey ?? env[keyEnv] ?? "";
@@ -229,6 +232,33 @@ function createSdkAdapter(
       }
     },
   };
+}
+
+/**
+ * 断言 `kind` 是已知 provider 类型（**未知 ⇒ 抛，绝不猜**）。
+ *
+ * 为什么必须在**运行期**再判一次（TS 已经收窄了 `ProviderKind`）：
+ * kind 的真实来源迟早是**数据库字符串**（`model_provider.type`，见
+ * `model-provider-repo` 的 `findByType`）—— 那时"表里出现一个没映射的 type"是
+ * 完全可达的路径，类型系统管不着。而**不判**的后果是静默降级：
+ * `createSdkAdapter` 的兜底分支（原 `:195-206`）会把未知 kind 一律当成
+ * `openai-compatible`，连带**跳过**它的 baseURL 强制检查 ⇒ 启动期不报错，
+ * 直到第一个用户请求才在 `new URL("undefined/...")` 上炸（QA F-2 实跑复现）。
+ * 那正是本项目要消灭的"启动期哑失败、运行期才响"。
+ *
+ * @param kind 候选值（**运行时**可能是任意字符串）。
+ * @returns 收窄后的 {@link ProviderKind}。
+ * @throws {ConfigError} 不在 {@link PROVIDER_KINDS} 内。
+ */
+export function assertKnownProviderKind(kind: string): ProviderKind {
+  if (!(PROVIDER_KINDS as readonly string[]).includes(kind)) {
+    throw new ConfigError(
+      `未知的 provider kind：${JSON.stringify(kind)}（合法值：${PROVIDER_KINDS.join(" | ")}）；` +
+        "未知 kind 不得静默降级为 openai-compatible —— 那会把启动期错误推迟到第一个用户请求",
+      ["kind"],
+    );
+  }
+  return kind as ProviderKind;
 }
 
 /**

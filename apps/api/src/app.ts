@@ -31,6 +31,7 @@ import {
   COMPATIBLE_KEY_ENV,
   PROVIDER_KEY_ENV,
   assertFakeProviderAllowed,
+  assertKnownProviderKind,
   createSdkProviderAdapter,
   type ProviderAdapter,
   type ProviderKind,
@@ -61,7 +62,9 @@ export const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
 //   2. 生产缺对应 API key ⇒ **启动期** `ConfigError`（`CONFIGURATION_ERROR`），
 //      **绝不静默回落 fake**（静默回落 = 对外声称有模型能力，实际在放录音）；
 //   3. 未给 `model` ⇒ **不装配**（CI 无任何 key，`pnpm test` 必须离线可跑，
-//      见 R3-19；真连只在窗口期人工执行）。
+//      见 R3-19；真连只在窗口期人工执行）；
+//   4. `kind` **白名单校验**（QA F-2）：未知 kind ⇒ `CONFIGURATION_ERROR`，
+//      绝不静默降级为 `openai-compatible`（那会把启动期错误推迟到第一个用户请求）。
 // ---------------------------------------------------------------------------
 
 /** 装配产物：Provider 适配器 + 网关（网关是 `ModelGatewayPort` 的唯一实现）。 */
@@ -71,7 +74,10 @@ export interface ModelStack {
   readonly gateway: ModelGateway;
 }
 
-/** 模型栈装配选项。`kind` **必填**（不猜：猜错等于静默用错厂商）。 */
+/**
+ * 模型栈装配选项。`kind` **必填**（不猜：猜错等于静默用错厂商），且必须命中
+ * `PROVIDER_KINDS` 白名单 —— 未知值 ⇒ `CONFIGURATION_ERROR`（QA F-2）。
+ */
 export interface ModelStackOptions {
   readonly kind: ProviderKind;
   /** 配置对象；缺省 `loadConfig(env)`。 */
@@ -94,7 +100,10 @@ export interface ModelStackOptions {
 export function buildModelStack(options: ModelStackOptions): ModelStack {
   const env = options.env ?? process.env;
   const config = options.config ?? loadConfig(env);
-  const kind = options.kind;
+  // 入口白名单（QA F-2）：必须在**取 keyEnv 之前**判 —— 否则未知 kind 会先走到
+  // `PROVIDER_KEY_ENV[kind]` 拿到 `undefined`，把错误说成「未配置 undefined」（F-3），
+  // 误导运维排查；更糟的是不判就会静默降级成 openai-compatible。
+  const kind = assertKnownProviderKind(options.kind);
 
   if (kind === "fake") {
     // 闸门：生产装配 fake 等同伪造能力，宁可启动失败。
