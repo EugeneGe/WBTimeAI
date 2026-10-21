@@ -11,7 +11,7 @@
 // 本文件保持同一顺序语义：request_id 先落头，壳后取头。**反过来就会让「体 == 头」
 // 变成两处各自生成再祈祷相等**，那正是本版要结构性消灭的东西。
 
-import { loadConfig, requireSecretKey } from "@wbtime/config";
+import { ConfigError, loadConfig, requireSecretKey } from "@wbtime/config";
 import type { Config } from "@wbtime/config";
 import type { DrizzleDatabase, SqlDialect } from "@wbtime/db";
 import { createLogger } from "@wbtime/logging";
@@ -25,6 +25,16 @@ import { AuthService } from "./modules/auth/service.js";
 import { createRegisterLimiter } from "./modules/auth/register-limiter.js";
 import { CredentialService } from "./modules/credential/service.js";
 import { OrganizationService } from "./modules/organization/service.js";
+import { createFakeProvider } from "./modules/model/fake-provider.js";
+import { ModelGateway } from "./modules/model/gateway.js";
+import {
+  COMPATIBLE_KEY_ENV,
+  PROVIDER_KEY_ENV,
+  assertFakeProviderAllowed,
+  createSdkProviderAdapter,
+  type ProviderAdapter,
+  type ProviderKind,
+} from "./modules/model/providers/factory.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
@@ -42,6 +52,78 @@ import { userRoutes } from "./routes/users.js";
  * 按 scope 校验它存在且启用。**租户自举（seed / ensure_default）归 V0.6.0**，登记为遗留。
  */
 export const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
+
+// ---------------------------------------------------------------------------
+// 模型栈装配（T3-02 · A02）
+//
+// 三条口径，逐条来自任务卡验收 ② 与 R3-19：
+//   1. fake 只在 `NODE_ENV=test` / `WBTIME_AI_ALLOW_FAKE_PROVIDER=1` / 显式开关下装配；
+//   2. 生产缺对应 API key ⇒ **启动期** `ConfigError`（`CONFIGURATION_ERROR`），
+//      **绝不静默回落 fake**（静默回落 = 对外声称有模型能力，实际在放录音）；
+//   3. 未给 `model` ⇒ **不装配**（CI 无任何 key，`pnpm test` 必须离线可跑，
+//      见 R3-19；真连只在窗口期人工执行）。
+// ---------------------------------------------------------------------------
+
+/** 装配产物：Provider 适配器 + 网关（网关是 `ModelGatewayPort` 的唯一实现）。 */
+export interface ModelStack {
+  readonly kind: ProviderKind;
+  readonly provider: ProviderAdapter;
+  readonly gateway: ModelGateway;
+}
+
+/** 模型栈装配选项。`kind` **必填**（不猜：猜错等于静默用错厂商）。 */
+export interface ModelStackOptions {
+  readonly kind: ProviderKind;
+  /** 配置对象；缺省 `loadConfig(env)`。 */
+  readonly config?: Config;
+  /** 环境变量源；缺省 `process.env`。 */
+  readonly env?: NodeJS.ProcessEnv;
+  /** 显式 key；缺省读该 kind 对应的 `*_API_KEY`。 */
+  readonly apiKey?: string;
+  /** 兼容端点 baseURL（`openai-compatible` 必填）。 */
+  readonly baseURL?: string;
+  /** 显式放行 fake；缺省看 `config.modelAllowFakeProvider`。 */
+  readonly allowFakeProvider?: boolean;
+}
+
+/**
+ * 装配模型栈（**严格**：缺 key / fake 被禁一律抛 `ConfigError`）。
+ *
+ * @throws {ConfigError} 见 {@link ModelStackOptions} 上方三条口径。
+ */
+export function buildModelStack(options: ModelStackOptions): ModelStack {
+  const env = options.env ?? process.env;
+  const config = options.config ?? loadConfig(env);
+  const kind = options.kind;
+
+  if (kind === "fake") {
+    // 闸门：生产装配 fake 等同伪造能力，宁可启动失败。
+    assertFakeProviderAllowed(env, options.allowFakeProvider ?? config.modelAllowFakeProvider);
+    const provider = createFakeProvider({});
+    return { kind, provider, gateway: new ModelGateway({ provider }) };
+  }
+
+  const keyEnv = kind === "openai-compatible" ? COMPATIBLE_KEY_ENV : PROVIDER_KEY_ENV[kind];
+  const apiKey = options.apiKey ?? env[keyEnv] ?? "";
+  if (apiKey.trim() === "") {
+    // 为什么在这里再判一次（工厂内 openai-compatible 只强制 baseURL）：
+    // 兼容端点允许"自建无鉴权"是**显式**用法，装配期不该替它默认"无 key 也能跑" ——
+    // 那会把 401 从启动期挪到第一个用户请求上。
+    throw new ConfigError(
+      `未配置 ${keyEnv}（未配置 ≠ 降级：R3-19 要求 fail loud，不得静默回落 fake provider）`,
+      [keyEnv],
+    );
+  }
+
+  const provider = createSdkProviderAdapter({
+    kind,
+    apiKey,
+    ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
+    env,
+    allowFakeProvider: false,
+  });
+  return { kind, provider, gateway: new ModelGateway({ provider }) };
+}
 
 /** `buildApp` 的可选项（全部有默认值，默认值即生产行为）。 */
 export interface BuildAppOptions {
@@ -65,6 +147,20 @@ export interface BuildAppOptions {
   readonly tenantId?: string;
   /** 身份族依赖（测试可注入替身；缺省由 `database` + `config` 现建）。 */
   readonly identity?: IdentityDeps;
+  /**
+   * 模型栈装配开关。**未给 ⇒ 不装配**（CI 无 key，R3-19 要求离线可跑）。
+   *
+   * 给了就走 {@link buildModelStack} 的严格口径：缺 key 或 fake 被禁 ⇒ 抛
+   * `ConfigError`（`CONFIGURATION_ERROR`），装配后的网关挂 `app.modelGateway`。
+   */
+  readonly model?: ModelStackOptions;
+}
+
+/** 挂了模型栈的实例：`modelGateway` 仅在 `buildApp({ model })` 时存在。 */
+declare module "fastify" {
+  interface FastifyInstance {
+    modelGateway?: ModelGateway;
+  }
 }
 
 /**
@@ -155,6 +251,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     organizationRoutes(app, identity);
     permissionRoutes(app, identity);
     modelRoutes(app, identity);
+  }
+
+  // 6) 模型栈（给了 `model` 才装配；缺 key 在上面就抛，不会走到这里）
+  if (options.model !== undefined) {
+    // 用 `decorate` 而不是直接赋值：Fastify 会因同名重复装饰而报错，
+    // 而"两个任务各自装配一个网关、后者静默覆盖前者"正是装配面要防的事故。
+    app.decorate("modelGateway", buildModelStack({ config, ...options.model }).gateway);
   }
 
   return app;

@@ -232,6 +232,26 @@ function createSdkAdapter(
 }
 
 /**
+ * 同步建**真实厂商**适配器（不含 fake）。
+ *
+ * 为什么拆出这个同步入口：`createProviderAdapter` 为 fake 走动态 `import()`，必然是
+ * 异步的，而**装配期**（`app.ts::buildModelStack`）必须同步拿到适配器 —— 否则
+ * "缺 key ⇒ 启动失败"就得等到第一个请求才炸，那是运行期事故不是启动期闸门。
+ *
+ * @throws {ConfigError} kind 为 fake（fake 必须过 {@link createProviderAdapter} 的闸门）/
+ *         缺 key / 兼容端点缺 baseURL。
+ */
+export function createSdkProviderAdapter(options: ProviderFactoryOptions): ProviderAdapter {
+  if (options.kind === "fake") {
+    throw new ConfigError(
+      "fake provider 只能经 createProviderAdapter() 装配（同步通道不接受 fake —— 闸门不可绕过）",
+      [FAKE_PROVIDER_ENV],
+    );
+  }
+  return createSdkAdapter(options.kind, options);
+}
+
+/**
  * 建 Provider 适配器。
  *
  * `kind === "fake"` 时先过闸门，再交给 `createFakeProvider`（**动态 import**：
