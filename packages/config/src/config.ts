@@ -67,6 +67,20 @@ export interface Config {
    * 注意：字段存在但**太短**时 `loadConfig` 当场抛（"值错 ≠ 没配"，
    * 与 `envAsInt` 对非法整数的口径一致），不会留到运行期。
    */
+  /**
+   * 模型请求超时（毫秒）。R3-15：默认 60000、**上界 600000**，越界即启动失败。
+   */
+  readonly modelRequestTimeoutMs: number;
+  /**
+   * 模型最大重试次数。R3-15：**上界 1（硬钉死）** —— 重试风暴比失败更难排查。
+   * 注：`invalid_request` 类错误**恒不重试**（见 `modules/model/errors.ts`）。
+   */
+  readonly modelMaxRetries: number;
+  /**
+   * 是否允许装配 `fake` Provider（R3-19）。生产默认 `false` ⇒ 误配即 `CONFIGURATION_ERROR`。
+   * 同时认环境变量 `NODE_ENV=test`（工厂内再判一次，双重保险）。
+   */
+  readonly modelAllowFakeProvider: boolean;
   readonly secretKey: string | null;
 }
 
@@ -82,6 +96,12 @@ export const ENV_KEYS = {
   shutdownTimeoutMs: "WBTIME_SHUTDOWN_TIMEOUT_MS",
   /** 未认证 register 的限速（每 IP / 每分钟）。`0` = 关闭（仅测试）。 */
   registerRateLimitPerMinute: "WBTIME_REGISTER_RATE_LIMIT_PER_MINUTE",
+  /** 模型请求超时（毫秒）。 */
+  modelRequestTimeoutMs: "WBTIME_MODEL_TIMEOUT_MS",
+  /** 模型最大重试次数（0 或 1；>1 直接拒）。 */
+  modelMaxRetries: "WBTIME_MODEL_MAX_RETRIES",
+  /** 是否放行 fake provider（与 `NODE_ENV=test` 等价）。 */
+  modelAllowFakeProvider: "WBTIME_AI_ALLOW_FAKE_PROVIDER",
 } as const;
 
 export const DEFAULTS = {
@@ -97,6 +117,11 @@ export const DEFAULTS = {
    * 折算，单 IP 最多占用 2% 的单核）。
    */
   registerRateLimitPerMinute: 20,
+  /** 60 秒：与 py 线 `DEFAULT_TIMEOUT_SECONDS=60.0` 同值（跨实现可比）。 */
+  modelRequestTimeoutMs: 60_000,
+  /** 只重试一次：配合退避已足够扛 429/5xx 抖动，再多就是重试风暴。 */
+  modelMaxRetries: 1,
+  modelAllowFakeProvider: false,
 } as const;
 
 /**
@@ -168,8 +193,44 @@ export function loadConfig(env: EnvSource = process.env): Config {
     logJson: envAsBool(env, ENV_KEYS.logJson, mode === "server"),
     shutdownTimeoutMs: resolveShutdownTimeoutMs(env),
     registerRateLimitPerMinute: resolveRegisterRateLimit(env),
+    modelRequestTimeoutMs: resolveModelRequestTimeoutMs(env),
+    modelMaxRetries: resolveModelMaxRetries(env),
+    modelAllowFakeProvider: envAsBool(env, ENV_KEYS.modelAllowFakeProvider, DEFAULTS.modelAllowFakeProvider),
     secretKey: resolveSecretKey(env),
   };
+}
+
+/**
+ * 读模型请求超时（毫秒）。
+ *
+ * 拒 **≤0 与 >600000**：0 会让每次调用立刻超时（不是"不超时"），越上界会把
+ * 一个卡死的上游变成占满 worker 的长尾。
+ */
+function resolveModelRequestTimeoutMs(env: EnvSource): number {
+  const value = envAsInt(env, ENV_KEYS.modelRequestTimeoutMs, DEFAULTS.modelRequestTimeoutMs);
+  if (value <= 0 || value > 600_000) {
+    throw new ConfigError(
+      `${ENV_KEYS.modelRequestTimeoutMs} 必须在 1..600000 之间：${value}（毫秒）`,
+      [ENV_KEYS.modelRequestTimeoutMs],
+    );
+  }
+  return value;
+}
+
+/**
+ * 读模型最大重试次数。
+ *
+ * 只接受 **0 或 1**：`0` = 不重试（更保守，允许）；`>1` 一律拒（R3-15 上界硬钉死）。
+ */
+function resolveModelMaxRetries(env: EnvSource): number {
+  const value = envAsInt(env, ENV_KEYS.modelMaxRetries, DEFAULTS.modelMaxRetries);
+  if (value < 0 || value > 1) {
+    throw new ConfigError(
+      `${ENV_KEYS.modelMaxRetries} 只能是 0 或 1：${value}（重试上界硬钉死，防重试风暴）`,
+      [ENV_KEYS.modelMaxRetries],
+    );
+  }
+  return value;
 }
 
 /**
