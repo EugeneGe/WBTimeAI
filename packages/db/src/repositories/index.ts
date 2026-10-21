@@ -86,4 +86,49 @@ export {
 // ---------------------------------------------------------------------------
 
 export { ModelCredentialRepo, type CredentialRow } from "./model-credential-repo.js";
-export { ModelProviderRepo, type ModelProviderRow } from "./model-provider-repo.js";
+// QA 遗留第 3 条（T3-03 接线）：把 T3-02 新增的常量与类型透出，
+// 免得调用方/测试再用字面量 `"ACTIVE"` 复述口径。
+export {
+  ModelProviderRepo,
+  CREDENTIAL_STATUS_ACTIVE,
+  PROVIDER_STATUS_ACTIVE,
+  type CredentialState,
+  type ModelProviderRow,
+  type ProviderKeyCarrier,
+} from "./model-provider-repo.js";
+
+// ---------------------------------------------------------------------------
+// 运行时族（T3-03 · W2；**不在** T2-03 的 11 张身份表内）
+// ---------------------------------------------------------------------------
+
+export {
+  ChildScopedRepo,
+  ChildConflictError,
+  type ChildRepoOptions,
+  type ChildScopedInsert,
+  type ChildScopedPatch,
+} from "./child-scoped-repo.js";
+export {
+  AgentRunRepo,
+  AGENT_RUN_STATUSES,
+  TERMINAL_AGENT_RUN_STATUSES,
+  isTerminalAgentRunStatus,
+  type AcquireLeaseOptions,
+  type AgentRunRow,
+  type FinalizeRunPatch,
+} from "./agent-run-repo.js";
+export {
+  ToolCallRepo,
+  TOOL_CALL_STATUSES,
+  TERMINAL_TOOL_CALL_STATUSES,
+  isTerminalToolCallStatus,
+  type MarkRunningOptions,
+  type MarkTerminalOptions,
+  type ToolCallRow,
+} from "./tool-call-repo.js";
+export {
+  AgentEventRepo,
+  type AgentEventRow,
+  type AppendEventInput,
+  type AppendedEvent,
+} from "./agent-event-repo.js";
