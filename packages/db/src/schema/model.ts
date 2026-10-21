@@ -2,7 +2,7 @@
 // scripts/gen-ddl.ts 的**唯一输入**：与 pg/ sqlite/ 下的 TS schema 文件由同一次
 // 脚本运行产出 ⇒ 「TS schema → DDL」链条内部不可能漂移。
 
-export const SCHEMA_VERSION = "v0018";
+export const SCHEMA_VERSION = "v0019";
 
 export interface ModelColumn {
   name: string;
@@ -186,6 +186,7 @@ export const TABLES: readonly ModelTable[] = [
       { name: "cost_breakdown", pgType: "JSONB", sqliteType: "JSON", nullable: true, pgDefault: null, sqliteDefault: null },
       { name: "cost_status", pgType: "VARCHAR(20)", sqliteType: "VARCHAR(20)", nullable: false, pgDefault: null, sqliteDefault: null },
       { name: "error", pgType: "TEXT", sqliteType: "TEXT", nullable: true, pgDefault: null, sqliteDefault: null },
+      { name: "stop_reason", pgType: "VARCHAR(50)", sqliteType: "VARCHAR(50)", nullable: true, pgDefault: null, sqliteDefault: null },
     ],
     indexes: [
       { name: "ix_agent_run_agent_id", columns: ["agent_id"], unique: false, where: null },
@@ -1889,7 +1890,7 @@ export const SQLITE_DIALECT_ONLY: readonly ModelDialectOnly[] = [
 ];
 
 /** 实跑计数（由生成器输出，**禁止手填**）。 */
-export const GENERATED_COUNTS = {"tables":61,"columns":629,"metadataIndexes":174,"uniqueIndexes":7,"partialIndexes":1,"uniqueConstraints":29,"foreignKeys":159,"namedForeignKeys":4,"primaryKeys":61,"rawIndexes":2,"hnswIndexes":2,"extensions":1,"sqliteDialectOnlyObjects":8,"sqliteVirtualTables":1,"sqliteShadowTables":4,"sqliteTriggers":3,"domainGroups":11};
+export const GENERATED_COUNTS = {"tables":61,"columns":630,"metadataIndexes":174,"uniqueIndexes":7,"partialIndexes":1,"uniqueConstraints":29,"foreignKeys":159,"namedForeignKeys":4,"primaryKeys":61,"rawIndexes":2,"hnswIndexes":2,"extensions":1,"sqliteDialectOnlyObjects":8,"sqliteVirtualTables":1,"sqliteShadowTables":4,"sqliteTriggers":3,"domainGroups":11};
 
 /** PG/SQLite 两侧的索引对象合计（PG = metadata + raw hnsw 2）。 */
 export const INDEX_OBJECTS_TOTAL = {"pg":176,"sqlite":174};

@@ -1,5 +1,5 @@
 // 由 scripts/gen-drizzle-schema.mjs 生成 —— **禁止手改**；改 oracle 后重跑生成器。
-// oracle ①: contracts/schema.v0018.sqlite.normalized.json（schema v0018，结构权威）
+// oracle ①: contracts/schema.v0019.sqlite.normalized.json（schema v0019，结构权威）
 // oracle ②: contracts/db/type-map.csv（列类型权威，禁手填）
 // 领域：agent · 表数 7
 
@@ -105,6 +105,7 @@ export const agent_run = sqliteTable("agent_run", {
   cost_breakdown: text("cost_breakdown", { mode: "json" }),
   cost_status: text("cost_status", { length: 20 }).notNull(),
   error: text("error"),
+  stop_reason: text("stop_reason", { length: 50 }),
 }, (t): ExtraConfig => ({
     ix_agent_run_agent_id: index("ix_agent_run_agent_id").on(t.agent_id),
     ix_agent_run_agent_version_id: index("ix_agent_run_agent_version_id").on(t.agent_version_id),

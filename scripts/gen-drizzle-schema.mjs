@@ -40,9 +40,44 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..");
 
+const DEFAULT_SCHEMA_VERSION = "v0018";
+
+/** 本生成器支持的 schema 版本（与 `scripts/check_ddl_parity.py` 的 `SCHEMAS` 同一枚举）。 */
+const SCHEMA_VERSIONS = ["v0018", "v0019"];
+
+/**
+ * v0019 的**已批准增量**：normalized 只给「结构」，类型面仍以 `contracts/db/type-map.csv`
+ * （v0018 冻结、受 `contracts/manifest.sha256` 保护、**禁改**）为准 ⇒ 新增列的类型用**代码内
+ * 登记表**补，不往 CSV 里加行。登记来源：`contracts/v0019.README.md` §2 第 1 行
+ * （`agent_run + stop_reason VARCHAR(50) NULL`，同名同型、无方言差异）。
+ */
+const TYPE_OVERLAY = {
+  v0019: [
+    {
+      table: "agent_run",
+      column: "stop_reason",
+      declared_type: "String(length=50)",
+      declared_str_type: "VARCHAR(50)",
+      pg_emit_type: "VARCHAR(50)",
+      sqlite_emit_type: "VARCHAR(50)",
+      ts_target: "string",
+      strategy: "v0019-registered-delta",
+      dialect_sensitive: "false",
+    },
+  ],
+};
+
+/** 当前运行选中的 schema 版本（由 `main()` 依 `--schema` 设定；渲染文件头时要用）。 */
+let ACTIVE_VERSION = DEFAULT_SCHEMA_VERSION;
+
+function oraclePaths(version) {
+  return {
+    pg: path.join(REPO, "contracts", `schema.${version}.pg.normalized.json`),
+    sqlite: path.join(REPO, "contracts", `schema.${version}.sqlite.normalized.json`),
+  };
+}
+
 const PATHS = {
-  pg: path.join(REPO, "contracts", "schema.v0018.pg.normalized.json"),
-  sqlite: path.join(REPO, "contracts", "schema.v0018.sqlite.normalized.json"),
   typeMap: path.join(REPO, "contracts", "db", "type-map.csv"),
   pgDir: path.join(REPO, "packages", "db", "src", "schema", "pg"),
   sqliteDir: path.join(REPO, "packages", "db", "src", "schema", "sqlite"),
@@ -229,6 +264,13 @@ function refColumnExpr(fromTable, refTable, col, namespace) {
 
 function main(argv) {
   const checkOnly = argv.includes("--check");
+  const flag = argv.indexOf("--schema");
+  const requested = flag >= 0 ? argv[flag + 1] : DEFAULT_SCHEMA_VERSION;
+  if (!requested || !SCHEMA_VERSIONS.includes(requested)) {
+    throw new Error(`--schema 只接受 ${SCHEMA_VERSIONS.join(" / ")}（缺值或不支持：${requested ?? "∅"}）`);
+  }
+  ACTIVE_VERSION = requested;
+  Object.assign(PATHS, oraclePaths(requested));
 
   const pgDoc = readJson(PATHS.pg);
   const sqliteDoc = readJson(PATHS.sqlite);
@@ -237,17 +279,30 @@ function main(argv) {
   if (pgDoc.schema_version !== sqliteDoc.schema_version) {
     throw new Error("双档 normalized json 的 schema_version 不一致");
   }
+  if (pgDoc.schema_version !== requested) {
+    throw new Error(`--schema ${requested} 与 oracle 自述 schema_version=${pgDoc.schema_version} 不一致`);
+  }
   const version = pgDoc.schema_version;
 
   const typeMap = new Map();
   for (const row of typeRows) typeMap.set(`${row.table}.${row.column}`, row);
+
+  // 已登记增量列（v0019 等）：类型不在冻结 CSV 里，用代码内登记表补（见 TYPE_OVERLAY）。
+  for (const row of TYPE_OVERLAY[version] ?? []) {
+    const key = `${row.table}.${row.column}`;
+    if (typeMap.has(key)) {
+      throw new Error(`TYPE_OVERLAY 与 type-map.csv 撞键：${key}（CSV 已覆盖，应删掉登记表该行）`);
+    }
+    typeMap.set(key, row);
+    typeRows.push(row);
+  }
 
   crossCheckStructure(pgDoc, sqliteDoc);
 
   const tableOrder = pgDoc.tables.map((t) => t.name);
   const domainOfTable = assignDomains(tableOrder);
 
-  // type-map 覆盖面：629 列逐列必须有映射（DoD#2 前置）。
+  // type-map 覆盖面：**全部列**逐列必须有映射（v0018 = 629；v0019 = 630，含 TYPE_OVERLAY 登记行）。
   const unmapped = [];
   for (const table of pgDoc.tables) {
     for (const col of table.columns) {
@@ -586,7 +641,7 @@ function renderDomain(dialect, domain, tables, typeMap) {
   const lines = [];
   lines.push("// 由 scripts/gen-drizzle-schema.mjs 生成 —— **禁止手改**；改 oracle 后重跑生成器。");
   lines.push(
-    `// oracle ①: contracts/schema.v0018.${dialect}.normalized.json（schema v0018，结构权威）`
+    `// oracle ①: contracts/schema.${ACTIVE_VERSION}.${dialect}.normalized.json（schema ${ACTIVE_VERSION}，结构权威）`
   );
   lines.push("// oracle ②: contracts/db/type-map.csv（列类型权威，禁手填）");
   lines.push(`// 领域：${domain} · 表数 ${tables.length}`);

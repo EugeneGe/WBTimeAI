@@ -4,7 +4,7 @@
 它守什么
 --------
 V0.1.0 用 **Drizzle ORM（TS）** 重建了 61 张表的数据层。旧 Python 线的 DDL 已被冻结成契约
-（``contracts/schema.v0018.{pg,sqlite}.normalized.json`` + ``.sql``）。本门禁回答一个问题：
+（``contracts/schema.<v>.{pg,sqlite}.normalized.json`` + ``.sql``，``<v>`` 由 ``--schema`` 选，默认 ``v0019``）。本门禁回答一个问题：
 
     **新 TS 线（schema 对象 + 由其发出的双档 DDL），与冻结契约是否零差异？**
 
@@ -15,7 +15,7 @@ V0.1.0 用 **Drizzle ORM（TS）** 重建了 61 张表的数据层。旧 Python 
    @wbtime/db run introspect`` 产出）。这是「TS schema 真身」的证据。
 2. ``output/ddl.pg.sql`` / ``output/ddl.sqlite.sql`` —— ``scripts/gen-ddl.ts`` 发出的可执行 DDL
    文本（index 对象 / hnsw / SQLite 专用对象只能从这里核）。
-3. 冻结 oracle ``contracts/schema.v0018.{pg,sqlite}.normalized.json``。
+3. 冻结 oracle ``contracts/schema.<v>.{pg,sqlite}.normalized.json``（``<v>`` = ``--schema``，默认 ``v0019``）。
 4. 类型 oracle ``contracts/db/type-map.csv``（断言组 C / DoD#2）。
 
 为什么不再用正则扫 TypeScript
@@ -29,7 +29,7 @@ V0.1.0 用 **Drizzle ORM（TS）** 重建了 61 张表的数据层。旧 Python 
 
 硬断言（少一条这条门禁就不成立）
 ------------------------------
-A0 **绝对计数**（字面量，不随契约漂移）：61 表 / 629 列 / metadata 索引 174 /
+A0 **绝对计数**（字面量，不随契约漂移）：61 表 / **629 列（v0018）或 630 列（v0019）** / metadata 索引 174 /
    unique 7 / partial 1 / unique 约束 29 / 外键 159 / 索引对象 PG 176、SQLite 174 / hnsw 2。
    **契约自身与自省、DDL 三方都必须命中同一组字面量**，任何一方漂移都单独报红。
 A1 DDL 归一化后的表数 / 列数 / 索引对象数与契约 ``counts`` 逐项相等。
@@ -45,7 +45,7 @@ B  自省 JSON 与契约**结构对结构**：表集合、列名与顺序、可�
    外键（名+列+引用表+引用列）、索引（名+表+列+unique+是否 partial）逐项相等；
    并校验 JSON 里的 ``source.files`` sha256 与磁盘上的 ``schema/**/*.ts`` 一致
    （**改了 schema 没重跑自省 ⇒ red: src.stale**）。
-C  ``type-map.csv`` 的 629 行逐列有映射；两个敏感口径（emit 差异 401 / 声明敏感族 403）
+C  ``type-map.csv`` 的 629 行 + 代码内登记增量行（v0019：``agent_run.stop_reason``）逐列有映射；两个敏感口径（emit 差异 401 / 声明敏感族 403）
    **由脚本实跑输出**，与文档登记值比对 —— 数对不上时**两边都保留**。
 
 🚨 PG 权威库状态
@@ -96,6 +96,48 @@ DEFAULT_SQLITE_DDL: Final[Path] = REPO / "output" / "ddl.sqlite.sql"
 DEFAULT_INTROSPECT_DIR: Final[Path] = REPO / "output"
 PG_CONTRACT: Final[Path] = REPO / "contracts" / "schema.v0018.pg.normalized.json"
 SQLITE_CONTRACT: Final[Path] = REPO / "contracts" / "schema.v0018.sqlite.normalized.json"
+
+#: 本门禁支持的 schema 版本（与 `scripts/check_ddl_parity.py` 的 `SCHEMAS` 同一枚举）。
+SCHEMA_VERSIONS: Final[tuple[str, ...]] = ("v0018", "v0019")
+
+#: **默认版本 = 当前有效基线 v0019**。
+#:
+#: 与 `check_ddl_parity.py`「默认 v0018、历史行为逐字节不变」不同：本门禁比对的是
+#: **代码生成物**（drizzle schema → 自省 JSON / DDL），代码一旦前进到 v0019，默认就必须跟着走，
+#: 否则「默认绿」只能靠忽略新增列来维持。`--schema v0018` 仍可运行，但会把已登记增量报成差异
+#: （那是**事实**：当前代码不再等于 py/ 线 oracle），仅供对照，不进门禁接线。
+DEFAULT_SCHEMA: Final[str] = "v0019"
+
+PG_CONTRACT_BY_SCHEMA: Final[dict[str, Path]] = {
+    "v0018": PG_CONTRACT,
+    "v0019": REPO / "contracts" / "schema.v0019.pg.normalized.json",
+}
+SQLITE_CONTRACT_BY_SCHEMA: Final[dict[str, Path]] = {
+    "v0018": SQLITE_CONTRACT,
+    "v0019": REPO / "contracts" / "schema.v0019.sqlite.normalized.json",
+}
+
+#: 当前 `--schema` 选中的版本（`main()` 设定；断言组 A0 / C 与契约加载都读它）。
+ACTIVE_SCHEMA: str = DEFAULT_SCHEMA
+
+#: v0019 的**已登记增量列**：`contracts/db/type-map.csv` 受 `manifest.sha256` 保护、禁改，
+#: 故新增列的类型在**代码内登记**（来源 `contracts/v0019.README.md` §2 第 1 行）。
+#: 与 `scripts/gen-drizzle-schema.mjs` 的 `TYPE_OVERLAY` 必须逐字一致（同一份登记的两处消费）。
+TYPE_OVERLAY_BY_SCHEMA: Final[dict[str, tuple[dict[str, str], ...]]] = {
+    "v0019": (
+        {
+            "table": "agent_run",
+            "column": "stop_reason",
+            "declared_type": "String(length=50)",
+            "declared_str_type": "VARCHAR(50)",
+            "pg_emit_type": "VARCHAR(50)",
+            "sqlite_emit_type": "VARCHAR(50)",
+            "ts_target": "string",
+            "strategy": "v0019-registered-delta",
+            "dialect_sensitive": "false",
+        },
+    ),
+}
 TYPE_MAP: Final[Path] = REPO / "contracts" / "db" / "type-map.csv"
 SCHEMA_ROOT: Final[Path] = REPO / "packages" / "db" / "src" / "schema"
 INTROSPECT_ENTRY: Final[Path] = REPO / "packages" / "db" / "dist" / "schema" / "_introspect.js"
@@ -107,14 +149,19 @@ DOCUMENTED_SENSITIVE: Final[dict[str, int]] = {"emit_diff": 401, "declared_famil
 _DIALECT_FAMILY: Final[tuple[str, ...]] = ("GUID", "DateTime", "JSON", "JSONType", "VectorType")
 
 #: A0 —— 绝对计数。**字面量**，不由契约推导：契约变了就必须有人来解释为什么改这里。
-EXPECTED_COUNTS: Final[dict[str, int]] = {
+#: **按 schema 版本分组**：v0018 = `py/` 线冻结面（629 列）；v0019 = V0.3.0 起有效基线
+#: （630 列，`agent_run + stop_reason`）。其余六项两版相同。
+_BASE_COUNTS: Final[dict[str, int]] = {
     "tables": 61,
-    "columns": 629,
     "metadata_indexes": 174,
     "unique_indexes": 7,
     "partial_indexes": 1,
     "unique_constraints": 29,
     "foreign_keys": 159,
+}
+EXPECTED_COUNTS_BY_SCHEMA: Final[dict[str, dict[str, int]]] = {
+    "v0018": {**_BASE_COUNTS, "columns": 629},
+    "v0019": {**_BASE_COUNTS, "columns": 630},
 }
 EXPECTED_INDEX_OBJECTS: Final[dict[str, int]] = {"pg": 176, "sqlite": 174}
 EXPECTED_HNSW: Final[int] = 2
@@ -1095,7 +1142,7 @@ def assert_hard_numbers(rep: Report, stats: dict[str, Any]) -> None:
             ("foreign_keys", ddl["foreign_keys"], intro["foreign_keys"], contract["foreign_keys"]),
         ]
         for what, ddl_v, intro_v, con_v in pairs:
-            expected = EXPECTED_COUNTS[what]
+            expected = EXPECTED_COUNTS_BY_SCHEMA[ACTIVE_SCHEMA][what]
             for source, value in (("ddl", ddl_v), ("introspect", intro_v), ("contract", con_v)):
                 if value != expected:
                     rep.red(
@@ -1170,6 +1217,8 @@ def assert_cross_view(rep: Report, stats: dict[str, Any]) -> None:
 
 def check_type_map(rep: Report, view: dict[str, Any]) -> dict[str, int]:
     rows = list(csv.DictReader(TYPE_MAP.read_text(encoding="utf-8-sig").splitlines()))
+    # 已登记增量列（v0019 等）的类型不在冻结 CSV 里，用代码内登记表补（见 TYPE_OVERLAY_BY_SCHEMA）。
+    rows.extend(TYPE_OVERLAY_BY_SCHEMA.get(ACTIVE_SCHEMA, ()))
     by_pair = {(r["table"], r["column"]): r for r in rows}
 
     missing = []
@@ -1426,8 +1475,8 @@ def _mutate_introspect(path: Path, mutate: Any) -> None:
 def run_self_test(pg_ddl: Path, sqlite_ddl: Path, pg_intro: Path, sqlite_intro: Path) -> int:
     log("SELFTEST 开始（全部操作在临时目录，绝不动 contracts/ 与真实产物）")
     try:
-        pg_doc = load_json(PG_CONTRACT)
-        sqlite_doc = load_json(SQLITE_CONTRACT)
+        pg_doc = load_json(PG_CONTRACT_BY_SCHEMA[ACTIVE_SCHEMA])
+        sqlite_doc = load_json(SQLITE_CONTRACT_BY_SCHEMA[ACTIVE_SCHEMA])
     except (OSError, json.JSONDecodeError) as exc:
         log(f"SELFTEST FAIL: frozen 契约无法加载 —— {exc}")
         return EXIT_SELFTEST
@@ -1547,7 +1596,16 @@ def run_self_test(pg_ddl: Path, sqlite_ddl: Path, pg_intro: Path, sqlite_intro: 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="check_drizzle_parity.py",
-        description="DoD#1/#2：Drizzle（TS）数据层 + 双档 DDL 与冻结契约 v0018 的 parity 门禁",
+        description=(
+            "DoD#1/#2：Drizzle（TS）数据层 + 双档 DDL 与冻结契约的 parity 门禁"
+            f"（--schema 可选 {' / '.join(SCHEMA_VERSIONS)}，默认 {DEFAULT_SCHEMA}）"
+        ),
+    )
+    parser.add_argument(
+        "--schema",
+        choices=list(SCHEMA_VERSIONS),
+        default=DEFAULT_SCHEMA,
+        help=f"契约版本面（默认 {DEFAULT_SCHEMA}；v0018 = py/ 线 oracle，对照用）",
     )
     parser.add_argument("--pg-ddl", type=Path, default=DEFAULT_PG_DDL, help="生成的 PG DDL 路径")
     parser.add_argument("--sqlite-ddl", type=Path, default=DEFAULT_SQLITE_DDL, help="生成的 SQLite DDL 路径")
@@ -1559,7 +1617,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    global ACTIVE_SCHEMA
     args = build_parser().parse_args(argv)
+    ACTIVE_SCHEMA = args.schema
+    if ACTIVE_SCHEMA != DEFAULT_SCHEMA:
+        log(f"NOTE: 本次对照 schema={ACTIVE_SCHEMA}（非当前基线 {DEFAULT_SCHEMA}）——已登记增量会被如实报为差异")
     pg_intro = args.introspect_dir / "drizzle-introspect.pg.json"
     sqlite_intro = args.introspect_dir / "drizzle-introspect.sqlite.json"
 
@@ -1576,8 +1638,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_self_test(args.pg_ddl, args.sqlite_ddl, pg_intro, sqlite_intro)
 
     try:
-        pg_doc = load_json(PG_CONTRACT)
-        sqlite_doc = load_json(SQLITE_CONTRACT)
+        pg_doc = load_json(PG_CONTRACT_BY_SCHEMA[ACTIVE_SCHEMA])
+        sqlite_doc = load_json(SQLITE_CONTRACT_BY_SCHEMA[ACTIVE_SCHEMA])
         rep, stats = collect(args.pg_ddl, args.sqlite_ddl, pg_intro, sqlite_intro, pg_doc, sqlite_doc)
     except FileNotFoundError as exc:
         log(f"USAGE/LOAD FAIL: {exc}")

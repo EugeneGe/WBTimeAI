@@ -1,5 +1,5 @@
 // 由 scripts/gen-drizzle-schema.mjs 生成 —— **禁止手改**；改 oracle 后重跑生成器。
-// oracle ①: contracts/schema.v0018.sqlite.normalized.json（schema v0018，结构权威）
+// oracle ①: contracts/schema.v0019.sqlite.normalized.json（schema v0019，结构权威）
 // oracle ②: contracts/db/type-map.csv（列类型权威，禁手填）
 // 领域：task · 表数 4
 
