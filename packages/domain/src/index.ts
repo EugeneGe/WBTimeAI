@@ -34,3 +34,6 @@ export type {
   TaskProps,
   TaskRecord,
 } from "./task/task.js";
+
+// T3-04（W1）：Runtime 域不变量 + 端口签名（纯函数 / 零 ORM / 零 Web）。
+export * from "./runtime/index.js";
