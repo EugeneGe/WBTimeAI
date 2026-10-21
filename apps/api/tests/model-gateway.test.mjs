@@ -21,7 +21,7 @@ import {
 import { createFakeProvider } from "../dist/modules/model/fake-provider.js";
 import { ModelGateway } from "../dist/modules/model/gateway.js";
 import { createPriceCatalog } from "../dist/modules/model/pricing.js";
-import { assertFakeProviderAllowed, createProviderAdapter } from "../dist/modules/model/providers/factory.js";
+import { assertFakeProviderAllowed, createProviderAdapter, toPrompt } from "../dist/modules/model/providers/factory.js";
 import { fingerprint, stableSerialize } from "../dist/modules/model/request-normalizer.js";
 
 const LIMITS = {
@@ -201,4 +201,46 @@ test("createProviderAdapter(fake) 在禁用环境下拒绝装配", async () => {
     () => createProviderAdapter({ kind: "fake", env: { NODE_ENV: "production" } }),
     /只允许在 NODE_ENV=test/,
   );
+});
+
+test("D-T302-1 修复：tool 消息带上 toolName（不再填占位）", () => {
+  const prompt = toPrompt([
+    { role: "assistant", content: "", toolCalls: [{ id: "call-1", name: "read_file", input: { path: "a.txt" } }] },
+    { role: "tool", content: "file body", toolCallId: "call-1", toolName: "read_file" },
+  ]);
+
+  const assistant = prompt[0];
+  assert.equal(assistant.role, "assistant");
+  assert.deepEqual(assistant.content, [
+    { type: "tool-call", toolCallId: "call-1", toolName: "read_file", input: { path: "a.txt" } },
+  ]);
+
+  const tool = prompt[1];
+  assert.equal(tool.role, "tool");
+  assert.deepEqual(tool.content, [
+    { type: "tool-result", toolCallId: "call-1", toolName: "read_file", result: "file body" },
+  ]);
+});
+
+test("兼容路径：tool 消息漏填 toolName 时退回占位（但不该在真实回路发生）", () => {
+  const prompt = toPrompt([{ role: "tool", content: "x", toolCallId: "c1" }]);
+  assert.equal(prompt[0].content[0].toolName, "tool");
+});
+
+test("assistant 带工具调用且无文本时，不产生空 text 分片", () => {
+  const prompt = toPrompt([
+    { role: "assistant", content: "", toolCalls: [{ id: "c1", name: "t", input: {} }] },
+  ]);
+  assert.equal(prompt[0].content.length, 1);
+  assert.equal(prompt[0].content[0].type, "tool-call");
+});
+
+test("assistant 同时有文本与工具调用：两者同一条消息", () => {
+  const prompt = toPrompt([
+    { role: "assistant", content: "我来查一下", toolCalls: [{ id: "c1", name: "t", input: {} }] },
+  ]);
+  assert.deepEqual(prompt[0].content, [
+    { type: "text", text: "我来查一下" },
+    { type: "tool-call", toolCallId: "c1", toolName: "t", input: {} },
+  ]);
 });

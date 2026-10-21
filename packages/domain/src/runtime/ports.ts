@@ -34,11 +34,38 @@ export interface RunCallContext {
 
 export type ModelRole = "system" | "user" | "assistant" | "tool";
 
+/**
+ * 一次工具调用请求（assistant 消息携带）。
+ *
+ * 加它是因为 **D-T302-1**：原端口只能表达"文本消息"，无法表达"模型请求了哪些工具"，
+ * 工具回路的往返因此在类型上不可表达。字段全是可选 ⇒ 对既有调用方零影响。
+ */
+export interface ModelToolCall {
+  readonly id: string;
+  readonly name: string;
+  /** 模型给出的入参（JSON 值；由 ToolExecutor 校验，域层不解释）。 */
+  readonly input: unknown;
+}
+
 export interface ModelMessage {
   readonly role: ModelRole;
   readonly content: string;
   /** `role="tool"` 时必填：对应的 tool call id。 */
   readonly toolCallId?: string;
+  /**
+   * `role="tool"` 时**应填**：产生该结果的工具名。
+   *
+   * AI SDK v4 的 `tool-result` 分片要求 `toolName`；缺它上游认不出结果属于哪个工具
+   * （见 D-T302-1）。可选是为了保持向后兼容 —— 缺省时适配器会退回占位值，但那只是
+   * 兼容路径，**真实工具回路必须填**。
+   */
+  readonly toolName?: string;
+  /**
+   * `role="assistant"` 时填：本轮模型请求的工具调用。
+   *
+   * 与 `toolName` 配对使用，才能把"请求 → 执行 → 回传"整条链表达完整。
+   */
+  readonly toolCalls?: readonly ModelToolCall[];
 }
 
 export interface ModelToolSpec {

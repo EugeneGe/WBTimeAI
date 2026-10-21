@@ -105,14 +105,14 @@ export function assertFakeProviderAllowed(
 /**
  * 把域层 `ModelMessage` 转成 AI SDK v4 的 prompt 结构。
  *
- * ⚠️ **已知缺口（D-T302-1）**：端口 `ModelMessage` 只有 `role/content/toolCallId`，**没有
- * `toolName`**，而 V4 的 `tool-result` 分片要求 `toolName`。本版先填占位 `"tool"`；
- * 真实工具回路在 W6（T3-09）落地前，建议给 `ModelMessage` **加一个可选 `toolName?`**
- * （纯加法，不破坏 T3-04 冻结签名）。已登记，不在本轮偷改端口。
+ * D-T302-1 已修复：`ModelMessage` 现在有可选 `toolName`（tool 结果）与 `toolCalls`
+ * （assistant 请求），因此工具回路可以完整表达。占位 `"tool"` **只在调用方漏填时**
+ * 作为兼容退路，真实回路必须填 —— 漏填会让上游认不出结果属于哪个工具。
  */
 export function toPrompt(messages: readonly ModelMessage[]): unknown[] {
   return messages.map((message) => {
     if (message.role === "system") return { role: "system", content: message.content };
+
     if (message.role === "tool") {
       return {
         role: "tool",
@@ -120,12 +120,24 @@ export function toPrompt(messages: readonly ModelMessage[]): unknown[] {
           {
             type: "tool-result",
             toolCallId: message.toolCallId ?? "unknown",
-            toolName: "tool",
+            toolName: message.toolName ?? "tool",
             result: message.content,
           },
         ],
       };
     }
+
+    if (message.role === "assistant" && message.toolCalls !== undefined && message.toolCalls.length > 0) {
+      // assistant 同时带文本与工具请求：文本是 reasoning/说明，工具请求是意图，
+      // 两者必须同一条消息发出，否则上游会把工具调用当成无关上下文。
+      const parts: unknown[] = [];
+      if (message.content.length > 0) parts.push({ type: "text", text: message.content });
+      for (const call of message.toolCalls) {
+        parts.push({ type: "tool-call", toolCallId: call.id, toolName: call.name, input: call.input });
+      }
+      return { role: "assistant", content: parts };
+    }
+
     return { role: message.role, content: [{ type: "text", text: message.content }] };
   });
 }
