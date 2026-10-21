@@ -104,6 +104,7 @@ export {
 export {
   ChildScopedRepo,
   ChildConflictError,
+  type ChildListOptions,
   type ChildRepoOptions,
   type ChildScopedInsert,
   type ChildScopedPatch,
