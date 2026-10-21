@@ -175,6 +175,39 @@ def run_checks(repo_root: Path) -> list[Check]:
         )
     )
 
+    # 全栈版本串一致（路线图 D6）—— 所有 workspace 成员的 version 必须等于根 version。
+    #
+    # Why (2026-10-21): 出包前实测发现 `packages/e2e` 仍是 `0.0.2`，而其余 10 个成员
+    # 已是 `0.1.0`。此前本脚本只读根 `package.json`，**成员漂移无人发现**，而 D6 明写
+    # 「版本串全栈一致（所有 `package.json` + 契约 manifest）」。只查根等于只查了 1/11。
+    mismatched: list[str] = []
+    member_paths: list[Path] = []
+    for pattern in ("apps/*/package.json", "packages/*/package.json"):
+        member_paths.extend(sorted(repo_root.glob(pattern)))
+    for member_path in member_paths:
+        try:
+            member = json.loads(member_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            mismatched.append(f"{member_path.parent.name}:<UNREADABLE>")
+            continue
+        member_version = member.get("version")
+        if member_version != version:
+            mismatched.append(f"{member.get('name')}:{member_version}")
+    checks.append(
+        Check(
+            "workspace/version一致",
+            bool(member_paths) and not mismatched,
+            (
+                f"{len(member_paths)} 个成员全部 = {version!r}"
+                if member_paths and not mismatched
+                else (
+                    f"漂移 {len(mismatched)}/{len(member_paths)} 个: {mismatched}"
+                    "（D6 要求全栈版本串一致）"
+                )
+            ),
+        )
+    )
+
     private = package.get("private")
     checks.append(Check("package.json/private", private is True, f"{private!r} (expected True)"))
 

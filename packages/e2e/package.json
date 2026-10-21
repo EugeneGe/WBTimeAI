@@ -1,6 +1,6 @@
 {
   "name": "@wbtime/e2e",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "private": true,
   "description": "WBTimeAI e2e runner（node:test 直打真端口）——V0.0.2 S-6 / DoD#4。零依赖：依赖面为空是 S-1 判据成立的前提。",
   "type": "module",
