@@ -40,3 +40,12 @@ apps/web/src/** -text -eol
 # check_extension_point_signatures.py 断言 snapshot 的 sha256 与索引一致；
 # 若被 autocrlf 转换（CRLF↔LF），sha 变化 ⇒ 门禁红，且红的原因与"签名漂移"无法区分。
 packages/contracts/signature-snapshot.json -text -eol
+
+# ---- 出包产物（V0.1.0 · §4.2-2 必出包）----
+# `SHA256SUMS` 必须保持 LF：`core.autocrlf=true` 会把它检出为 CRLF，
+# 而 `sha256sum -c` 逐行解析 `hash *filename`，行尾 `\r` 会粘在文件名后面
+# ⇒ 报 "no such file" 而不是"校验失败"，且只在别人的机器上出现。
+# 二进制产物（tgz / tar.gz）同理按字节处理，杜绝任何换行规范化碰它们。
+release/**/SHA256SUMS text eol=lf
+release/**/*.tgz -text -eol
+release/**/*.tar.gz -text -eol
