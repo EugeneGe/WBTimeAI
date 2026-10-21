@@ -146,6 +146,15 @@ jobs:
       - name: Contracts semantics (recompute from artifacts, not from ledger)
         run: python scripts/verify_semantics.py
 
+      # R3-00-②：verify_semantics 证「数字对」，本条证「结构语义没被重排改坏」——
+      # v0019 登记时 contract-manifest.json 全量重排（+3315/−3259），字节门禁只能发现变化、
+      # 不能区分「重排」与「删改」。断言 objects 48 / 新增 7 条全含 v0019 / 删除 0 /
+      # 其余 7 个顶层集合计数不变 / classification_rules pattern 集合与基线相等。
+      - name: R3-00-② contract-manifest semantic equivalence (rearrange-safe)
+        run: python scripts/check_manifest_semantics.py
+      - name: R3-00-② manifest-semantics detector self-test (5 injections)
+        run: python scripts/check_manifest_semantics.py --self-test
+
       # 下面两条是 V0.1.0 审计补的门禁（M-4 / B-1），职责与上面的契约档不重叠：
       #   前者证明「i18n 两语言键集真的对等」，后者证明「TS 侧错误码字面量真的来自契约」。
       # 两者都带 --self-test：先证明检测器会红，再用它判绿（只绿不红 = 没有门禁）。
