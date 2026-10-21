@@ -24,7 +24,13 @@ yarn-error.log*
 secrets/
 
 # ---- 构建产物 / 运行时数据 ----
-release/
+# 2026-10-21：`release/` 原先整体排除，是与 `*.exe`/`*.msi` 并列的"安装包不入库"策略
+# （面向 V0.9.0 的 Electron 大包，数百 MB）。但 V0.1.0 的**基座包**（8 个 npm tarball
+# + web dist，合计约 750 K）属**交付物**——按 `施工纪律.md` §4.2-2「必出包」产出，
+# 且《出包登记》需要可核对的产物。故改为「排除 release/*，仅放行已登记的版本目录」；
+# 未来 Electron 大包只需不为该版本加放行规则即可继续被排除。
+release/*
+!release/v0.1.0/
 *.exe
 *.msi
 *.AppImage
