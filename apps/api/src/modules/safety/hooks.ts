@@ -81,12 +81,19 @@ export function sampleToolResult(
   const head = content.slice(0, half);
   // 尾半取 `window - half`：窗口为奇数时不丢字符（头 + 尾 == window）。
   const tail = content.slice(content.length - (window - half));
-  const omittedChars = content.length - head.length - tail.length;
+  const omittedChars = content.length - window;
   return {
-    // 检查视图：头 + 尾直接相连（不插标记）—— 标记本身也可能被规则匹配到，
-    // 那是噪声；这里要的是"两段原文都在检测视野内"。
+    // **检查视图** = 头 + 尾（两段原文直接相连，不插标记 —— 标记本身也可能被规则
+    // 匹配到，那是噪声；这里要的是"两段原文都在检测视野内"）。
     checked: `${head}${tail}`,
-    stored: `${head}\n…[S6 采样：省略 ${omittedChars} 字符]…\n${tail}`,
+    // **落库/回传形态** = 只保留前 `window` 字符（**头截断**），与沙箱的
+    // `truncateOutput`（`text.slice(0, MAX_OUTPUT_CHARS)`）同口径 —— 两处截断语义
+    // 不一致会让人误判"工具输出到底还能看见多长"。
+    //
+    // ⚠️ 关键：`stored` **不含尾段** ⇒ 尾部的违规片段只有 `checked` 看得见。
+    // 这正是"先检查后截断"必须成立的原因：顺序颠倒（拿 `stored` 去检查）⇒ 尾部注入
+    // 漏检 ⇒ `safety-hooks.test.mjs` S6 红（反例已实测，见施工记录「注入验证 #3」）。
+    stored: `${content.slice(0, window)}\n…[S6 采样：省略 ${omittedChars} 字符]…`,
     sampled: true,
     omittedChars,
   };

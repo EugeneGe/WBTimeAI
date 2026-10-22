@@ -169,24 +169,29 @@ test("R-3/R-4 · 洞 ⇒ 停在洞前；洞补上后从 after_seq 续传", async
 // R-5 · 取消不复活
 // ---------------------------------------------------------------------------
 
-test("R-5 · 取消后 run 停在 CANCELLED（500ms 后仍不是 SUCCEEDED）且不发 agent.completed", async () => {
-  // 慢速脚本：每轮 120ms，足够在 run 结束前发出 cancel
-  const slow = [];
-  for (let index = 0; index < 10; index += 1) {
-    slow.push(slowToolTurn(`call-slow-${index}`, "shell", { command: "echo slow" }, 120));
-  }
+test("R-5 · 取消后 run 停在 CANCELLED（后台收尾后仍不是 SUCCEEDED）且不发 agent.completed", async () => {
+  // 关键设计：**取消窗口必须落在"模型还在流式"的时刻**，而不是"工具执行中"。
+  // 因为内核只在两处查 `signal.aborted`（轮首 / 工具执行前）；模型这一轮流完仍会
+  // commit + 收敛成 SUCCEEDED。于是"cancel 先落 CANCELLED、内核后返回 SUCCEEDED"
+  // 这个竞态真的会发生 —— 收尾若不复核终态，就会把取消覆盖成"复活"。
+  const slow = [[
+    { type: "text_delta", text: "慢慢想……", delayMs: 800 },
+    { type: "usage", usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } },
+    { type: "finish", reason: "model_finish" },
+  ]];
   const fixture = await makeRunApp({ turns: slow });
   try {
     const started = await fixture.startRun({ message: "慢速取消" });
     assert.equal(started.response.statusCode, 200, started.response.body);
     const runId = JSON.parse(started.response.body).data.id;
 
-    // 等它真的开始推进（拿到 lease 并发出第一帧），再取消
+    // 等它真的开始推进（拿到 lease 并发出第一帧），再取消 —— 此刻模型正在流式中
     await fixture.waitFor(
       () => fixture.channelsOf(runId).includes("agent.started"),
       "agent.started",
       10_000,
     );
+    await sleep(120);
     const cancelled = await fixture.app.inject({
       method: "POST",
       url: `/api/v1/runs/${runId}/cancel`,
@@ -200,8 +205,9 @@ test("R-5 · 取消后 run 停在 CANCELLED（500ms 后仍不是 SUCCEEDED）且
     assert.equal(first.status, "CANCELLED", JSON.stringify(first));
     assert.equal(first.stop_reason, "cancelled");
 
-    // 关键：等后台驱动真正收尾，再读一次 —— 不允许被晚到的 SUCCEEDED 覆盖
-    await sleep(600);
+    // 关键：等后台驱动**真正收尾**（模型 800ms 才流完），再读一次 ——
+    // 不允许被晚到的 SUCCEEDED 覆盖。等待窗口必须大于"取消时刻到内核返回"的间隔。
+    await sleep(2000);
     const again = fixture.runRow(runId);
     assert.equal(again.status, "CANCELLED", `取消后被复活：${JSON.stringify(again)}`);
     assert.equal(again.stop_reason, "cancelled");
