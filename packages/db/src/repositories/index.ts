@@ -272,3 +272,4 @@ export {
   type McpToolRow,
   type RegisterMcpServerInput,
 } from "./mcp-repo.js";
+export { AuditLogRepo, FeatureFlagRepo, type InsertAuditInput, type SafetyAuditMetadata, type FeatureFlagRow } from "./audit-repo.js";
