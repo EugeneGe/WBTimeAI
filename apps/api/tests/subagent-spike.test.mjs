@@ -530,13 +530,15 @@ test("S-2-1 · 判据载体：stream_run 就位且接受单对象入参", () => 
  *
  * 观察面：下发帧的 `data.run_id` 集合 == `{父 run_id}`，**缺键即红**（D2 原文语义保留）。
  *
- * ⚠️ 关于「传 `runId` 与不传的输出必须不同」这条**反向**断言：
- *   它当前**写不出来** —— `StreamRunFramesOptions` 里根本没有 `runId` 形参
- *   （架构核实：接口只有 `readAfter / isTerminal / afterSeq / batchLimit /
- *   pollIntervalMs / maxPolls / signal / write`），归属目前靠 `routes/runs.ts:132`
- *   的闭包**隐式**保证。故这条现在恒红、且红的原因是「接口还没长出来」而非「实现有 bug」
- *   ⇒ 按裁定**移出载体**，登记为 **T031-05 的待办断言**（`runId` 形参落地后补）。
- *   详见台账 §5 风险表 R-10。
+ * ✅ 关于「传 `runId` 与不传的输出必须不同」这条**反向**断言（原待办，2026-10-23 销项）：
+ *   它原先**写不出来** —— `StreamRunFramesOptions` 里没有 `runId` 形参，归属靠
+ *   `routes/runs.ts` 的闭包隐式保证 ⇒ 按裁定移出载体、登记为 **T031-05 待办断言**
+ *   （台账 §5 风险表 R-10）。
+ *   **T031-05 已把 `runId` 形参落地**（`apps/api/src/modules/run/sse-stream.ts:119`
+ *   `readonly runId?: string`，行级过滤在 `selectStreamableRows`），故本条反向断言
+ *   **已补回本用例末尾**（见下方「传 `runId` 与不传的输出必须不同」）。
+ *   ⚠️ 上面那段「接口还没有 `runId` 形参」的描述已被现状推翻，保留在此仅为**变更留痕**，
+ *   不得再作为「断言写不出来」的依据。
  */
 test("S-2-2 · D2-a：带 run_id 的 15 条通道，跨 run 行不得汇入父流（缺键即红）", async () => {
   assert.equal(STREAM_FN.found, true, `前置：streamRunFrames 未就位（${STREAM_FN.tried.join(" | ")}）`);
@@ -567,6 +569,37 @@ test("S-2-2 · D2-a：带 run_id 的 15 条通道，跨 run 行不得汇入父�
   const collected = collectRunIds(emitted);
   assert.deepEqual(collected.violations, [], "不应有任何违规帧（缺 run_id 即红，D2-a）");
   assert.deepEqual([...collected.runIds], [PARENT], "父流的 data.run_id 集合必须全等于 {父 run_id}（D2-a）");
+
+  // ── 反向断言（T031-05 待办销项）：同一组行，**传 `runId` 与不传的输出必须不同** ──
+  // 没有这一条，上面对 `emitted`（2 帧）的断言可能被"过滤根本没生效、只是恰好只发 2 帧"
+  // 蒙混过去。不传 `runId` ⇒ 归属过滤关闭 ⇒ 4 行全下发（seq 1,2,3,4 连续）。
+  const emittedNoFilter = [];
+  await STREAM_FN.value({
+    readAfter: async () => rows,
+    isTerminal: async () => true,
+    afterSeq: 0,
+    pollIntervalMs: 0,
+    maxPolls: 1,
+    // 刻意**不传** runId
+    write: (frame) => emittedNoFilter.push(frame.toString()),
+  });
+
+  assert.equal(
+    emittedNoFilter.length,
+    4,
+    "反向前提：不传 runId ⇒ 归属过滤关闭 ⇒ 4 行全下发（若这里不是 4，说明本用例的行集构造有问题）",
+  );
+  assert.notDeepEqual(
+    emittedNoFilter,
+    emitted,
+    "传 runId 与不传的输出必须不同 —— 相同说明 runId 形参没被真正消费（归属过滤是摆设）",
+  );
+  const collectedNoFilter = collectRunIds(emittedNoFilter);
+  assert.deepEqual(
+    [...collectedNoFilter.runIds].sort(),
+    [PARENT, CHILD].sort(),
+    "反向：不传 runId ⇒ 子 run 的 run_id 必然出现在流里（这正是 D2 要防的形态）",
+  );
 });
 
 /**
@@ -645,6 +678,32 @@ test("S-2-3 · D2-b：不带 run_id 的 4 条通道，按来源行 agent_event.r
     approvalIds.includes("child-approval"),
     false,
     "D2-b 反向：子 run 的 approval.requested 必须被行级过滤掉"
+  );
+
+  // ── 反向断言（T031-05 待办销项）：同一组行，**传 `runId` 与不传的输出必须不同** ──
+  // 这 4 条通道帧里没有 `run_id`，唯一能分辨归属的就是来源行的 `agent_event.run_id` 列。
+  // 若不传 `runId` 的输出与传了的一样 ⇒ 说明行级过滤根本没被消费（D2-b 形同虚设）。
+  const emittedNoFilter = [];
+  await STREAM_FN.value({
+    readAfter: async () => rows,
+    isTerminal: async () => true,
+    afterSeq: 0,
+    pollIntervalMs: 0,
+    maxPolls: 1,
+    // 刻意**不传** runId
+    write: (frame) => emittedNoFilter.push(frame.toString()),
+  });
+
+  const approvalIdsNoFilter = emittedNoFilter.map((frame) => parseFrame(frame).data?.approval_id);
+  assert.deepEqual(
+    approvalIdsNoFilter,
+    ["parent-approval", "child-approval"],
+    "反向前提：不传 runId ⇒ 子 run 的同通道帧必然进流（这正是 D2-b 要防的静默崩溃形态）",
+  );
+  assert.notDeepEqual(
+    approvalIdsNoFilter,
+    approvalIds,
+    "传 runId 与不传的输出必须不同 —— 相同说明 runId 形参没被真正消费，D2-b 恒真",
   );
 });
 
