@@ -110,7 +110,8 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
   /**
    * 本会话内某次 run 产生的消息（`run_id` 可空，故也可能为空集）。
    *
-   * ⚠️ 父谓词由基类自动 and 上 —— 本方法**不可能**跨会话取数。
+   * ⚠️ 父谓词由基类自动 and 上 —— 本方法的取数范围**被它锁在本会话**（**前提是谓词在**：
+   * 反例探针见本文末 B-4 实测 —— 摘掉它，同一调用立刻从 0 行变 3 行、全是别租户的消息）。
    * 这是"按 run 查消息"唯一允许的形态（见文件头注第 3 条）。
    *
    * @throws {ScopeError} **仅当** `runRef` 由**别租户的 scope** 铸造
@@ -157,8 +158,10 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
    *   ② **安全不需要**：跨租户引用已被上面那条租户级校验拦住，会话级不带来任何
    *      安全增量（同租户、跨会话的 `run_id` 不构成越权）。
    *   ③ **可测性反而更强**：允许该形态存在，判据①「同租户两会话共用同一 run_id」
-   *      才能验证「父谓词**不依赖数据是干净的**」—— 它容忍的脏数据是**仓储自己
-   *      造不出来的**，这比"仓储自己造脏数据再读回来"更能证明父谓词是独立屏障。
+   *      才能验证「父谓词**不依赖数据是干净的**」。⚠️ 注意该形态**仓储自己就造得出来**
+   *      —— 判据① 正文即 `inConvA2.append({ runId: IDS.runA })`（同租户 ⇒ 通过），
+   *      所以判据① 证明的是「父谓词不依赖数据多干净」，**不是**「外部注入的脏数据也
+   *      挡得住」；后者要用别的用例，别拿判据① 当那个证据。
    *      读侧也确实由它兜住：`listByRun` 恒 and `conversation_id`（见
    *      {@link MessageRepo.listByRun} 的实测：摘掉父谓词才从 0 行变 3 行）。
    *
