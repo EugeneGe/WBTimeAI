@@ -181,7 +181,11 @@ test("K-11 前端零改动：apps/web/src 逐文件 sha256 与登记快照全等
     for (const name of readdirSync(dir).sort()) {
       const full = join(dir, name);
       if (statSync(full).isDirectory()) walk(full);
-      else actual.set(relative(snapshot.root, full).split("\\").join("/"), full);
+      // 相对键的基必须是**绝对**的 WEB_SRC_PATH —— 不能用 snapshot.root（相对字符串）：
+      // `path.relative` 把两侧都按 cwd 解析，cwd ≠ 仓根时（如从 apps/api 直跑单文件）
+      // 会产出 `../../apps/web/src/App.tsx` 这类废键 ⇒ 全部误判「已删除」假红
+      // （2026-10-22 T3-05 并行施工实测抓到；订正后与 cwd 无关）。
+      else actual.set(relative(WEB_SRC_PATH, full).split("\\").join("/"), full);
     }
   };
   walk(WEB_SRC_PATH);
