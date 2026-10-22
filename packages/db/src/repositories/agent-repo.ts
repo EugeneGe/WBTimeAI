@@ -24,8 +24,8 @@
  *
  * `tests/b2-agent.test.mjs` 用原生插入钉住"步骤 1 带非 NULL 指针必被外键拒"。
  *
- * 状态值域与迁移矩阵（**逐条给证据**；本层常量在 `packages/db` 复述而非 import
- * `packages/domain` —— db 不依赖 domain，同批次 A 偏差 #5 口径）
+ * 状态值域与迁移矩阵（**逐条给证据**；**唯一真相源 = `@wbtime/domain`** —— T3-05
+ * 裁决 #1 落地：db 侧不再复述常量，见下方值域段与 `src/agent/agent-status.ts` 头注）
  * ------------------------------
  * | 值 | 证据 |
  * |---|---|
@@ -95,82 +95,55 @@ export type AgentRow = InferSelectModel<typeof pgAgent>;
 export type AgentVersionRow = InferSelectModel<typeof pgAgentVersion>;
 
 // ---------------------------------------------------------------------------
-// 值域（证据见文件头注；改值必须同步改测试的手写期望表）
+// 值域（**唯一真相源 = `@wbtime/domain`**；T3-05 裁决 #1 落地 —— db 侧不再复述）
+//
+// 证据链见 domain `src/agent/agent-status.ts` 文件头注（py oracle constants.py:40-54
+// + 契约 default + 前端 DTO phase1.ts:18 三方一致）。本文件只做两件事：
+//   1. import 供仓储内部使用；
+//   2. 以**既有导出名** re-export（`index.ts` 的出口面不变，既有调用方/测试零改动）。
+// 改值必须改 domain 并同步改测试的手写期望表。
 // ---------------------------------------------------------------------------
 
-/** agent 生命周期：草稿（创建即此态；契约 `AgentResponse.status` default）。 */
-export const AGENT_STATUS_DRAFT = "DRAFT";
-/** agent 生命周期：启用（发布路径实证：py `publish_version` 置 ACTIVE）。 */
-export const AGENT_STATUS_ACTIVE = "ACTIVE";
-/** agent 生命周期：归档（弃置/下线；无迁移出自它指向 DRAFT 的路径）。 */
-export const AGENT_STATUS_ARCHIVED = "ARCHIVED";
-
-/** agent 生命周期全集（顺序 = py 常量声明顺序，逐项同序）。 */
-export const AGENT_STATUSES = [
-  AGENT_STATUS_DRAFT,
+import {
+  AGENT_STATUSES,
   AGENT_STATUS_ACTIVE,
   AGENT_STATUS_ARCHIVED,
-] as const;
+  AGENT_STATUS_DRAFT,
+  AGENT_STATUS_TRANSITIONS,
+  AGENT_TYPES,
+  AGENT_TYPE_PRIMARY,
+  AGENT_VERSION_STATUS_PUBLISHED,
+  agentTransitionSources,
+  canAgentTransition,
+  isAgentStatus,
+  isAgentType,
+  isAgentVersionStatus,
+} from "@wbtime/domain";
 
-/** 版本状态：草稿（py 词表成员；本层**没有**产生 DRAFT 版本的入口 —— 契约唯一
- * 创建路径 `POST /agents/{id}/publish` 恒产 PUBLISHED，见 `publishVersion`）。 */
-export const AGENT_VERSION_STATUS_DRAFT = "DRAFT";
-/** 版本状态：已发布（契约 `AgentVersionResponse.status` default；发布即冻结）。 */
-export const AGENT_VERSION_STATUS_PUBLISHED = "PUBLISHED";
-/** 版本状态：已废弃（py 词表第三值；本层无迁移入口 —— 没有对应端点）。 */
-export const AGENT_VERSION_STATUS_DEPRECATED = "DEPRECATED";
-
-/** 版本状态全集（成员既不是子集也不是超集关系，两端都要逐项校验）。 */
-export const AGENT_VERSION_STATUSES = [
+export {
+  AGENT_STATUSES,
+  AGENT_STATUS_ACTIVE,
+  AGENT_STATUS_ARCHIVED,
+  AGENT_STATUS_DRAFT,
+  AGENT_STATUS_TRANSITIONS,
+  AGENT_TYPES,
+  AGENT_TYPE_PRIMARY,
+  AGENT_VERSION_STATUSES,
+  AGENT_VERSION_STATUS_DEPRECATED,
   AGENT_VERSION_STATUS_DRAFT,
   AGENT_VERSION_STATUS_PUBLISHED,
-  AGENT_VERSION_STATUS_DEPRECATED,
-] as const;
+  isAgentStatus,
+  isAgentType,
+  isAgentVersionStatus,
+} from "@wbtime/domain";
+export type {
+  AgentStatus,
+  AgentType,
+  AgentVersionStatus,
+} from "@wbtime/domain";
 
-/** agent 类型：主 Agent（契约 `CreateAgentRequest.type` / `AgentResponse.type` default）。 */
-export const AGENT_TYPE_PRIMARY = "PRIMARY";
-/** agent 类型全集（顺序 = py 常量声明顺序）。 */
-export const AGENT_TYPES = [
-  AGENT_TYPE_PRIMARY,
-  "SUB_AGENT",
-  "WORKFLOW_AGENT",
-  "SCHEDULED_AGENT",
-  "EVENT_AGENT",
-] as const;
-
-/**
- * agent 状态迁移矩阵（**方向 = from → 允许的 to**；证据见文件头注）。
- *
- * 键集合必须恰好等于 {@link AGENT_STATUSES}（少一个状态 = 矩阵对它沉默，
- * 测试的手写期望表会红）；值集合 ⊆ {@link AGENT_STATUSES}。
- */
-export const AGENT_STATUS_TRANSITIONS: Readonly<
-  Record<(typeof AGENT_STATUSES)[number], readonly string[]>
-> = {
-  [AGENT_STATUS_DRAFT]: [AGENT_STATUS_ACTIVE, AGENT_STATUS_ARCHIVED],
-  [AGENT_STATUS_ACTIVE]: [AGENT_STATUS_ARCHIVED],
-  [AGENT_STATUS_ARCHIVED]: [AGENT_STATUS_ACTIVE],
-};
-
-/** 是否 agent 生命周期值。 */
-export function isAgentStatus(status: string): boolean {
-  return (AGENT_STATUSES as readonly string[]).includes(status);
-}
-
-/** 是否 agent 版本状态值。 */
-export function isAgentVersionStatus(status: string): boolean {
-  return (AGENT_VERSION_STATUSES as readonly string[]).includes(status);
-}
-
-/** 是否 agent 类型值。 */
-export function isAgentType(type: string): boolean {
-  return (AGENT_TYPES as readonly string[]).includes(type);
-}
-
-/** `from → to` 是否合法迁移（矩阵查表；from 不在矩阵里 ⇒ false）。 */
-export function canTransitionStatus(from: string, to: string): boolean {
-  return (AGENT_STATUS_TRANSITIONS[from as keyof typeof AGENT_STATUS_TRANSITIONS] ?? []).includes(to);
-}
+/** `from → to` 是否合法迁移（域层 `canAgentTransition` 的既有导出别名）。 */
+export const canTransitionStatus = canAgentTransition;
 
 /** `GET /agents` 的分页口径（契约：`page` 默认 1；`page_size` 默认 20、上限 100）。 */
 export const AGENT_LIST_DEFAULT_PAGE = 1;
@@ -350,7 +323,7 @@ export class AgentRepo extends ScopedRepo<AgentRow> {
         `agent.transition：目标状态必须是 ${AGENT_STATUSES.join(" | ")}，实测 ${JSON.stringify(to)}`,
       );
     }
-    const froms = sourcesOf(to);
+    const froms = agentTransitionSources(to);
     if (froms.length === 0) {
       throw new ScopeError(
         `agent.transition：目标状态 ${to} 没有任何合法来源（AGENT_STATUS_TRANSITIONS 无指向它的边）—— ` +
@@ -524,15 +497,6 @@ export class AgentRepo extends ScopedRepo<AgentRow> {
     const rows = await (chain as unknown as OffsetChain).offset(offset);
     return rows.slice() as AgentRow[];
   }
-}
-
-/** 反查：哪些状态可以迁移到 `to`（矩阵的方向是 from → to，CAS 需要 to 的来源集合）。 */
-function sourcesOf(to: string): string[] {
-  const froms: string[] = [];
-  for (const [from, tos] of Object.entries(AGENT_STATUS_TRANSITIONS)) {
-    if (tos.includes(to)) froms.push(from);
-  }
-  return froms;
 }
 
 /** `page` 解析（契约 ≥ 1 的整数，缺省 1；非法值抛，不夹取）。 */

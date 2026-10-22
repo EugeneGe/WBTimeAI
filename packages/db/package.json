@@ -38,6 +38,7 @@
     "test:typecheck": "node tests/typecheck/run.mjs"
   },
   "dependencies": {
+    "@wbtime/domain": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "pg": "^8.23.1"
   },
