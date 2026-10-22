@@ -62,6 +62,8 @@ __all__ = [
     "VICTIM_V031_EXEMPTION",
     "VICTIM_V031_STREAM",
     "VICTIM_V031_DEPTH",
+    "V031_WATERMARK_CARRIER",
+    "VICTIM_V031_WATERMARK",
     "MARKER_IMPL_NOT_LANDED",
     "MARKER_DIST_STALE",
 ]
@@ -108,6 +110,14 @@ VICTIM_V031_DEPTH: Final[str] = "子 run 深度守卫"
 MARKER_IMPL_NOT_LANDED: Final[str] = "V031_IMPL_NOT_LANDED"
 MARKER_DIST_STALE: Final[str] = "V031_DIST_STALE"
 
+#: D6 游标缺口判据载体（相对仓库根）。与 spike 载体并列、同属 K5b 的**第二种**
+#: 静默崩溃路径（水位归属 / 游标来源）—— spike 的 S-2 只验帧内容归属，不验游标来源。
+#: 由 QA 落盘，实现者不得自建自评。
+V031_WATERMARK_CARRIER: Final[str] = "apps/api/tests/sse-watermark.test.mjs"
+
+#: 第四个改坏点：无 `seq` 兜底分支被保留为**连接本地自增**（不按 run 隔离）。
+VICTIM_V031_WATERMARK: Final[str] = "无 seq 兜底分支（连接本地自增冒充 id:）"
+
 #: Gate keys understood by :mod:`inject_counterexample`.  Declared here so the
 #: registry fails loudly on a typo instead of silently skipping a case.
 GATE_KEYS: Final[tuple[str, ...]] = (
@@ -117,6 +127,7 @@ GATE_KEYS: Final[tuple[str, ...]] = (
     "oracle_recompute",
     "run_check",
     "v031_spike",
+    "v031_watermark",
 )
 
 
@@ -788,6 +799,52 @@ def v031_depth_lt_3(contracts: Path, repo: Path) -> str:
     )
 
 
+def v031_watermark_local_increment(contracts: Path, repo: Path) -> str:
+    """改坏点 ④：把无 `seq` 兜底分支保留为**连接本地自增**（不按 run 隔离）（D6 反例）。
+
+    正确实现（两条路线任选其一，判据载体 `sse-watermark.test.mjs` 都判绿）：
+      * 路线 A —— 缺 `seq` 的行**不下发**且**不推进水位**（跳过而非抛错，不得杀整条流）；
+      * 路线 B —— 下发但**显式标记**，且编号作用域**声明为 run**。
+    改坏后：无 `seq` 的行用"连接水位 + 1"的整数 `id:` **静默**下发 ⇒ 前端把它当
+    `Last-Event-ID` 续传**拉错 run**，或父流水位被顶高后 gap-aware 直接停 ⇒
+    **跳帧 / 永远空回放** —— 两者都是静默崩溃（K5b / D6 路径①②）。
+    ⇒ `apps/api/tests/sse-watermark.test.mjs` 的 **W-2a** 必红
+    （撞号场景：自增编号数字上落在父 run 的 `(run_id, seq)` 空间内，W-1 抓不住，
+    只有 payload 探针能抓）。
+
+    Args:
+        contracts: 未使用（本族改的是实现，不是契约件）。
+        repo: 克隆仓库根。
+
+    Returns:
+        一行"改了什么"。
+
+    Raises:
+        MutationError: 实现未落地 / dist 落后 / 锚点命中次数不为 1。
+    """
+    del contracts
+    return _v031_patch(
+        repo,
+        (
+            "apps/api/src/modules/run/sse-stream.ts",
+            "apps/api/src/modules/run/sse-watermark.ts",
+        ),
+        (
+            # 路线 A 的"缺 seq ⇒ 跳过该行"守卫整块删除 ⇒ 该行落进后续下发路径。
+            (
+                r"if\s*\(\s*!\s*Number\.isInteger\(\s*(?:row|r|item|event)\.seq\s*\)\s*\)"
+                r"\s*\{\s*(?:continue|return)\s*;?\s*\}",
+                " ",
+            ),
+            # 两条路线共有的"seq 是不是非负整数"判断式 → 常量 true（守卫失效）。
+            (r"Number\.isInteger\(\s*(?:row|r|item|event)\.seq\s*\)", "true"),
+            # py 原型同形：`row.seq ?? <兜底>` 的正确形态 → 直接连本地水位自增。
+            (r"(?:row|r|item|event)\.seq\s*\?\?", "lastSeq + 1 ??"),
+        ),
+        label=f"④ {VICTIM_V031_WATERMARK}：缺 seq 守卫 → 失效（连接本地自增冒充 id:）",
+    )
+
+
 # ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
@@ -919,6 +976,25 @@ CASES: Final[tuple[InjectionCase, ...]] = (
         mutator=v031_depth_lt_3,
         checks_integrity=False,
     ),
+    InjectionCase(
+        case_id="v031-watermark-local-increment",
+        dod="V0.3.1 D6 · T031-05 出口判据 / T031-06 收口",
+        target_gate="v031_watermark",
+        expected_reason=(
+            f"{VICTIM_V031_WATERMARK} 被保留 ⇒ sse-watermark 载体的 W-2a 红"
+            "（无 seq 的行用连接本地自增的整数 id: 冒充父 run 游标 = 静默崩溃 K5b）"
+        ),
+        description=(
+            "把无 `seq` 行的守卫（`!Number.isInteger(row.seq)` 或等价判断式）失效，"
+            "使该行落到连接本地自增兜底，src 与 dist 双写。"
+        ),
+        must_be_red=(
+            "W-2a",
+            "无 seq 的行",
+        ),
+        mutator=v031_watermark_local_increment,
+        checks_integrity=False,
+    ),
 )
 
 
@@ -963,4 +1039,5 @@ def victims() -> dict[str, str]:
         "v031_exemption": VICTIM_V031_EXEMPTION,
         "v031_stream": VICTIM_V031_STREAM,
         "v031_depth": VICTIM_V031_DEPTH,
+        "v031_watermark": VICTIM_V031_WATERMARK,
     }

@@ -256,6 +256,25 @@ def _argv_v031_spike(contracts: Path, legacy: Path) -> list[str]:
     return ["--experimental-sqlite", "--test", inject_cases.V031_CARRIER]
 
 
+def _argv_v031_watermark(contracts: Path, legacy: Path) -> list[str]:
+    """Arguments for the V0.3.1 watermark carrier (a **Node** gate).
+
+    D6 游标缺口（水位归属）判据载体，与 :func:`_argv_v031_spike` 同款：
+    ``--experimental-sqlite`` 强制 + 仓库相对路径（gate 以 ``cwd=<clone root>``
+    运行）。载体文件由 QA 落盘（``apps/api/tests/sse-watermark.test.mjs``），
+    执行者 ≠ 判定者（P1-3）。
+
+    Args:
+        contracts: Contracts directory (unused — the carrier reads it itself).
+        legacy: Legacy root (unused).
+
+    Returns:
+        The argument list, **including** the script path.
+    """
+    del contracts, legacy
+    return ["--experimental-sqlite", "--test", inject_cases.V031_WATERMARK_CARRIER]
+
+
 def prepare_v031_clone(clone: Path, source_repo: Path) -> None:
     """Wire ``node_modules`` into a clone without copying the pnpm store.
 
@@ -356,6 +375,20 @@ GATES: Final[dict[str, GateSpec]] = {
         # `node --test` exits 1 when at least one assertion failed.  Anything
         # else (module load crash, bad flag, missing runner) means the gate never
         # judged the input and must never be read as a refutation.
+        red_codes=(1,),
+        unevaluable_codes=(2, 9),
+        interpreter="node",
+        clone_dirs=("contracts", "scripts", "apps/api", "output"),
+        prepare=prepare_v031_clone,
+        reseals=False,
+    ),
+    "v031_watermark": GateSpec(
+        key="v031_watermark",
+        script="",
+        build_argv=_argv_v031_watermark,
+        label="V0.3.1 D6 watermark carrier (node --test)",
+        # 与 `v031_spike` 同口径：exit 1 = 至少一条断言红（真红）；其余退出码
+        # （模块加载崩溃 / 旗标错 / runner 缺失）一律不可判，绝不读作反驳。
         red_codes=(1,),
         unevaluable_codes=(2, 9),
         interpreter="node",
@@ -1231,11 +1264,11 @@ def _self_test() -> int:
 
     # Registry sanity: an empty or mis-wired registry must not look like success.
     ids = [case.case_id for case in cases]
-    # The registry grew from 5 contract cases to 5 + 3 V031 spike cases.  A count
-    # change alone is not a regression, but an *unexplained* one is: the probe
-    # pins the exact size so an accidental case loss cannot hide behind "more
-    # cases were added anyway".
-    record("registry-has-8-cases", len(cases), 8, f"ids={ids}")
+    # The registry grew from 5 contract cases to 5 + 4 V031 cases (3 spike
+    # carriers + 1 watermark carrier).  A count change alone is not a
+    # regression, but an *unexplained* one is: the probe pins the exact size so
+    # an accidental case loss cannot hide behind "more cases were added anyway".
+    record("registry-has-9-cases", len(cases), 9, f"ids={ids}")
     record("registry-ids-unique", len(set(ids)) == len(ids), True)
     record(
         "registry-targets-known-gates",
