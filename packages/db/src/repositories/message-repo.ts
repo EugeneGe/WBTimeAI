@@ -19,10 +19,11 @@
  *      **不提供**「只给 run_id、不给 conversation」的任何入口 —— 那种入口一开，
  *      "按 run 查消息"就变成"跨会话串流"，正是验收 ④ 要打红的写法。
  *      写路径同理：{@link MessageRepo.append} 在 `runId` 非空时校验
- *      「run 在本 scope 下可见（`agent_run` 租户直挂）」+「`run.conversation_id`
- *      等于本会话」。`agent_run.conversation_id` 是 `NOT NULL`，所以这条不变式
- *      **精确**；而 FK 只查 run 存在性，不查租户、也不查会话 —— 单靠 FK 挡不住
- *      「把 A 租户的 run 挂到 B 租户的会话下」。
+ *      「run 在**本 scope**（本租户）下可见」。FK 只查 run 行是否存在，**不查租户** ——
+ *      单靠 FK 挡不住「把 A 租户的 run 挂到 B 租户的会话下」，那一格由这条校验补。
+ *      ⚠️ 但**不**比对 `run.conversation_id`：跨会话、同租户的 `run_id` 是**合法**形态
+ *      （对话分叉 1.1.3 需要 `message.run_id` 跨会话存活；读侧由父谓词兜住）。
+ *      详见 {@link MessageRepo.append} 的注。
  *
  * 本层**不做**的校验（刻意）
  * ------------------------
@@ -141,23 +142,34 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
   /**
    * 追加一条消息（`id` 由仓储生成，父 `conversation_id` 由基类注入）。
    *
-   * `runId` 非空时校验两条不变式（FK 只能保证"run 存在"，两条都管不到）：
-   *   1. run 在**本 scope** 下可见（`agent_run` 有 `tenant_id` ⇒ scoped `findById`）；
-   *   2. `run.conversation_id` **等于**本会话 —— `agent_run.conversation_id` 是
-   *      `NOT NULL`，所以"这条消息的 run 必须发生在本会话里"是精确定义的。
+   * `runId` 非空时校验**一条**不变式：run 在**本 scope**（= 本租户）下可见
+   * （`agent_run` 有 `tenant_id` ⇒ scoped `findById` 自带租户谓词）。
+   * 外键只保证「这个 run 行存在」，**不保证它属于本租户** —— 那一格 FK 管不到。
    *
-   * 两条失败抛**不同文案**的 `ScopeError`：前者是"你拿到了别的租户的 run"，
-   * 后者是"run 是真的，但它属于另一个会话"，服务层要能分开翻译。
+   * ⚠️ **刻意不比对 `run.conversation_id`**（改动前先读这三条）
+   * --------------------------------------------------------
+   *   ① **安全边界只需要租户级**：真正要挡的是「租户 A 的消息挂到租户 B 的 run 上」，
+   *      那是跨租户引用。同租户、跨会话的 `run_id` **不构成越权**，是合法数据形态。
+   *   ② **会话级约束会砸掉对话分叉（1.1.3）**：分叉的语义就是"把消息复制到新会话"，
+   *      消息的 `run_id` 必须**跨会话存活**。在写路径硬约束 `run.conversation_id ===
+   *      父会话 id`，分叉将来只能绕开仓储层（或在测试里假绿绕过）—— 把问题推到后面。
+   *   ③ **读侧本来就由父谓词兜住**：`listByRun` 恒 and `conversation_id`，所以
+   *      "跨会话同 run_id"这类行读出去也串不了会话（见 {@link MessageRepo.listByRun}
+   *      的实测：摘掉父谓词才从 0 行变 3 行）。写侧不需要重复拦一遍。
+   *
+   * 校验**每次 `append` 都做一次**，不复用基类 `ensureParent()` 的实例级缓存 ——
+   * 父引用在构造期固定（缓存它是对的），而 `runId` 每次调用都可能不同；
+   * 复用一个"查过一次就不再查"的缓存，等于第二次 append 换个 runId 就直接跳过校验
+   * （那是最典型的假绿：第一次查了，后面全放行）。
    *
    * @throws {ScopeError} 父会话在本 scope 下不可见（首次使用时校验）。
-   * @throws {ScopeError} `runId` 指向的 run 在本 scope 下不可见（含跨租户）。
-   * @throws {ScopeError} `runId` 指向的 run 属于**另一个会话**。
+   * @throws {ScopeError} `runId` 指向的 run 在本 scope 下不可见（跨租户或不存在）。
    */
   async append(input: AppendMessageInput): Promise<MessageRow> {
     // 父优先级最高：父本身不可见时，谈 run 归属没有意义。
     await this.ensureParent();
     if (input.runId !== undefined && input.runId !== null) {
-      await this.#assertRunInThisConversation(input.runId);
+      await this.#assertRunVisible(input.runId);
     }
     const row: Record<string, unknown> = {
       id: randomUUID(),
@@ -171,23 +183,17 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
   }
 
   /**
-   * 校验「这个 run 就是本会话里跑的那次」。
+   * 校验 run 在**本 scope** 下可见（只此一条，不看会话）。
    *
-   * 单独抽出来的原因：注入验证要能**只换一次查找**（去掉租户谓词 / 去掉会话一致性）
-   * 就打红对应判据，而不是连着把父校验一起动。
+   * 单独抽出来的原因：反向验证（把 scoped 查找换成不查租户的直查）要能**只换这一处**
+   * 就打红跨租户那条判据，而不牵连父校验。
    */
-  async #assertRunInThisConversation(runId: string): Promise<void> {
+  async #assertRunVisible(runId: string): Promise<void> {
     const run = await this.#findRun(runId);
     if (run === null) {
       throw new ScopeError(
         `表 message：run ${runId} 在本 scope 下不可见（租户 ${this.scope.tenantId}）—— ` +
-          "跨租户或不存在的一律拒绝挂消息（外键只查 run 是否存在，不查租户）",
-      );
-    }
-    if (run.conversation_id !== this.parentId) {
-      throw new ScopeError(
-        `表 message：run ${runId} 属于会话 ${String(run.conversation_id)}，` +
-          `与本会话 ${this.parentId} 不一致 —— message.run_id 必须指向本会话的 run`,
+          "跨租户或不存在的一律拒绝挂消息（外键只查 run 行是否存在，不查租户）",
       );
     }
   }
