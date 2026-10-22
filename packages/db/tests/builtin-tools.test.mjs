@@ -239,6 +239,37 @@ test("B · ensureBuiltinTools 第二次：仍 5 行，且**写次数为 0**（�
   assert.equal(writes, 0, "这条锁的是**写次数**：任何 INSERT/UPDATE 都会让它红");
 });
 
+test("B · **跨实例**幂等：a 建、b 再建 ⇒ 0 写、行数不变、id 与 a 一致", async () => {
+  const { connection, db, scopeA } = seed();
+
+  // 两个独立实例，同一个 db / scope —— 复现"bootstrap 跑了两遍（两个 reporter 各 new 一次）"。
+  // 上一版只有"同一实例调两次"的用例：实例内的状态（若有）会替幂等背书，
+  // 跨实例重复插入就没人发现。
+  const a = new ToolRepo(db, scopeA, DIALECT);
+  const first = await a.ensureBuiltinTools();
+  assert.equal(first.inserted.length, 5, "对照路径：a 首次必须真插入 5 行");
+  const idsFromA = new Map((await a.list()).map((row) => [row.name, row.id]));
+  assert.equal(idsFromA.size, 5);
+
+  const b = new ToolRepo(db, scopeA, DIALECT);
+  const before = totalChanges(connection);
+  const second = await b.ensureBuiltinTools();
+  const writes = totalChanges(connection) - before;
+
+  assert.deepEqual([...second.inserted], [], "跨实例也不得插入任何行");
+  assert.equal(second.existing.length, 5);
+  assert.equal(writes, 0, "任何 INSERT/UPDATE 都会让这条红（幂等不是实例内自证）");
+  assert.equal(rawTools(connection, T_A).length, 5, "tool 行数仍 5（不是 10）");
+  assert.equal(rawVersionCount(connection, T_A), 5, "tool_version 也没重复插");
+
+  // 身份一致：b 看到的每行 id 必须就是 a 建的那一行（不是"又建了一套"）。
+  const rowsFromB = await b.list();
+  assert.equal(rowsFromB.length, 5);
+  for (const row of rowsFromB) {
+    assert.equal(row.id, idsFromA.get(row.name), `${row.name}：b 拿到的 id 必须与 a 建的一致`);
+  }
+});
+
 test("B · 落库的 input_schema 与**手写字面量**逐字节一致（期望值不引用注册表）", async () => {
   const { connection, db, scopeA } = seed();
   const tools = new ToolRepo(db, scopeA, DIALECT);
