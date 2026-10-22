@@ -113,6 +113,21 @@ export async function assertRealPort(server) {
  */
 export async function startRuntimeServer(options) {
   const label = options.label ?? "runtime";
+
+  // ---- 方言闸（R3-20）----------------------------------------------------
+  // CI 只跑 SQLite。PG 档**只提供入口**：缺环境 ⇒ fail loud（非 0 退出，**不 skip**），
+  // 且本版**没有** PG 运行时 e2e 的实现 —— 任何"用 SQLite 结果宣称 PG 通过"都是假证。
+  if ((process.env.WBTIME_RUNTIME_DIALECT ?? "sqlite") === "pg") {
+    if (process.env.WBTIME_PG_URL === undefined || process.env.WBTIME_PG_URL === "") {
+      throw new Error(
+        "PG 档运行时 e2e 缺环境：WBTIME_PG_URL 未设置（fail loud，禁止 skip —— R3-20 ③）"
+      );
+    }
+    throw new Error(
+      "PG 档运行时 e2e **本版未实现**（V0.3.0 CI 只跑 SQLite，R3-20 ①）。" +
+        "入口与 fail-loud 已就位；PG 补测需在窗口期人工执行，且**不得**以 SQLite 结果冒充（R3-20 ④）"
+    );
+  }
   const tempDir = mkdtempSync(path.join(tmpdir(), `wbtime-e2e-${label}-`));
   const dbPath = path.join(tempDir, `${label}.db`);
   // run 工作区根：用例要能检查工具副作用（写文件是否真的发生）。

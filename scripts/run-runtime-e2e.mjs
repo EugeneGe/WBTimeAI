@@ -36,12 +36,40 @@ export const RUNTIME_FILES = [
   "packages/e2e/tests/runtime/resume.mjs",
 ];
 
+/**
+ * 方言开关（R3-20）：`--dialect pg` ⇒ 把 `WBTIME_RUNTIME_DIALECT=pg` 传下去。
+ *
+ * 缺 `WBTIME_PG_URL` ⇒ **runner 自己 fail loud**（exit 1），不交给子进程去 skip：
+ * "没跑 PG = 通过"正是 V0.2.0 审计 #2 的原样重演。
+ *
+ * @param {string[]} argv 命令行参数。
+ * @returns {'sqlite'|'pg'}
+ * @throws {Error} `--dialect` 值非法 / PG 档缺 URL。
+ */
+export function resolveDialect(argv) {
+  const index = argv.indexOf("--dialect");
+  const raw = index === -1 ? "sqlite" : (argv[index + 1] ?? "");
+  if (raw !== "sqlite" && raw !== "pg") {
+    throw new Error(`--dialect 只接受 sqlite / pg，实测 ${JSON.stringify(raw)}`);
+  }
+  if (raw === "pg") {
+    const url = process.env.WBTIME_PG_URL;
+    if (url === undefined || url === "") {
+      throw new Error(
+        "PG 档缺环境：WBTIME_PG_URL 未设置 —— fail loud（非 0 退出），**不得 skip**，也不得以 SQLite 结果冒充（R3-20 ③④）"
+      );
+    }
+  }
+  return raw;
+}
+
 /** 子进程继承的环境（假 Provider 的闸门需要显式放行，与 R3-19 同口径）。 */
-function childEnv() {
+function childEnv(dialect = "sqlite") {
   return {
     ...process.env,
     NODE_ENV: "test",
     WBTIME_AI_ALLOW_FAKE_PROVIDER: "1",
+    WBTIME_RUNTIME_DIALECT: dialect,
   };
 }
 
@@ -67,12 +95,12 @@ export function parseSummary(text) {
  * @param {string} relFile 相对仓根的文件路径。
  * @returns {Promise<{file: string, rc: number, pass: number|null, fail: number|null, parsed: boolean, tail: string}>}
  */
-export function runFile(relFile) {
+export function runFile(relFile, dialect = "sqlite") {
   const absolute = path.join(REPO_ROOT, relFile);
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["--experimental-sqlite", absolute], {
       cwd: REPO_ROOT,
-      env: childEnv(),
+      env: childEnv(dialect),
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -108,7 +136,7 @@ export function runFile(relFile) {
  * @param {string[]} [files] 文件清单（self-test 用）。
  * @returns {Promise<number>} 退出码。
  */
-export async function runRuntimeE2e(files = RUNTIME_FILES) {
+export async function runRuntimeE2e(files = RUNTIME_FILES, dialect = "sqlite") {
   const prefix = "[runtime-e2e]";
   if (files.length === 0) {
     process.stderr.write(`${prefix} FAIL: 文件清单为空（0 文件 = 0 用例，绝不能算绿 —— N-10）\n`);
@@ -124,7 +152,7 @@ export async function runRuntimeE2e(files = RUNTIME_FILES) {
   process.stdout.write(`${prefix} files(${files.length}):\n${files.map((file) => `  - ${file}\n`).join("")}`);
   const results = [];
   for (const relFile of files) {
-    results.push(await runFile(relFile));
+    results.push(await runFile(relFile, dialect));
   }
 
   let totalPass = 0;
@@ -182,7 +210,13 @@ if (process.argv.slice(2).includes("--self-test")) {
   });
 } else {
   try {
-    process.exitCode = await runRuntimeE2e();
+    const dialect = resolveDialect(process.argv.slice(2));
+    if (dialect === "pg") {
+      process.stdout.write(
+        "[runtime-e2e] dialect=pg —— 入口已就位；本版 PG 运行时 e2e **未实现**（R3-20 ①），子进程会 fail loud\n",
+      );
+    }
+    process.exitCode = await runRuntimeE2e(RUNTIME_FILES, dialect);
   } catch (error) {
     process.stderr.write(`[runtime-e2e] FAIL: ${error.message}\n`);
     process.exitCode = 1;
