@@ -215,6 +215,7 @@ test("A-5 · 对照：批准 ⇒ 工具**真的**执行（副作用文件存在�
 // 复跑：改 `apps/api/src/modules/run/driver.ts` 后
 //       `pnpm --filter @wbtime/api build && cd apps/api && node --experimental-sqlite --test tests/invariants/approval.test.mjs`
 //
-// COUNTEREXAMPLE: 把 `#askApproval` 里的 `ledger.pause()/resume()` 删掉（等待期照计时）
-// ⇒ 长等待场景下 run 会因 `wall_time` 变 FAILED ⇒ A-5 的 `terminal.status` 不再是
-// SUCCEEDED ⇒ A-5 红（等待不吃预算这条被反向钉住）。
+// COUNTEREXAMPLE: 把 `approvalRequiredFor()` 改成恒 `false`（"审批闸没装"）⇒ 工具直接执行、
+// **没有** `approval` 行、**没有** `approval.requested` 帧 ⇒ A-1 红（双红：行 + 帧）。
+// 注：`legacy` 的另一条反例「删掉 `ledger.pause()/resume()`」本版**不可验证**（需要
+// 超过 600s 墙钟的等待才能触发 `wall_time`），故**不登记为已完成**（R3-21 ③）。

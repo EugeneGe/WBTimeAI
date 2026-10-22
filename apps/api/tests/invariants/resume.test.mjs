@@ -225,7 +225,8 @@ test("R-5 · 取消后 run 停在 CANCELLED（后台收尾后仍不是 SUCCEEDED
 // 复跑：改 `apps/api/src/modules/run/driver.ts` 后
 //       `pnpm --filter @wbtime/api build && cd apps/api && node --experimental-sqlite --test tests/invariants/resume.test.mjs`
 //
-// COUNTEREXAMPLE: 把 `continualFrom` 里的 `if (row.seq > expected) break;` 改成
-// `continue`（"跳过洞继续发"）⇒ R-3 的 `gapped.map(idOf)` 从 `[1]` 变成 `[1,3,4,…]`
-// ⇒ R-3 红。跳过洞等于伪造因果链：前端会看到 tool.completed 却没见过 tool.started。
+// COUNTEREXAMPLE: 把 `continualFrom` 里「遇洞即停」（`if (row.seq > expected) break;`）
+// 改成「把洞当起点继续发」（先 `expected = row.seq` 再 push）⇒ R-3 的 `gapped.map(idOf)`
+// 从 `[1]` 变成 `[1,3,4,…]` ⇒ R-3 红。跳过洞等于伪造因果链：前端会看到 tool.completed
+// 却从没见过 tool.started。
 // 复跑：改 `apps/api/src/modules/run/sse-stream.ts` 后同上命令。

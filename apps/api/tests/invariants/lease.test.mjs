@@ -23,7 +23,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 
 import { RunCoordinator, LeaseRejectedError } from "../../dist/modules/run/coordinator.js";
-import { makeRunApp, finalTurn, TENANT_ID, WORKSPACE_ID } from "./_harness.mjs";
+import { FIXED_USAGE, finalTurn, makeRunApp, TENANT_ID, WORKSPACE_ID } from "./_harness.mjs";
 
 /**
  * 裸 SQL 插一个 `QUEUED` 的 run（父链齐全：agent / version 由真路由产出）。
@@ -93,17 +93,45 @@ test("B-1 · 两个 worker 并发抢同一 run ⇒ 恰一方成功（CAS）", as
 // B-2 / B-3 · 驱动侧真的抢 lease，且单写者
 // ---------------------------------------------------------------------------
 
-test("B-2/B-3 · 驱动先抢 lease 再干活 ⇒ 终态后再抢必失败 ∧ agent.started 恰一帧", async () => {
-  const fixture = await makeRunApp({ turns: [finalTurn()] });
+test("B-2/B-3 · 驱动先抢 lease 再干活（**飞行中**不可再抢）∧ 终态后也抢不到 ∧ agent.started 恰一帧", async () => {
+  // 慢脚本：让 run 在"已抢到 lease、还没终态"的窗口里停住，于是"第二方能不能抢"
+  // 是可判定的。用快脚本时 run 早已终态，`acquire(from:QUEUED)` 失败只是因为"状态过期"
+  // ——那证明不了"驱动用了 CAS"。
+  const fixture = await makeRunApp({
+    turns: [[
+      { type: "text_delta", text: "慢慢想……", delayMs: 600 },
+      { type: "usage", usage: { ...FIXED_USAGE } },
+      { type: "finish", reason: "model_finish" },
+    ]],
+  });
   try {
     const started = await fixture.startRun();
     assert.equal(started.response.statusCode, 200, started.response.body);
     const run = JSON.parse(started.response.body).data;
+    const late = new RunCoordinator({ db: fixture.connection.db, dialect: "sqlite", tenantId: TENANT_ID });
+
+    // 等驱动真的开跑（发出 agent.started ⇒ 它**已经**把 run 从 QUEUED 抢走了）
+    await fixture.waitFor(
+      () => fixture.channelsOf(run.id).includes("agent.started"),
+      "agent.started",
+      10_000,
+    );
+    assert.notEqual(fixture.runRow(run.id).status, "QUEUED", "驱动必须先离开 QUEUED 才能干活");
+
+    // B-2a（飞行中）：第二方抢同一个 QUEUED ⇒ 必失败（CAS 未命中，不是 404）
+    await assert.rejects(
+      () => late.acquire(run.id, { from: ["QUEUED"], to: "RUNNING" }),
+      (error) => {
+        assert.ok(error instanceof LeaseRejectedError, `实测 ${String(error)}`);
+        return true;
+      },
+      "飞行中的 run 不得被第二个 worker 抢到 —— 否则一次 run 会被推进两遍",
+    );
+
     const terminal = await fixture.waitTerminal(run.id);
     assert.equal(terminal.status, "SUCCEEDED", JSON.stringify(terminal));
 
-    // B-2：QUEUED → 已是终态，任何"从 QUEUED 抢"的尝试都必须失败（不是 404，是 CAS 未命中）
-    const late = new RunCoordinator({ db: fixture.connection.db, dialect: "sqlite", tenantId: TENANT_ID });
+    // B-2b（终态后）：同样抢不到
     await assert.rejects(
       () => late.acquire(run.id, { from: ["QUEUED"], to: "RUNNING" }),
       (error) => {
@@ -131,5 +159,6 @@ test("B-2/B-3 · 驱动先抢 lease 再干活 ⇒ 终态后再抢必失败 ∧ a
 //       `pnpm --filter @wbtime/db build && cd apps/api && node --experimental-sqlite --test tests/invariants/lease.test.mjs`
 //
 // COUNTEREXAMPLE: 删掉 `RunDriver.#drive` 开头的 `coordinator.acquire(runId, {from:["QUEUED"]})`
-// （改成直接干活）⇒ 两个并发驱动都会写事件 ⇒ B-3 的 `agent.started` 变成 2 ⇒ B-3 红；
-// 同时 B-2 的"终态后再抢"会**成功**（状态还在 QUEUED/RUNNING）⇒ B-2 也红。
+// （改成直接干活）⇒ run 在整段执行期都还是 `QUEUED` ⇒ B-2a 的
+// `late.acquire(from:["QUEUED"])` **会成功**（不再抛 LeaseRejectedError）⇒ B-2 红，
+// 且 `assert.notEqual(status,"QUEUED")` 同时红（双红）。
