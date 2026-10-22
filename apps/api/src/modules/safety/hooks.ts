@@ -94,7 +94,12 @@ export function sampleToolResult(
 
 /** 挂点上下文（一次 run 内恒定）。 */
 export interface SafetyHookContext {
-  readonly runId: string;
+  /**
+   * run 标识。**S1 必须是 `null`**：run 还没创建，`audit_log.run_id` 有外键指向
+   * `agent_run(id)` —— 填一个占位串（如 `"preflight"`）会让审计写入撞 FK 而**静默失败**
+   * （`AuditLogRepo.create` 失败不抛），于是"该 stage 零判定记录"这条反例自己变成假绿。
+   */
+  readonly runId: string | null;
   readonly requestId: string;
   readonly conversationId: string | null;
 }
@@ -102,6 +107,28 @@ export interface SafetyHookContext {
 /** 判定是否放行（`ALLOW` 或 `REDACT` 都算放行；`DENY` 才算拦下）。 */
 export function isBlocked(verdict: SafetyVerdict): boolean {
   return verdict.decision === "DENY";
+}
+
+/**
+ * 把判定**作用到文本**上：`DENY` ⇒ 拦下；`REDACT` ⇒ 换成同源脱敏后的文本。
+ *
+ * 为什么必须有一个统一入口：R3-16 的口径是"REDACT **不是**放行"，
+ * 各挂点必须真的把脱敏结果用起来（否则审计写着 REDACT、实际下发原文 —— 那是最坏的
+ * 一种假绿：记录说脱敏了，数据没脱敏）。
+ *
+ * @param verdict 判定。
+ * @param text 原始文本。
+ * @returns `blocked=true` ⇒ 调用方必须短路；否则用 `text` 继续。
+ */
+export function applyVerdict(
+  verdict: SafetyVerdict,
+  text: string
+): { readonly blocked: boolean; readonly text: string } {
+  if (verdict.decision === "DENY") return { blocked: true, text };
+  if (verdict.decision === "REDACT") {
+    return { blocked: false, text: verdict.redactedContent ?? text };
+  }
+  return { blocked: false, text };
 }
 
 /**

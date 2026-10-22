@@ -95,7 +95,7 @@ import {
   type StopLimits,
 } from "../runtime/stop-conditions.js";
 import { SAFETY_POLICY_VERSION, type SafetyGate, type SafetyVerdict } from "../safety/gate.js";
-import { SafetyHooks, isBlocked, type SampledContent } from "../safety/hooks.js";
+import { SafetyHooks, applyVerdict, isBlocked, type SampledContent } from "../safety/hooks.js";
 import type { SandboxProvider } from "../sandbox/types.js";
 import { ToolExecutor } from "../tool/executor.js";
 import { RunCoordinator } from "./coordinator.js";
@@ -254,6 +254,30 @@ function flattenMessages(messages: readonly ModelMessage[]): string {
   return messages.map((message) => `[${message.role}] ${message.content}`).join("\n");
 }
 
+/**
+ * 合成一条 `system` 消息行（把版本的 `system_prompt` 前置进上下文）。
+ *
+ * 为什么要有它：`system_prompt` 是**版本快照**，不在 `message` 表里；不前置就等于
+ * "模型的系统提示词从未生效"（T3-14 施工前正是如此）。`id` 固定为
+ * `system-prompt:<conversationId>`：回放时一眼能认出它不是用户消息。
+ *
+ * @param conversationId 会话 id（拼进合成 id）。
+ * @param content 版本的系统提示词。
+ * @returns 形状与 `MessageRow` 一致的合成行（其余列给 `null`）。
+ */
+function systemPromptRow(conversationId: string, content: string): MessageRow {
+  return {
+    id: `system-prompt:${conversationId}`,
+    conversation_id: conversationId,
+    run_id: null,
+    role: "system",
+    content,
+    content_parts: null,
+    token_count: null,
+    created_at: "",
+  } as unknown as MessageRow;
+}
+
 /** `runtime_config.skills` → 归一后的名字清单。 */
 export function skillRefsOf(
   runtimeConfig: Record<string, unknown>
@@ -316,6 +340,15 @@ export function limitsOf(
   };
 }
 
+/** 宽松 JSON 解析（失败回落原值 —— 脱敏文本理论上仍是 JSON，但不为此抛错）。 */
+function safeJsonParse(text: string, fallback: unknown): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return fallback;
+  }
+}
+
 /** 最小 sleep（不引入依赖）。 */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -360,7 +393,8 @@ export class RunDriver {
   }): Promise<SafetyVerdict | null> {
     if (this.#deps.safety === undefined) return null;
     const hooks = new SafetyHooks(this.#deps.safety, {
-      runId: "preflight",
+      // S1 时 run 还没创建 ⇒ `run_id` 必须为 null（`audit_log.run_id` 有 FK）。
+      runId: null,
       requestId: input.requestId,
       conversationId: input.conversationId,
     });
@@ -659,15 +693,22 @@ export class RunDriver {
           };
 
           // ② S5（`tool_args`；Authorize 之前 ⇒ DENY 不进执行器）
+          //    REDACT 的语义（T3-13 口径"REDACT 仅限落盘脱敏"）在这里落成
+          //    **脱敏后的 args 才进执行器**：凭据不进工具，比"存脱敏、跑原文"安全。
+          let effectiveInput: unknown = invocation.input;
           if (hooks !== null) {
             const verdict = await hooks.stageToolArgs(callId, argsJson);
-            if (isBlocked(verdict)) {
+            const applied = applyVerdict(verdict, argsJson);
+            if (applied.blocked) {
               flags.safetyBlockedStage = "tool_args";
               return finish({
                 status: "DENIED",
                 error: `工具入参被安全策略拦截：${verdict.detail}`,
                 durationMs: Date.now() - startedAtCall,
               });
+            }
+            if (applied.text !== argsJson) {
+              effectiveInput = safeJsonParse(applied.text, invocation.input);
             }
           }
 
@@ -702,10 +743,16 @@ export class RunDriver {
 
           // ④ execute（`PENDING → RUNNING` 之后才碰沙箱）
           await toolCalls.markRunning(callId);
-          const raw = await executor.execute(invocation, callContext);
+          const raw = await executor.execute(
+            effectiveInput === invocation.input
+              ? invocation
+              : { callId, toolName, input: effectiveInput },
+            callContext
+          );
 
           // ⑤ S6（`tool_result`；先检查后截断）
           let sampled: SampledContent | null = null;
+          let redacted = false;
           if (hooks !== null) {
             const checked = await hooks.stageToolResult(
               callId,
@@ -723,11 +770,19 @@ export class RunDriver {
                 durationMs: raw.durationMs,
               });
             }
+            // REDACT ⇒ 落库/回传用脱敏后的**截断形态**（凭据不进模型，P-1 不落原文）。
+            if (checked.verdict.decision === "REDACT") {
+              redacted = true;
+              return finish(
+                { ...raw, output: checked.verdict.redactedContent ?? checked.sampled.stored },
+                checked.verdict.redactedContent ?? checked.sampled.stored
+              );
+            }
           }
 
           // 采样过的结果落"截断形态"（`stored`），**不外传 `checked`**。
           const output =
-            sampled !== null && sampled.sampled
+            sampled !== null && sampled.sampled && !redacted
               ? sampled.stored
               : (raw.output ?? raw.error ?? null);
           return finish(raw, output === null ? undefined : output);
@@ -756,31 +811,40 @@ export class RunDriver {
         tools: surface.specs,
         loadMessages: async () => {
           const rows = await messagesRepo.list({ limit: 200 });
+          // 系统提示词是**版本快照**的一部分（`agent_version.system_prompt`），不在
+          // `message` 表里 —— 这里以一条合成行前置进上下文（id 固定，便于回放时识别）。
+          // 空串 ⇒ 不加：一条空的 system 消息只会让模型看到噪声。
+          const context = input.systemPrompt.trim() === ""
+            ? rows
+            : [systemPromptRow(conversationId, input.systemPrompt), ...rows];
           if (hooks !== null) {
             // **S2**：上下文拼装后、模型调用前逐轮判定。
-            const verdict = await hooks.stageContext(flattenMessages(toModelMessages(rows)));
+            const verdict = await hooks.stageContext(flattenMessages(toModelMessages(context)));
             if (isBlocked(verdict)) {
               flags.safetyBlockedStage = "context";
               throw new SafetyBlockedError("context", verdict.detail);
             }
           }
-          return rows;
+          return context;
         },
         appendAssistant: async ({ content, toolCalls: calls }) => {
+          let effectiveContent = content;
           if (hooks !== null) {
             // **S7**：Commit turn 之前（消息还没落库）。
             const verdict = await hooks.stageOutput(content, {
               incident: false,
               deliveredUnits: flags.servedUnits,
             });
-            if (isBlocked(verdict)) {
+            const applied = applyVerdict(verdict, content);
+            if (applied.blocked) {
               flags.safetyBlockedStage = "output";
               throw new SafetyBlockedError("output", verdict.detail);
             }
+            effectiveContent = applied.text;
           }
           const row = await messagesRepo.append({
             role: "assistant",
-            content,
+            content: effectiveContent,
             contentParts: calls.map((call) => ({
               type: "tool_call",
               id: call.id,
@@ -795,7 +859,7 @@ export class RunDriver {
           await driver.#frame(writer, "message.delta", {
             message_id: row.id,
             role: "assistant",
-            content,
+            content: effectiveContent,
           });
           flags.servedUnits += 1;
         },
@@ -814,7 +878,9 @@ export class RunDriver {
       outcome = await loop.run(context);
     } catch (error) {
       if (error instanceof SafetyBlockedError) {
-        failureDetail = error.detail;
+        // 用 `message`（含 `安全拦截（<stage>）` 前缀）而不是裸 detail：
+        // 排障时"哪个挂点拦的"与"为什么拦"同等重要。
+        failureDetail = error.message;
         failureType = "SAFETY_DENIED";
       } else {
         failureDetail = error instanceof Error ? error.message : String(error);
