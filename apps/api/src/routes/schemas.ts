@@ -365,6 +365,87 @@ export const ToolResponseSchema = Type.Object(
 export type ToolResponseBody = Static<typeof ToolResponseSchema>;
 
 // ---------------------------------------------------------------------------
+// MCP 族（T3-11 · 8 op）
+// ---------------------------------------------------------------------------
+
+/** 契约 `RegisterMCPServerRequest`（required 仅 `name`；`transport` default `stdio`）。 */
+export const RegisterMcpServerRequestSchema = Type.Object({
+  name: Type.String({ minLength: 1, maxLength: 255 }),
+  transport: Type.Optional(Type.String({ default: "stdio" })),
+  command: Type.Optional(NullableString),
+  args: Type.Optional(Type.Array(Type.String())),
+  endpoint: Type.Optional(NullableString),
+  credential_id: Type.Optional(NullableString36),
+  env_ref: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  workspace_id: Type.Optional(NullableString36),
+});
+export type RegisterMcpServerRequestBody = Static<typeof RegisterMcpServerRequestSchema>;
+
+/** 契约 `MCPServerResponse`（12 键；`args` 非可空 ⇒ 列值 null 回落 `[]`）。 */
+export const McpServerResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    name: Type.String(),
+    transport: Type.String(),
+    command: NullableString,
+    args: Type.Array(Type.String()),
+    endpoint: NullableString,
+    credential_id: NullableString,
+    env_ref: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
+    status: Type.String(),
+    workspace_id: NullableString,
+    tenant_id: NullableString,
+    created_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type McpServerResponseBody = Static<typeof McpServerResponseSchema>;
+
+/** 契约 `MCPToolResponse`（8 键）。 */
+export const McpToolResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    mcp_server_id: Type.String(),
+    name: Type.String(),
+    description: NullableString,
+    input_schema: Type.Record(Type.String(), Type.Unknown()),
+    output_schema: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
+    status: Type.String(),
+    discovered_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type McpToolResponseBody = Static<typeof McpToolResponseSchema>;
+
+/** 契约 `CreateMCPPermissionRequest`（required 仅 `mcp_tool_id`）。 */
+export const CreateMcpPermissionRequestSchema = Type.Object({
+  mcp_tool_id: Type.String({ minLength: 1 }),
+  agent_id: Type.Optional(NullableString36),
+  agent_version_id: Type.Optional(NullableString36),
+  action: Type.Optional(Type.String({ default: "EXECUTE" })),
+  effect: Type.Optional(Type.String({ default: "DENY" })),
+  scope: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+});
+export type CreateMcpPermissionRequestBody = Static<typeof CreateMcpPermissionRequestSchema>;
+
+/** 契约 `MCPPermissionResponse`（9 键）。 */
+export const McpPermissionResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    mcp_tool_id: Type.String(),
+    agent_id: NullableString,
+    agent_version_id: NullableString,
+    action: Type.String(),
+    effect: Type.String(),
+    scope: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
+    tenant_id: NullableString,
+    created_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type McpPermissionResponseBody = Static<typeof McpPermissionResponseSchema>;
+
+// ---------------------------------------------------------------------------
 // Agent 族（T3-05 · 7 op）
 // ---------------------------------------------------------------------------
 
@@ -983,6 +1064,59 @@ export const OPERATION_SCHEMAS: Readonly<Record<string, OperationSchemas>> = Obj
     // 开放对象，只为让"属性名集合相等"这条判据有东西可比；真正的响应体是字节流，
     // 由 `routes/runs.ts` 的 `reply.raw` 写出，**不经过** Fastify 序列化。
     response: Type.Object({}, { additionalProperties: true }),
+  },
+
+  // ---- MCP 族（T3-11 · 8 op）-----------------------------------------------
+  list_servers_api_v1_mcp_servers_get: {
+    method: "GET",
+    path: "/api/v1/mcp/servers",
+    successStatus: 200,
+    response: Type.Array(McpServerResponseSchema),
+  },
+  register_server_api_v1_mcp_servers_post: {
+    method: "POST",
+    path: "/api/v1/mcp/servers",
+    successStatus: 201,
+    body: RegisterMcpServerRequestSchema,
+    response: McpServerResponseSchema,
+  },
+  get_server_api_v1_mcp_servers__server_id__get: {
+    method: "GET",
+    path: "/api/v1/mcp/servers/{server_id}",
+    successStatus: 200,
+    response: McpServerResponseSchema,
+  },
+  delete_server_api_v1_mcp_servers__server_id__delete: {
+    method: "DELETE",
+    path: "/api/v1/mcp/servers/{server_id}",
+    // **204 零字节**（真删行）—— 与 `DELETE /models/providers/{id}`（软删 200）不同形。
+    successStatus: 204,
+    response: EmptyBodySchema,
+  },
+  discover_tools_api_v1_mcp_servers__server_id__discover_post: {
+    method: "POST",
+    path: "/api/v1/mcp/servers/{server_id}/discover",
+    successStatus: 200,
+    response: Type.Array(McpToolResponseSchema),
+  },
+  list_tools_api_v1_mcp_tools_get: {
+    method: "GET",
+    path: "/api/v1/mcp/tools",
+    successStatus: 200,
+    response: Type.Array(McpToolResponseSchema),
+  },
+  list_permissions_api_v1_mcp_permissions_get: {
+    method: "GET",
+    path: "/api/v1/mcp/permissions",
+    successStatus: 200,
+    response: Type.Array(McpPermissionResponseSchema),
+  },
+  create_permission_api_v1_mcp_permissions_post: {
+    method: "POST",
+    path: "/api/v1/mcp/permissions",
+    successStatus: 201,
+    body: CreateMcpPermissionRequestSchema,
+    response: McpPermissionResponseSchema,
   },
 });
 

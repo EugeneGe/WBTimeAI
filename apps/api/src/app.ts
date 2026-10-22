@@ -27,6 +27,7 @@ import { AuthService } from "./modules/auth/service.js";
 import { createRegisterLimiter } from "./modules/auth/register-limiter.js";
 import { CredentialService } from "./modules/credential/service.js";
 import { ConversationService } from "./modules/conversation/service.js";
+import { McpService } from "./modules/mcp/service.js";
 import { ModelProviderService } from "./modules/model/provider-service.js";
 import { RunCoordinator } from "./modules/run/coordinator.js";
 import { RunService } from "./modules/run/run-service.js";
@@ -51,6 +52,7 @@ import { conversationRoutes } from "./routes/conversations.js";
 import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
 import { organizationRoutes } from "./routes/organizations.js";
+import { mcpRoutes } from "./routes/mcp.js";
 import { permissionRoutes } from "./routes/permissions.js";
 import { runRoutes } from "./routes/runs.js";
 import { skillRoutes } from "./routes/skills.js";
@@ -233,6 +235,14 @@ export function buildIdentityStack(args: {
       tenantId,
       coordinator: new RunCoordinator({ db: args.database, dialect, tenantId }),
     }),
+    // T3-11：MCP 8 op（只做 client）。出网白名单从 env 读（逗号分隔；缺省空 = 拒绝全部，
+    // 与 `guards/ssrf` 的默认口径一致 —— stdio transport 不受影响）。
+    mcp: new McpService({
+      db: args.database,
+      dialect,
+      tenantId,
+      ...(mcpEgressAllowlist() === undefined ? {} : { egressAllowlist: mcpEgressAllowlist() }),
+    }),
     // FIX-04：限速器**在这里**构造 —— 每次 `buildApp()` 一份，随实例存亡。
     // 放在模块作用域会变成跨实例共享的配额桶（测试之间互相污染，见 R-34）。
     registerLimiter: createRegisterLimiter({
@@ -305,6 +315,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     toolRoutes(app, identity);
     // T3-08：runs 3 op（详情 / 取消 / SSE 事件流；SSE 走 `reply.hijack()` 自管响应）。
     runRoutes(app, identity);
+    // T3-11：MCP 8 op（server 目录 / discover / tool 与 permission 列表）。
+    mcpRoutes(app, identity);
   }
 
   // 6) 模型栈（给了 `model` 才装配；缺 key 在上面就抛，不会走到这里）
@@ -315,6 +327,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
 
   return app;
+}
+
+/**
+ * MCP 出网白名单（`WBTIME_MCP_EGRESS_ALLOWLIST`，逗号分隔）。
+ *
+ * 为什么读 env 而不是配置对象：`loadConfig` 的字段是**契约级**（进 `.env.example`），
+ * 而 MCP 出网名单是部署面参数（每个环境不同、可能很长）。缺省不设 ⇒ `undefined`
+ * ⇒ `checkEgress` 走"空白名单 = 拒绝全部"，与安全默认一致。
+ */
+function mcpEgressAllowlist(): readonly string[] | undefined {
+  const raw = process.env.WBTIME_MCP_EGRESS_ALLOWLIST;
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const items = raw.split(",").map((item) => item.trim()).filter((item) => item !== "");
+  return items.length === 0 ? undefined : items;
 }
 
 /** 编译期自证：`buildApp` 的返回类型就是 Fastify 实例（不接受隐式 `any`）。 */

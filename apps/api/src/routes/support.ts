@@ -27,6 +27,7 @@ import { AgentService } from "../modules/agent/service.js";
 import { ApprovalService } from "../modules/approval/service.js";
 import { ConversationService } from "../modules/conversation/service.js";
 import { CredentialService } from "../modules/credential/service.js";
+import { McpService } from "../modules/mcp/service.js";
 import { ModelProviderService } from "../modules/model/provider-service.js";
 import { OrganizationService } from "../modules/organization/service.js";
 import { RunService } from "../modules/run/run-service.js";
@@ -102,6 +103,13 @@ export interface IdentityDeps {
    * **本服务不执行 run** —— run 的创建由 `POST /agents/{id}/run` 的入口回执负责。
    */
   readonly runs: RunService;
+  /**
+   * MCP 服务（T3-11 · 8 op）。
+   *
+   * **只做 client**（卡面红线）：本服务不提供 MCP server 能力，也不暴露"直接调用
+   * MCP 工具"的方法 —— 执行路径只有 `modules/mcp/adapter.ts` 注册进 `ToolExecutor` 的那一条。
+   */
+  readonly mcp: McpService;
   /**
    * 未认证 register 的限速器（FIX-04）。
    *
