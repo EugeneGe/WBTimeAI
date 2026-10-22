@@ -325,6 +325,11 @@ jobs:
   #   与 node:test 不是同一套 runner，故各用各的命令，不混在一个 `-r` 里假装统一。
   #
   # 全部 **required**：禁止 `continue-on-error`、禁止 `|| true`。
+  #
+  # 本档另外负责一件**证明**：T2-04 · J-2②「TS 生成的 PHC 串 → py verify == true」。
+  # 那条用例是 fail loud 的（没设 `WBTIME_PY_ORACLE_PYTHON` 就红），所以本档在跑单测
+  # **之前**装 python + argon2-cffi 并把解释器绝对路径注入环境变量 —— 即「真跑」，
+  # 而不是用 `WBTIME_ALLOW_MISSING_PY_ORACLE=1` 把跳过当通过。
   # ---------------------------------------------------------------------------
   v010-ts:
     name: v0.1.0 ts (install · test · typecheck · lint)
@@ -342,6 +347,34 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Assert the runner really runs the declared Node
         run: node -e "const v=process.versions.node; if(!v.startsWith('22.19.0')){console.error('expected 22.19.0, got '+v);process.exit(1)}"
+      # J-2② 的 py oracle（T2-04）—— 选「真跑」而不是「显式允许跳过」
+      # ------------------------------------------------------------------
+      # `apps/api/tests/auth-password.test.mjs` 的 J-2② 是 **fail loud** 的：
+      # `WBTIME_PY_ORACLE_PYTHON` 是**唯一**接受来源，没设就红（不再静默 `# SKIP`）。
+      # 这里必须把它设成一个真装了 argon2-cffi 的解释器，否则本档单测必红。
+      #
+      # 为什么不用 `WBTIME_ALLOW_MISSING_PY_ORACLE=1` 放行：那等于把「等效性证明」
+      # 降级成「声明」，与铁律「禁冒充实证」冲突。多花 ~15s 装个 wheel 就能真跑。
+      #
+      # 需要什么/不需要什么：oracle 程序**内嵌在测试文件里**
+      # （`PY_ORACLE_PROGRAM`，是 py 线 helper 的 verify 分支逐字拷贝），
+      # 所以 CI **不需要** `WBTimeAI_old` 仓，只需要「解释器 + argon2-cffi」。
+      #
+      # 版本对齐本机基准环境（py 3.12.10 / argon2-cffi 25.1.0）：argon2 的 PHC 参数
+      # （m=65536,t=3,p=4）跨版本稳定，但把解释器小版本钉住能让失败可复现。
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install py oracle deps (argon2-cffi) and expose WBTIME_PY_ORACLE_PYTHON
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install "argon2-cffi==25.1.0"
+          # 用解释器**绝对路径**注入（不是裸 `python`）：跨 step 时工作目录/venv 都可能变，
+          # 绝对路径让"到底跑了哪个解释器"在日志里可以直接看到。
+          PY_ORACLE="$(python -c 'import sys; print(sys.executable)')"
+          echo "WBTIME_PY_ORACLE_PYTHON=${PY_ORACLE}" >> "$GITHUB_ENV"
+          "${PY_ORACLE}" -c "import sys, importlib.metadata as m; print('py oracle:', sys.version.split()[0], '| argon2-cffi', m.version('argon2-cffi'), '|', sys.executable)"
       - name: packages · unit tests (e2e / web excluded)
         run: pnpm -r --filter "!@wbtime/e2e" --filter "!@wbtime/web" test
       - name: packages · typecheck
