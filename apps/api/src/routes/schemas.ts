@@ -272,6 +272,98 @@ export const BindCredentialRequestSchema = Type.Object({
 });
 export type BindCredentialRequestBody = Static<typeof BindCredentialRequestSchema>;
 
+/** 契约 `RegisterProviderRequest`（required = `name` / `provider_type`）。 */
+export const RegisterProviderRequestSchema = Type.Object({
+  name: Type.String({ minLength: 1, maxLength: 255 }),
+  provider_type: Type.String({ minLength: 1, maxLength: 50 }),
+  endpoint: Type.Optional(NullableString),
+  credential_id: Type.Optional(NullableString36),
+  config: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  workspace_id: Type.Optional(NullableString36),
+});
+export type RegisterProviderRequestBody = Static<typeof RegisterProviderRequestSchema>;
+
+/**
+ * 契约 `ModelResponse`（9 键）。
+ *
+ * `tenant_id` / `created_at` **恒 `null`**：`model` 表只有 `id / provider_id / name /
+ * type / context_window / capabilities / status` 七列（实测 `schema/pg/model.ts:77`），
+ * 没有这两列。契约里两者都可空 ⇒ 不为此改 DDL（J-1 红线），登记为已知差异。
+ */
+export const ModelResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    tenant_id: NullableString,
+    provider_id: Type.String(),
+    name: Type.String(),
+    type: Type.String(),
+    context_window: Type.Union([Type.Integer(), Type.Null()]),
+    capabilities: Type.Record(Type.String(), Type.Unknown()),
+    status: Type.String(),
+    created_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type ModelResponseBody = Static<typeof ModelResponseSchema>;
+
+/** 契约 `RegisterModelRequest`（required = `name`；`model_type` default `CHAT`）。 */
+export const RegisterModelRequestSchema = Type.Object({
+  name: Type.String({ minLength: 1, maxLength: 255 }),
+  model_type: Type.Optional(Type.String({ maxLength: 30, default: "CHAT" })),
+  context_window: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
+  capabilities: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+});
+export type RegisterModelRequestBody = Static<typeof RegisterModelRequestSchema>;
+
+// ---------------------------------------------------------------------------
+// 审批族（T3-12 · 4 op）
+// ---------------------------------------------------------------------------
+
+/**
+ * 契约 `ApprovalResponse`（12 键，required 仅 `id`）。
+ *
+ * `subject_type` / `subject_ref` / `status` 契约都给了 `default` 且非必填 ⇒
+ * 列 NOT NULL 时按原值出；列若为 `null` 则回落空串（py `str(... or "")` 同口径）。
+ */
+export const ApprovalResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    tenant_id: NullableString,
+    subject_type: Type.String(),
+    subject_ref: Type.String(),
+    requested_by: NullableString,
+    status: Type.String(),
+    decided_by: NullableString,
+    decided_at: NullableString,
+    payload: Type.Record(Type.String(), Type.Unknown()),
+    expires_at: NullableString,
+    created_at: NullableString,
+    updated_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type ApprovalResponseBody = Static<typeof ApprovalResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// 工具目录族（T3-12 · 1 op）
+// ---------------------------------------------------------------------------
+
+/** 契约 `ToolResponse`（8 键，required 仅 `name`；`type` default `builtin`）。 */
+export const ToolResponseSchema = Type.Object(
+  {
+    id: NullableString,
+    name: Type.String(),
+    display_name: Type.String(),
+    description: Type.String(),
+    category: Type.String(),
+    type: Type.String(),
+    requires_sandbox: Type.Boolean(),
+    input_schema: Type.Record(Type.String(), Type.Unknown()),
+  },
+  { additionalProperties: false }
+);
+export type ToolResponseBody = Static<typeof ToolResponseSchema>;
+
 // ---------------------------------------------------------------------------
 // Agent 族（T3-05 · 7 op）
 // ---------------------------------------------------------------------------
@@ -786,6 +878,85 @@ export const OPERATION_SCHEMAS: Readonly<Record<string, OperationSchemas>> = Obj
     path: "/api/v1/conversations/{conversation_id}/messages",
     successStatus: 200,
     response: Type.Array(ConversationMessageResponseSchema),
+  },
+
+  // ---- 审批族（T3-12 · 4 op）------------------------------------------------
+  // ⚠️ `GET /approvals` 是**唯一**带 query 分页参数的列表 op（`limit` 1..200 缺省 50、
+  //    `offset` ≥0 缺省 0，契约实测）。本映射只记 method/path/成功码/响应形状；
+  //    查询参数由路由层的 TypeBox `querystring` schema 校验（见 `routes/approvals.ts`）。
+  list_approvals_api_v1_approvals_get: {
+    method: "GET",
+    path: "/api/v1/approvals",
+    successStatus: 200,
+    response: Type.Array(ApprovalResponseSchema),
+  },
+  get_approval_api_v1_approvals__approval_id__get: {
+    method: "GET",
+    path: "/api/v1/approvals/{approval_id}",
+    successStatus: 200,
+    response: ApprovalResponseSchema,
+  },
+  approve_approval_api_v1_approvals__approval_id__approve_post: {
+    method: "POST",
+    path: "/api/v1/approvals/{approval_id}/approve",
+    successStatus: 200,
+    response: ApprovalResponseSchema,
+  },
+  reject_approval_api_v1_approvals__approval_id__reject_post: {
+    method: "POST",
+    path: "/api/v1/approvals/{approval_id}/reject",
+    successStatus: 200,
+    response: ApprovalResponseSchema,
+  },
+
+  // ---- 模型目录族（T3-12 · 6 op，补 T2-07 的 5 op）---------------------------
+  list_providers_api_v1_models_providers_get: {
+    method: "GET",
+    path: "/api/v1/models/providers",
+    successStatus: 200,
+    response: Type.Array(ModelProviderResponseSchema),
+  },
+  register_provider_api_v1_models_providers_post: {
+    method: "POST",
+    path: "/api/v1/models/providers",
+    successStatus: 201,
+    body: RegisterProviderRequestSchema,
+    response: ModelProviderResponseSchema,
+  },
+  get_provider_api_v1_models_providers__provider_id__get: {
+    method: "GET",
+    path: "/api/v1/models/providers/{provider_id}",
+    successStatus: 200,
+    response: ModelProviderResponseSchema,
+  },
+  disable_provider_api_v1_models_providers__provider_id__delete: {
+    method: "DELETE",
+    path: "/api/v1/models/providers/{provider_id}",
+    // **200 而不是 204**：软删（`status = DISABLED`）且回整行 —— 这条成功码就是
+    // "删除其实是禁用"的证据，见 `model-provider-repo.ts::disable` 的注释。
+    successStatus: 200,
+    response: ModelProviderResponseSchema,
+  },
+  list_models_api_v1_models_providers__provider_id__models_get: {
+    method: "GET",
+    path: "/api/v1/models/providers/{provider_id}/models",
+    successStatus: 200,
+    response: Type.Array(ModelResponseSchema),
+  },
+  register_model_api_v1_models_providers__provider_id__models_post: {
+    method: "POST",
+    path: "/api/v1/models/providers/{provider_id}/models",
+    successStatus: 201,
+    body: RegisterModelRequestSchema,
+    response: ModelResponseSchema,
+  },
+
+  // ---- 工具目录族（T3-12 · 1 op）-------------------------------------------
+  list_tools_api_v1_tools_get: {
+    method: "GET",
+    path: "/api/v1/tools",
+    successStatus: 200,
+    response: Type.Array(ToolResponseSchema),
   },
 });
 

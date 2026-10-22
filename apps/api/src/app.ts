@@ -22,12 +22,15 @@ import { registerEnvelope } from "./http/envelope.js";
 import { registerErrorHandler } from "./http/error-handler.js";
 import { attachRequestContext, genReqId } from "./http/request-context.js";
 import { AgentService } from "./modules/agent/service.js";
+import { ApprovalService } from "./modules/approval/service.js";
 import { AuthService } from "./modules/auth/service.js";
 import { createRegisterLimiter } from "./modules/auth/register-limiter.js";
 import { CredentialService } from "./modules/credential/service.js";
 import { ConversationService } from "./modules/conversation/service.js";
+import { ModelProviderService } from "./modules/model/provider-service.js";
 import { OrganizationService } from "./modules/organization/service.js";
 import { SkillService } from "./modules/skill/service.js";
+import { ToolService } from "./modules/tool/service.js";
 import { createFakeProvider } from "./modules/model/fake-provider.js";
 import { ModelGateway } from "./modules/model/gateway.js";
 import {
@@ -41,12 +44,14 @@ import {
 } from "./modules/model/providers/factory.js";
 import { authRoutes } from "./routes/auth.js";
 import { agentRoutes } from "./routes/agents.js";
+import { approvalRoutes } from "./routes/approvals.js";
 import { conversationRoutes } from "./routes/conversations.js";
 import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
 import { organizationRoutes } from "./routes/organizations.js";
 import { permissionRoutes } from "./routes/permissions.js";
 import { skillRoutes } from "./routes/skills.js";
+import { toolRoutes } from "./routes/tools.js";
 import type { IdentityDeps } from "./routes/support.js";
 import { userRoutes } from "./routes/users.js";
 
@@ -211,6 +216,12 @@ export function buildIdentityStack(args: {
     skills: new SkillService({ db: args.database, dialect }),
     // T3-07：Conversation 族 5 op（消息写入是服务层入口，不挂路由 —— 契约无该 op）。
     conversations: new ConversationService({ db: args.database, dialect }),
+    // T3-12：审批族 4 op（决议只改状态与时间戳，**不触发执行** —— 执行归 T3-08 恢复路径）。
+    approvals: new ApprovalService({ db: args.database, dialect }),
+    // T3-12：模型目录 6 op（供应商目录 4 + 模型目录 2；凭证族 5 op 仍走 `credentials`）。
+    providers: new ModelProviderService({ db: args.database, dialect }),
+    // T3-12：工具目录 1 op（`GET /tools` 先幂等物化内置注册表再读回，R3-23 口径）。
+    tools: new ToolService({ db: args.database, dialect }),
     // FIX-04：限速器**在这里**构造 —— 每次 `buildApp()` 一份，随实例存亡。
     // 放在模块作用域会变成跨实例共享的配额桶（测试之间互相污染，见 R-34）。
     registerLimiter: createRegisterLimiter({
@@ -278,6 +289,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     skillRoutes(app, identity);
     // T3-07：Conversation 族 5 op（同一 db / tenant；无 DELETE 无消息写路由）。
     conversationRoutes(app, identity);
+    // T3-12：审批族 4 op + 工具目录 1 op（模型目录 6 op 已在 `modelRoutes` 内补齐）。
+    approvalRoutes(app, identity);
+    toolRoutes(app, identity);
   }
 
   // 6) 模型栈（给了 `model` 才装配；缺 key 在上面就抛，不会走到这里）

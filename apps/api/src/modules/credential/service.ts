@@ -26,6 +26,7 @@ import {
 } from "@wbtime/db";
 
 import { authError } from "../auth/errors.js";
+import { toProviderView, type ModelProviderView } from "../model/view.js";
 import { deriveCredentialKey, encryptValue, maskValue } from "./crypto.js";
 
 /** 对外凭据视图（契约 `CredentialResponse`，键集合逐字对齐）。 */
@@ -38,19 +39,13 @@ export interface CredentialView {
   readonly workspace_id: string | null;
 }
 
-/** 对外供应商视图（契约 `ModelProviderResponse`，键集合逐字对齐）。 */
-export interface ModelProviderView {
-  readonly id: string;
-  readonly name: string;
-  readonly type: string;
-  readonly endpoint: string | null;
-  readonly credential_id: string | null;
-  readonly status: string;
-  readonly config: Record<string, unknown>;
-  readonly created_at: string | null;
-  readonly tenant_id: string | null;
-  readonly workspace_id: string | null;
-}
+/**
+ * 对外供应商视图（契约 `ModelProviderResponse`）。
+ *
+ * **定义已迁至 `../model/view.js`**（T3-12：provider 目录的 6 个新 op 用同一形状，
+ * 两份实现必然漂移）。此处 re-export 只为不打断 T2-07 既有 import 面。
+ */
+export type { ModelProviderView } from "../model/view.js";
 
 /** 保存凭据的入参（契约 `SaveCredentialRequest`）。 */
 export interface SaveCredentialInput {
@@ -224,24 +219,7 @@ function toCredentialView(row: CredentialRow): CredentialView {
   };
 }
 
-/** 行 → 契约视图。 */
-function toProviderView(row: ModelProviderRow): ModelProviderView {
-  return {
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    endpoint: row.endpoint ?? null,
-    credential_id: row.credential_id ?? null,
-    status: row.status,
-    config: (row.config ?? {}) as Record<string, unknown>,
-    // `model_provider` **没有** `created_at` 列（实测 schema：id/tenant_id/organization_id/
-    // workspace_id/name/type/endpoint/credential_id/status/config）—— 契约里该字段可空，
-    // 故恒 null，不为此改 DDL（J-1 红线）。登记为遗留。
-    created_at: null,
-    tenant_id: row.tenant_id ?? null,
-    workspace_id: row.workspace_id ?? null,
-  };
-}
+/** 行 → 契约视图。供货商形状的定义已迁至 `../model/view.js`（T3-12），此处不再复述。 */
 
 /**
  * 时间 → 契约要求的 `string | null`。

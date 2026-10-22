@@ -24,10 +24,13 @@ import type { FastifyRequest } from "fastify";
 import { AuthService, type AuthUser } from "../modules/auth/service.js";
 import { authError, unauthorized } from "../modules/auth/errors.js";
 import { AgentService } from "../modules/agent/service.js";
+import { ApprovalService } from "../modules/approval/service.js";
 import { ConversationService } from "../modules/conversation/service.js";
 import { CredentialService } from "../modules/credential/service.js";
+import { ModelProviderService } from "../modules/model/provider-service.js";
 import { OrganizationService } from "../modules/organization/service.js";
 import { SkillService } from "../modules/skill/service.js";
+import { ToolService } from "../modules/tool/service.js";
 import {
   loadPrincipal,
   type Principal,
@@ -69,6 +72,28 @@ export interface IdentityDeps {
    * `conversationRoutes(app, deps)` 的读取面一致）。
    */
   readonly conversations: ConversationService;
+  /**
+   * 审批族服务（T3-12 · 4 op）。
+   *
+   * 挂载理由与 `agents` / `skills` / `conversations` 同源：依赖（db / dialect）与身份族
+   * 完全同源，`buildApp` 的装配入口只有一个。**决议不触发执行** —— 执行在 T3-08 的
+   * 恢复路径，本服务只落状态与时间戳。
+   */
+  readonly approvals: ApprovalService;
+  /**
+   * 模型目录服务（T3-12 · 6 op：供应商目录 4 + 模型目录 2）。
+   *
+   * 与 `credentials`（凭证族 5 op，T2-07）**分开两个服务**：凭证关心密文与掩码，
+   * 目录关心标签与层级；混成一个类会让"解密只在保存时发生"这条不变量难以审计。
+   */
+  readonly providers: ModelProviderService;
+  /**
+   * 工具目录服务（T3-12 · 1 op）。
+   *
+   * `list` 内含**幂等物化**（R3-23）：`tool_permission.tool_id` 是 FK，权限要引用工具
+   * 就必须先有行与稳定 id ⇒ 不能只返回内存注册表。
+   */
+  readonly tools: ToolService;
   /**
    * 未认证 register 的限速器（FIX-04）。
    *
