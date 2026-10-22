@@ -13,9 +13,9 @@
 // 反「哑真」措施：源文本抽不到函数体 / 抽不到键 ⇒ **立刻红**，绝不产生
 // 「空集 ⊆ 任意集 ⇒ PASS」这种假绿。这也是本仓 §7 判据表反复强调的 empty-set floor。
 
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import assert from "node:assert/strict";
@@ -26,6 +26,7 @@ import { ENVELOPE_FIELD_NAMES } from "@wbtime/core";
 /** 仓库根（apps/api/tests → apps/api → apps → 根）。 */
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const WEB_API_PATH = join(ROOT, "apps", "web", "src", "lib", "api.ts");
+const WEB_SRC_PATH = join(ROOT, "apps", "web", "src");
 
 const envelopeContract = JSON.parse(
   readFileSync(join(ROOT, "contracts", "envelope.schema.json"), "utf8"),
@@ -154,20 +155,56 @@ test("K-11 已登记差异 ①②：request_id 可选不校验 / 前端是键判
   );
 });
 
-test("K-11 前端零改动：git diff -- apps/web/src 必须为空", () => {
+test("K-11 前端零改动：apps/web/src 逐文件 sha256 与登记快照全等（V0.2.0 审计 #29：去 git 工作树依赖）", () => {
   // 与 gate:fdiff 的重叠说明：`gate:fdiff` 做 243 文件逐字节 + raw digest 双判（权威）；
   // 这里只做一个「本任务期间没动过前端」的轻量旁证 —— 两者都在，互不替代。
-  const output = execFileSync(
-    "git",
-    ["diff", "--stat", "--", "apps/web/src"],
-    { cwd: ROOT, encoding: "utf8" },
+  //
+  // **#29 订正**：原实现用 `git diff --stat` / `git status --porcelain` 判零改动 ——
+  // 那依赖 git 工作树状态（N-8 实测：无 `.git` 的工作树里直接抛错，测试变成环境红）。
+  // 现改用**前端文件 sha 快照**：登记 243 个文件（`fixtures/web-src-sha256.json`，
+  // 生成方式见该文件与下方），无 `.git` 也能跑；前端任一文件被改 / 增 / 删 ⇒ 红。
+  //
+  // 快照再生成（刻意的手工摩擦：改前端必须显式刷新快照并登记，不允许悄悄带过）：
+  //   node -e "<见 02-施工/施工记录/T3-15.md §#29>"
+  const snapshot = JSON.parse(
+    readFileSync(join(ROOT, "apps", "api", "tests", "fixtures", "web-src-sha256.json"), "utf8"),
   );
-  assert.equal(output.trim(), "", `apps/web/src 出现改动（K-11 红线）:\n${output}`);
+  assert.equal(snapshot.algorithm, "sha256");
+  assert.equal(snapshot.root, "apps/web/src");
+  assert.ok(
+    snapshot.fileCount >= 1 && Object.keys(snapshot.files).length === snapshot.fileCount,
+    "快照登记表必须非空且与 fileCount 一致（空快照 = 空集 ⊆ 任意集 的哑真）",
+  );
 
-  const untracked = execFileSync(
-    "git",
-    ["status", "--porcelain", "--", "apps/web/src"],
-    { cwd: ROOT, encoding: "utf8" },
-  );
-  assert.equal(untracked.trim(), "", `apps/web/src 出现未跟踪/改动文件（K-11 红线）:\n${untracked}`);
+  const actual = new Map();
+  const walk = (dir) => {
+    for (const name of readdirSync(dir).sort()) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) walk(full);
+      else actual.set(relative(snapshot.root, full).split("\\").join("/"), full);
+    }
+  };
+  walk(WEB_SRC_PATH);
+
+  // ① 不得删文件：快照里有、工作树没有 ⇒ 红。
+  for (const rel of Object.keys(snapshot.files)) {
+    assert.ok(
+      actual.has(rel),
+      `apps/web/src/${rel} 在快照里登记了但工作树已删除（K-11 红线：前端零改动）`,
+    );
+  }
+  // ② 不得加文件 / 改文件：工作树的每一份内容 sha 必须与快照逐字节等价。
+  for (const [rel, full] of actual) {
+    const expected = snapshot.files[rel];
+    assert.ok(
+      expected !== undefined,
+      `apps/web/src/${rel} 是快照外的**新增**文件（K-11 红线：前端零改动；若为登记过的合法变更，须刷新快照并登记差异变更）`,
+    );
+    const digest = createHash("sha256").update(readFileSync(full)).digest("hex");
+    assert.equal(
+      digest,
+      expected,
+      `apps/web/src/${rel} 内容与快照不符（K-11 红线：前端零改动）`,
+    );
+  }
 });
