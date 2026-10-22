@@ -20,6 +20,8 @@ import {
   AgentRunRepo,
   ChildConflictError,
   ChildScopedRepo,
+  ConversationRepo,
+  MessageRepo,
   Scope,
   ScopeError,
   UNSCOPED_WHITELIST,
@@ -150,6 +152,52 @@ test("父谓词恒在：同一租户的另一个 run 也互相隔离", async () 
   await eventsA1.append({ type: "agent.started" });
   assert.equal((await eventsA1.list()).length, 1, "对照路径：runA 真的有 1 条");
   assert.deepEqual(await eventsA2.list(), [], "runA2 与 runA 同租户也互不可见（父谓词，不是租户谓词）");
+});
+
+test("父谓词恒在：message.listByRun 不越出会话域（同租户两会话共用同一 run_id）", async () => {
+  const { connection, db, scopeA } = seed();
+
+  // 同一租户 A 下的第二个会话：与 convA 共用 workspace / agent / user ⇒ 租户谓词拦不住
+  // 会话之间的串流，能拦住的**只有**父谓词（`conversation_id`）。
+  const convA2 = "aaaa0000-0000-4000-8000-0000000000a2";
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+  await conversations.create({
+    id: convA2,
+    workspaceId: IDS.wsA,
+    agentId: IDS.agentA,
+    userId: IDS.userA,
+    title: "conv-a2",
+  });
+
+  const runRef = scopeA.ref(IDS.runA);
+  const inConvA = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+  const inConvA2 = new MessageRepo(db, scopeA, scopeA.ref(convA2), DIALECT);
+
+  // 两个会话各插一条，**run_id 相同**（runA 归属 convA；message.run_id 没有
+  // "必须等于所在会话的 run" 的约束 ⇒ 库里可以造出这种数据，正是要挡的形态）。
+  const mine = await inConvA.append({ role: "user", content: "in convA", runId: IDS.runA });
+  const theirs = await inConvA2.append({ role: "user", content: "in convA2", runId: IDS.runA });
+  assert.notEqual(mine.id, theirs.id);
+
+  // 对照路径：库里确实有 **2** 条同 run_id 的消息（证明下面的"只回 1 条"是过滤掉的，
+  // 不是另一条根本没插进去）。
+  const raw = connection.raw
+    .prepare("select count(*) as n from message where run_id = ?")
+    .get(IDS.runA);
+  assert.equal(Number(raw.n), 2, "夹具必须真的造出跨会话同 run_id 的两行");
+
+  const listedFromA = await inConvA.listByRun(runRef);
+  assert.equal(listedFromA.length, 1, "listByRun 必须只回本会话那条（摘掉父谓词就会变 2）");
+  assert.equal(listedFromA[0].id, mine.id);
+  assert.equal(listedFromA[0].conversation_id, IDS.convA);
+
+  // 反向对照：另一个会话查同一个 run 也只回自己那条 ⇒ 谓词不是"碰巧只剩一条"。
+  const listedFromA2 = await inConvA2.listByRun(runRef);
+  assert.deepEqual(
+    listedFromA2.map((row) => row.id),
+    [theirs.id],
+    "会话 A2 查同一 run 只应看到自己那条",
+  );
 });
 
 test("父列只能由基类注入：插入自带 run_id ⇒ ScopeError", async () => {
