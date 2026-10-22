@@ -1,7 +1,7 @@
 /**
  * T2-07 · **OpenAPI 对齐测试**（本任务最关键的一条）。
  *
- * 背景：`packages/contracts` 没有 OpenAPI 的 TS 生成物，52 个 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1 + runs 3）的 TypeBox schema
+ * 背景：`packages/contracts` 没有 OpenAPI 的 TS 生成物，60 个 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1 + runs 3 + MCP 8）的 TypeBox schema
  * 只能手写 ⇒ **天然是第二真相源**。没有这条测试，"手写 schema"等于裸奔：改契约（或改
  * schema）时不会有任何东西红，直到联调时前端才崩。
  *
@@ -13,7 +13,7 @@
  *  3. **响应属性名集合相等**：契约成功响应的属性名（数组响应取 `items`）== 我 schema 的
  *     属性名集合。**多一个键**会污染壳，**少一个键**会让前端拿到 undefined。
  *
- * 另外断言"恰好 52 个"（T3-08 起：T3-12 的 49 + runs 3）—— 多一条说明加了契约外端点，少一条说明漏实现。
+ * 另外断言"恰好 60 个"（T3-11 起：T3-08 的 52 + MCP 8）—— 多一条说明加了契约外端点，少一条说明漏实现。
  */
 
 import assert from "node:assert/strict";
@@ -69,10 +69,10 @@ function schemaRequired(schema) {
   return [...(schema?.required ?? [])].sort();
 }
 
-test("恰好 52 个 op（不多不少），且每个 operationId 都能在契约里找到", () => {
-  assert.equal(OPERATION_IDS.length, 52, "本版做 52 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1 + runs 3）");
+test("恰好 60 个 op（不多不少），且每个 operationId 都能在契约里找到", () => {
+  assert.equal(OPERATION_IDS.length, 60, "本版做 60 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1 + runs 3 + MCP 8）");
   const contract = contractOperations();
-  assert.equal(contract.length, 52, `契约里应能对上 52 个 op，实测 ${contract.length}`);
+  assert.equal(contract.length, 60, `契约里应能对上 60 个 op，实测 ${contract.length}`);
 
   const contractIds = new Set(contract.map((item) => item.operationId));
   for (const id of OPERATION_IDS) {
@@ -157,7 +157,7 @@ test("成功响应属性名集合与契约逐条相等（数组响应取 items�
   }
 });
 
-test("52 op 的 operationId 与本任务交付的清单逐字相同（防「顺手改名」）", () => {
+test("60 op 的 operationId 与本任务交付的清单逐字相同（防「顺手改名」）", () => {
   // 清单来源：01-身份与授权.md §1（19 行）+ T3-05 任务卡（7 行）+ T3-06 任务卡（7 行）
   //           + T3-07 任务卡（5 行）；
   // 只做"字符串层面没被改过"的守卫。
@@ -221,6 +221,15 @@ test("52 op 的 operationId 与本任务交付的清单逐字相同（防「顺�
     "get_run_api_v1_runs__run_id__get",
     "cancel_run_api_v1_runs__run_id__cancel_post",
     "list_run_events_api_v1_runs__run_id__events_get",
+    // ---- MCP 族（T3-11 · 8 op）----
+    "list_servers_api_v1_mcp_servers_get",
+    "register_server_api_v1_mcp_servers_post",
+    "get_server_api_v1_mcp_servers__server_id__get",
+    "delete_server_api_v1_mcp_servers__server_id__delete",
+    "discover_tools_api_v1_mcp_servers__server_id__discover_post",
+    "list_tools_api_v1_mcp_tools_get",
+    "list_permissions_api_v1_mcp_permissions_get",
+    "create_permission_api_v1_mcp_permissions_post",
   ];
   assert.deepEqual([...OPERATION_IDS].sort(), [...expected].sort());
 });

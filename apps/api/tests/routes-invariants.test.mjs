@@ -126,10 +126,10 @@ test("J-10 反面：204 失败时仍是四键错误壳（不是空体）", async
   await fixture.close();
 });
 
-test("路由清单守恒：`/healthz` + 52 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1 + runs 3），一条不多一条不少", async () => {
+test("路由清单守恒：`/healthz` + 60 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1 + runs 3 + MCP 8），一条不多一条不少", async () => {
   const fixture = await makeApp({ username: "inventory" });
 
-  // ① **正向**：52 个 op 的 (method, path) 逐条存在（T3-08 起：在 T3-12 的 49 之上加 runs 3）。
+  // ① **正向**：60 个 op 的 (method, path) 逐条存在（T3-11 起：在 T3-08 的 52 之上加 MCP 8）。
   //    （`hasRoute` 是 Fastify 的公开 API，比解析打印树可靠）。参数位写成 Fastify 的 `:param` 形式。
   const expected = [
     ["POST", "/api/v1/auth/register"],
@@ -191,14 +191,23 @@ test("路由清单守恒：`/healthz` + 52 op（身份 19 + Agent 7 + Skill 7 + 
     ["GET", "/api/v1/runs/:run_id"],
     ["POST", "/api/v1/runs/:run_id/cancel"],
     ["GET", "/api/v1/runs/:run_id/events"],
+    // ---- MCP 族（T3-11 · 8 op）----
+    ["GET", "/api/v1/mcp/servers"],
+    ["POST", "/api/v1/mcp/servers"],
+    ["GET", "/api/v1/mcp/servers/:server_id"],
+    ["DELETE", "/api/v1/mcp/servers/:server_id"],
+    ["POST", "/api/v1/mcp/servers/:server_id/discover"],
+    ["GET", "/api/v1/mcp/tools"],
+    ["GET", "/api/v1/mcp/permissions"],
+    ["POST", "/api/v1/mcp/permissions"],
   ];
-  assert.equal(expected.length, 52);
+  assert.equal(expected.length, 60);
   for (const [method, url] of expected) {
     assert.equal(fixture.app.hasRoute({ method, url }), true, `缺少路由 ${method} ${url}`);
   }
   assert.equal(fixture.app.hasRoute({ method: "GET", url: "/healthz" }), true);
 
-  // ② **反向**：注册的**方法总数**恰为 53（52 op + healthz）。
+  // ② **反向**：注册的**方法总数**恰为 61（60 op + healthz）。
   //    为什么不逐条比对打印树：`printRoutes` 输出的是前缀树，参数段只是 `/:id` 子行，
   //    重建完整路径要靠缩进猜层数 —— 那种解析本身就会成为新的脆弱点。
   //    Fastify 默认 `exposeHeadRoutes: true`，GET 会隐含一个 HEAD，故统计时排除 HEAD。
@@ -212,7 +221,7 @@ test("路由清单守恒：`/healthz` + 52 op（身份 19 + Agent 7 + Skill 7 + 
       .map((item) => item.trim())
       .filter((item) => item !== "" && item !== "HEAD").length;
   }
-  assert.equal(methodCount, 53, `注册的方法总数应为 53（52 op + /healthz），实测 ${methodCount}`);
+  assert.equal(methodCount, 61, `注册的方法总数应为 61（60 op + /healthz），实测 ${methodCount}`);
 
   // ③ 契约外路由族一个都不许有（U-3 / R-26 已裁定不纳入）
   for (const [method, url] of [
