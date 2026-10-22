@@ -169,11 +169,15 @@ export class SubAgentSpawner {
     });
 
     // 子侧还原源：`payload.parent_run_id`（子 run 自己的事件流里第一条）。
+    // payload 键序 = channels.delta.json :: subagent.started 的 payload_keys_in_order
+    // （T031-01 冻结）：run_id = 本行所属流（子 run）；child_run_id / parent_run_id
+    // 恒双在 —— 任何一侧单看都能还原父子关系。
     await this.#events(childRunId).append({
       type: SUBAGENT_STARTED_EVENT,
       payload: {
-        parent_run_id: args.parentRunId,
+        run_id: childRunId,
         child_run_id: childRunId,
+        parent_run_id: args.parentRunId,
         target_agent_id: args.targetAgentId,
         task: args.task,
       },

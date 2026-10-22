@@ -82,10 +82,16 @@ test("K-7 遍历面：契约 19 条通道、19 个 golden，且 guard 帧不在�
     "guard 帧不得出现在 channels[].golden 里（它不是第 20 条通道）",
   );
 
-  // 磁盘上确实有 20 个 .txt：19 正式 + 1 guard。这条断言的作用是**记录**这个陷阱：
-  // 若有人把遍历改成 glob，条数会从 19 跳成 20。
+  // 磁盘上确实有 23 个 .txt：19 正式 + 1 guard + 2 delta（V0.3.1 · T031-01）+ 1 keys 序列化。
+  // 这条断言的作用是**记录**这个陷阱：若有人把遍历改成 glob，条数会从 19 跳成 23。
+  // delta 三个文件不是第 20+ 条通道 —— 它们只由下方的 K-9-delta 校验，不进本文件的
+  // `channels[].golden` 遍历（channels.json 的 19 项与 delta 是两份契约、两套校验）。
   const onDisk = readdirSync(GOLDEN_DIR).filter((name) => name.endsWith(".txt"));
-  assert.equal(onDisk.length, 20, "golden 目录应为 19 正式 + 1 guard = 20 个文件");
+  assert.equal(
+    onDisk.length,
+    23,
+    "golden 目录应为 19 正式 + 1 guard + 2 delta（subagent.started/finished）+ 1 keys = 23 个文件",
+  );
   assert.equal(channels.meta.guard_file_count, 1);
 });
 
@@ -249,9 +255,135 @@ test("K-8 编码器本体不做数值处理（归一化点唯一）", () => {
 test("K-9 contracts/sse/channels.delta.json 不存在（本版不建第 20 通道）", () => {
   assert.equal(
     existsSync(join(SSE_DIR, "channels.delta.json")),
-    false,
-    "本版不得出现 channels.delta.json（首个适用例是 V0.3.1 的 2 帧）",
+    true,
+    "V0.3.1 已登记 delta 契约（T031-01）：恰 2 帧（subagent.started / subagent.finished）；缺失 = 契约未落地",
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// K-9-delta · V0.3.1 追加 2 帧（channels.delta.json）—— 与 19 项基线**叠加不替代**
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("K-9-delta delta 恰 2 帧、golden 逐字节与磁盘全等、且不得漏进 19 通道生成白名单", () => {
+  const delta = readJson(join(SSE_DIR, "channels.delta.json"));
+  assert.equal(delta.channels.length, 2, "delta 恰 2 项（多一帧 = 未登记契约增量，判红）");
+  assert.equal(delta.meta.count, 2);
+  assert.equal(delta.meta.base_channels_count, 19, "delta 必须声明其基线是 19 项（叠加关系机器可查）");
+  assert.equal(
+    delta.meta.base_channels_digest_sha256,
+    channels.meta.channels_digest_sha256,
+    "delta 声明的基线 digest 必须与 channels.json 实际 digest 全等（基线漂移即红）",
+  );
+
+  const deltaNames = delta.channels.map((spec) => spec.channel);
+  assert.deepEqual(
+    [...deltaNames].sort(),
+    ["subagent.finished", "subagent.started"],
+    "delta 通道名单必须逐字同源（V0.3.1 计划 §1④）",
+  );
+  // 登记边界：通道名登记 ≠ 下发面注册。生成白名单仍钉死 19 项 ——
+  // subagent.* 进 SSE_CHANNELS / event-writer 发帧注册归 T031-05，提前出现 = 越权。
+  for (const name of deltaNames) {
+    assert.equal(
+      SSE_CHANNEL_LIST.includes(name),
+      false,
+      `${name} 不得在生成白名单里（注册归 T031-05；提前出现会让 payload 校验面悄然扩张）`,
+    );
+  }
+
+  // delta golden：磁盘字节 sha256 / 长度与契约逐条全等（K-7① 的 delta 面）。
+  let checked = 0;
+  for (const spec of delta.channels) {
+    const bytes = readFileSync(join(SSE_DIR, spec.golden));
+    assert.equal(sha256(bytes), spec.golden_sha256, `${spec.channel}: delta golden sha 与契约不一致`);
+    assert.equal(bytes.length, spec.frame.bytes, `${spec.channel}: delta golden 字节数与契约不一致`);
+    checked += 1;
+  }
+  assert.equal(checked, 2, "必须逐个校验完 2 帧");
+});
+
+test("K-9-delta message.delta.keys 冻结件：键名版与键名:类型版 sha 全等、且反规范形态可复算", () => {
+  // 只读冻结契约推导（§8.1(b)(c)：delta 类型继承投影源 content = "str | null"）。
+  const spec = channels.channels.find((c) => c.channel === "message.delta");
+  const p = spec.payload_fields;
+  const types = {
+    delta: p.content.type, // projection.rule = "content -> delta"；不得取缺省 str
+    message_id: p.message_id.type,
+    role: p.role.type,
+    run_id: p.run_id.type,
+  };
+  const keys = Object.keys(types).sort();
+  const typed = keys.map((k) => `${k}:${types[k]}`).join("\n") + "\n";
+  const names = keys.join("\n") + "\n";
+
+  const expectedTyped = "51a78dc60c5bb33ce5f049b206407db1cd439b336b0c6c97e4619b257e4949c1";
+  const expectedNames = "ddf3eaae42f86234e4f67e602ffbba6957b3c696192885cb41a52fbb2983a031";
+  assert.equal(sha256(Buffer.from(typed, "utf8")), expectedTyped, "键名:类型版 sha 漂移 ⇒ payload 类型面被改");
+  assert.equal(sha256(Buffer.from(names, "utf8")), expectedNames, "键名版 sha 漂移 ⇒ payload 键集合被改");
+
+  // 反规范形态（delta 误取 str）必须仍可复算出登记的实值 —— 钉死"这是错的那个值"。
+  const wrong = keys.map((k) => `${k}:${k === "delta" ? "str" : types[k]}`).join("\n") + "\n";
+  assert.equal(
+    sha256(Buffer.from(wrong, "utf8")),
+    "b7917f8b27aebb038e503cfc77333a1d4ac51edb63a7e5a90707b1c42c1ea355",
+    "反规范参考值对不上 ⇒ 推导规范说明与实值脱钩，须回到 §8.1(c) 重定",
+  );
+
+  // 冻结件本体：keys.txt 字节与推导逐字全等，manifest（.sha256）里登记的正是它的哈希。
+  const keysBytes = readFileSync(join(GOLDEN_DIR, "message.delta.keys.txt"));
+  assert.equal(
+    keysBytes.toString("utf8"),
+    typed,
+    "message.delta.keys.txt 内容与契约推导不一致 —— 冻结件被手改",
+  );
+  const manifestLines = readFileSync(join(ROOT, "contracts", "sse", "golden", "message.delta.keys.sha256"), "utf8")
+    .split("\n")
+    .filter((line) => line.trim() !== "" && !line.trim().startsWith("#"));
+  assert.equal(manifestLines.length, 1, "keys.sha256 只许一条校验行（其余必须是 # 注释）");
+  const [hash, target] = manifestLines[0].trim().split(/\s+/);
+  assert.equal(hash, expectedTyped, "keys.sha256 登记值与契约推导不一致");
+  assert.equal(
+    sha256(readFileSync(join(ROOT, target))),
+    hash,
+    `keys.sha256 校验行指向的 ${target} 与登记哈希不一致（即 sha256sum -c 必红的形态）`,
+  );
+
+  // 两条派生摘要 = **同一个 keys.txt** 的派生（裁定 2026-10-23 条件③，防两文件各自漂移）：
+  // typed = keys.txt 文件字节本体；names = 逐行剥离 ":类型" 后取 sha。
+  assert.equal(sha256(keysBytes), expectedTyped, "keys.txt 文件字节 sha ≠ 键:类型版参考值（防篡改锚失配）");
+  const namesFromFile =
+    keysBytes
+      .toString("utf8")
+      .split("\n")
+      .filter((line) => line !== "")
+      .map((line) => line.slice(0, line.indexOf(":")))
+      .join("\n") + "\n";
+  assert.equal(
+    sha256(Buffer.from(namesFromFile, "utf8")),
+    expectedNames,
+    "从 keys.txt 剥离类型推导的键名版 sha ≠ 参考值 —— 两派生摘要不再同源",
+  );
+});
+
+test("K-9-e0 · 模板组装 == encodeDataFrame：19/19 既有通道逐字节等价（E-0 常驻 gate）", () => {
+  // 裁定 2026-10-23：模板组装是 delta golden（subagent.* 未进生成白名单）的唯一导出路径，
+  // 其可信度 = 本断言 —— 生成器或编码器任何一侧被改动，这里必须仍 19/19 全等；
+  // 失配 ⇒ delta golden 的导出路径失效，须回到导出探针重出（D:/Temp/WBTimeAI/2026-10-23-V031-spike/export-delta-golden.mjs）。
+  let checked = 0;
+  for (const spec of channels.channels) {
+    const payload = buildEventPayload(spec.channel, spec.constructor.kwargs ?? {});
+    const expected = encodeDataFrame(spec.frame.seq, spec.channel, payload);
+    const text = DATA_FRAME_TEMPLATE
+      .replaceAll("{seq}", String(spec.frame.seq))
+      .replaceAll("{channel}", spec.channel)
+      .replaceAll("{json}", JSON.stringify(projectPayload(spec.channel, payload)));
+    assert.ok(
+      Buffer.from(text, "utf8").equals(expected),
+      `${spec.channel}: 模板组装与 encodeDataFrame 逐字节不等价 —— E-0 失效`,
+    );
+    checked += 1;
+  }
+  assert.equal(checked, 19, "必须逐个校验完 19 条");
 });
 
 test("K-9 通道数 19、digest 与生成物同源、19 项 sha 与 manifest 全等", () => {

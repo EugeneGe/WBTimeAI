@@ -1,0 +1,164 @@
+{
+  "contract_version": 1,
+  "extends": "channels.json",
+  "note": "V0.3.1 唯一允许的契约增量（T031-01）：父流追加 2 帧。既有 19 项（channels.json）零变化、逐字节冻结。事件 payload 语义：run_id = 本行所属事件流的 run（父流帧上=父 run，子 run 自身事件行上=子 run）；child_run_id / parent_run_id 恒双在 —— 任何一侧单看都能还原父子关系（裁定书 R8 ② 双源还原：父侧 tool_call.output.child_run_id、子侧 agent_event.payload.parent_run_id，与本帧同值互证）。",
+  "meta": {
+    "count": 2,
+    "golden_file_count": 2,
+    "base_channels_count": 19,
+    "base_channels_digest_sha256": "9edda3baea0cee3a7bf0fb9aa4036fe90b0423797141ab5936abdd1d2e350fc5",
+    "registered_by": "V0.3.1 · T031-01（docs/V1.0/V0.3.1-子Agent委派M1/02-施工/00-施工任务划分.md T031-01 卡）",
+    "registration_boundary": "通道名登记 ≠ 下发面注册：packages/event 的 SSE_CHANNELS 生成白名单仍为 19 项（channels.json 单一来源），subagent.* 进生成面与 event-writer 发帧注册归 T031-05；在此之前 event-writer 对这 2 帧维持既有拒发行为",
+    "golden_export": "packages/event 编码产物形态（DATA_FRAME_TEMPLATE / LF only / seq=1）；导出探针自带 19/19 模板组装==encodeDataFrame 逐字节等价自证（subagent.* 未进生成白名单，直接调 encodeDataFrame 会 UnknownChannelError），等价自证已常驻 gate（packages/event/tests/golden.test.mjs · K-9-e0），探针存 D:/Temp/WBTimeAI/2026-10-23-V031-spike/export-delta-golden.mjs",
+    "golden_sample_side": "golden 样本钉**父流侧**（run_id=父 run）；子 run 自身事件行同形，仅 run_id 取子 run id（裁定 2026-10-23 条件①：两侧各钉本侧样本值，子侧载体断言归 T031-05 注册时落）",
+    "t031_05_exit_criteria": "subagent.* 进 SSE_CHANNELS 生成面后，须对 subagent.started / subagent.finished 各产一帧**真实 encodeDataFrame 产物**与 golden 逐字节比对（出口判据 + 载体断言，归 T031-05）——在此之前 golden 受模板等价性（K-9-e0）保护，该口子不得长期开着"
+  },
+  "channels": [
+    {
+      "channel": "subagent.started",
+      "constructor": {
+        "factory": null,
+        "kwargs": {
+          "run_id": "run_01",
+          "child_run_id": "run_02",
+          "parent_run_id": "run_01",
+          "target_agent_id": "agent_02",
+          "task": "汇总本周日程冲突"
+        },
+        "kwargs_source": "read:apps/api/src/modules/run/subagent-spawner.ts::SubAgentSpawner.spawn（G031-SPK ac26c0b 实产物导出；TS 侧无 py 工厂，组装归 event-writer，T031-05 注册）"
+      },
+      "domain_type": "subagent.started",
+      "event_class": null,
+      "event_module": null,
+      "frame": {
+        "bytes": 169,
+        "seq": 1,
+        "sha256": "78c1d4287c9b64f5474d34b0babe384d82759ad00d5794cf35e718cbd2749d1e"
+      },
+      "golden": "golden/subagent.started.txt",
+      "golden_sha256": "78c1d4287c9b64f5474d34b0babe384d82759ad00d5794cf35e718cbd2749d1e",
+      "index": 20,
+      "payload_fields": {
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "child_run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "parent_run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "target_agent_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "task": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "child_run_id",
+        "parent_run_id",
+        "target_agent_id",
+        "task"
+      ],
+      "phase": "delta",
+      "phase_source": "read:docs/V1.0/V0.3.1-子Agent委派M1/01-计划/README.md §1④（父流追加 2 帧：subagent.started / subagent.finished）",
+      "projected_fields": [
+        "run_id",
+        "child_run_id",
+        "parent_run_id",
+        "target_agent_id",
+        "task"
+      ],
+      "projection": null
+    },
+    {
+      "channel": "subagent.finished",
+      "constructor": {
+        "factory": null,
+        "kwargs": {
+          "run_id": "run_01",
+          "child_run_id": "run_02",
+          "parent_run_id": "run_01",
+          "status": "SUCCEEDED",
+          "duration_ms": 12,
+          "error": null
+        },
+        "kwargs_source": "read:apps/api/src/modules/run/subagent-spawner.ts（子 run 终态经 RunCoordinator.finalizeIfActive 的 status/stop_reason 口径，T031-02 接线发射；status 取 @wbtime/domain 的 TERMINAL_RUN_STATUSES 终态 3 值 SUCCEEDED/FAILED/CANCELLED —— 发射侧必须 import 同一冻结词表常量，不得另立字面量清单，词表漂移两处同红）"
+      },
+      "domain_type": "subagent.finished",
+      "event_class": null,
+      "event_module": null,
+      "frame": {
+        "bytes": 158,
+        "seq": 1,
+        "sha256": "37a0cb0df85795b96cc8cdc6c2533343240bbe7b459466d2496b9a2e5a2d28b6"
+      },
+      "golden": "golden/subagent.finished.txt",
+      "golden_sha256": "37a0cb0df85795b96cc8cdc6c2533343240bbe7b459466d2496b9a2e5a2d28b6",
+      "index": 21,
+      "payload_fields": {
+        "run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "child_run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "parent_run_id": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "status": {
+          "default": null,
+          "required": true,
+          "type": "str"
+        },
+        "duration_ms": {
+          "default": null,
+          "required": false,
+          "type": "int | null"
+        },
+        "error": {
+          "default": null,
+          "required": false,
+          "type": "str | null"
+        }
+      },
+      "payload_keys_in_order": [
+        "run_id",
+        "child_run_id",
+        "parent_run_id",
+        "status",
+        "duration_ms",
+        "error"
+      ],
+      "phase": "delta",
+      "phase_source": "read:docs/V1.0/V0.3.1-子Agent委派M1/01-计划/README.md §1④（父流追加 2 帧：subagent.started / subagent.finished）",
+      "projected_fields": [
+        "run_id",
+        "child_run_id",
+        "parent_run_id",
+        "status",
+        "duration_ms",
+        "error"
+      ],
+      "projection": null
+    }
+  ]
+}

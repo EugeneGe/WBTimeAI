@@ -1,0 +1,4 @@
+id: 1
+event: subagent.finished
+data: {"run_id":"run_01","child_run_id":"run_02","parent_run_id":"run_01","status":"SUCCEEDED","duration_ms":12,"error":null}
+

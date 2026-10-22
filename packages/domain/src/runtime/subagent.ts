@@ -64,9 +64,19 @@ export const SUBAGENT_REJECTED_EVENT = "subagent.rejected";
 /**
  * 派生被放行时落的**内部事件**类型（父 run 侧；`agent_event.type`，零 DDL）。
  *
- * ⚠️ spike 阶段它只是内部行；T031-01 把 `subagent.started` 登记为 SSE delta 通道后，
- * 它会随 `frameOf` 变成父流的下发帧 —— 届时 payload 键序以冻结件
- * `channels.delta.json` 的 `payload_keys_in_order` 为准（本骨架的 payload 形状
- * 是 spike 探针形状，T031-02/T031-05 接线时必须重对键序）。
+ * ⚠️ payload 键序**已冻结** = `contracts/sse/channels.delta.json` ::
+ * `subagent.started` 的 `payload_keys_in_order`
+ * （`run_id, child_run_id, parent_run_id, target_agent_id, task`，T031-01）。
+ * 两侧语义：`run_id` = 本行所属事件流的 run；`child_run_id` / `parent_run_id` 恒双在
+ * （双源还原，裁定书 R8 ②）。T031-02/T031-05 接线父侧发帧时**不得**改键序/键名
+ * （golden `subagent.started.txt` 已冻结，逐字节全等是 D6 门禁）。
  */
 export const SUBAGENT_STARTED_EVENT = "subagent.started";
+
+/**
+ * `subagent.finished` 发射侧约束（T031-02 接线时生效；架构裁定 2026-10-23 条件②）：
+ * 帧 payload.status 必须引用**与 `agent.completed` / `agent.error` 同源的冻结词表常量**
+ * （本包的 `TERMINAL_RUN_STATUSES` 导入），**不得**在发射点另立字面量清单
+ * —— 词表漂移时两处必须同红。payload 键序见 `channels.delta.json` 冻结形
+ * （`run_id, child_run_id, parent_run_id, status, duration_ms, error`）。
+ */

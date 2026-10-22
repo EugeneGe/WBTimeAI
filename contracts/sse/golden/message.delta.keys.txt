@@ -1,0 +1,4 @@
+delta:str | null
+message_id:str
+role:str
+run_id:str

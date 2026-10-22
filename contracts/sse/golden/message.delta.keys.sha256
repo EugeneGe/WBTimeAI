@@ -1,0 +1,35 @@
+# message.delta 投影字段冻结件（U4 / G031-5 判据③；V0.3.1 · T031-01 建立，2026-10-23）
+#
+# 规范（docs/V1.0/V0.3.1-子Agent委派M1/02-施工/README.md §8.1(b)(c)，QA 实测复现后钉死；禁读 apps/ / packages/ 源码）：
+#   数据源     = contracts/sse/channels.json 中 message.delta 条目的 projected_fields
+#                （实测 = run_id / message_id / role / delta）
+#   键名版     = 按键名字典序升序、每行一个键名、LF 结尾
+#                ⇒ sha256 = ddf3eaae42f86234e4f67e602ffbba6957b3c696192885cb41a52fbb2983a031
+#   键名:类型版 = 按键名字典序升序、每行 "键名:类型"、LF 结尾（本件校验的这个）
+#                ⇒ sha256 = 51a78dc60c5bb33ce5f049b206407db1cd439b336b0c6c97e4619b257e4949c1
+#   类型规则   = 投影字段的类型 = 其投影源字段的类型：payload_fields 里没有投影产物 delta，
+#                delta 必须从源字段 content（projection.rule = "content -> delta"）继承 = "str | null"，
+#                不得回退取缺省 "str" —— 反规范形态实值（即 delta 误取 str）
+#                = b7917f8b27aebb038e503cfc77333a1d4ac51edb63a7e5a90707b1c42c1ea355，
+#                算出它 = 推导违反规范，改推导、不得改本参考值凑数。
+#
+# 被校验对象 = message.delta.keys.txt（本目录，其字节即上述"键名:类型"序列化本体）；
+# 判据命令（cwd = 仓库根）：sha256sum -c contracts/sse/golden/message.delta.keys.sha256
+#
+# 防篡改锚（裁定 2026-10-23 · 条件②）：上述 51a78dc6… 同时 = keys.txt **自身文件字节**的 sha256
+# （manifest 装 keys.txt 的哈希，manifest 本身不参与被校验 —— 非自引用）。
+# keys.txt 一个字节被改，sha256sum -c 当场红。
+#
+# 两条派生摘要声明（裁定 2026-10-23 · 条件③）：51a78dc6…（键:类型全集 = keys.txt 文件字节）
+# 与 ddf3eaae…（去类型键名集 = keys.txt 逐行剥离 ":类型" 后取 sha）是**同一个 keys.txt 的
+# 两条派生摘要**，均已进 gate 断言（packages/event/tests/golden.test.mjs · K-9-delta）
+# —— 防"两个文件各自漂移"。
+#
+# 生成链（两步，任何人可复跑；只读冻结契约，禁读 apps/ / packages/ 源码）：
+#   第 1 步 · 生成 keys.txt（按键名字典序升序、每行 "键名:类型"、LF 结尾）：
+#   cd D:/WBT/WBTimeAI && python -c "import json,pathlib;d=json.loads(pathlib.Path('contracts/sse/channels.json').read_text(encoding='utf-8'));e=next(x for x in d['channels'] if x['channel']=='message.delta');p=e['payload_fields'];t={'delta':p['content']['type'],'message_id':p['message_id']['type'],'role':p['role']['type'],'run_id':p['run_id']['type']};pathlib.Path('contracts/sse/golden/message.delta.keys.txt').write_bytes(''.join(k+':'+t[k]+chr(10) for k in sorted(t)).encode('utf-8'))"
+#   第 2 步 · 对 keys.txt 取 sha256，写入本件校验行（# 注释行被 sha256sum -c 跳过）：
+#   cd D:/WBT/WBTimeAI && sha256sum contracts/sse/golden/message.delta.keys.txt
+#   ⇒ 须输出 51a78dc60c5bb33ce5f049b206407db1cd439b336b0c6c97e4619b257e4949c1
+#
+51a78dc60c5bb33ce5f049b206407db1cd439b336b0c6c97e4619b257e4949c1  contracts/sse/golden/message.delta.keys.txt
