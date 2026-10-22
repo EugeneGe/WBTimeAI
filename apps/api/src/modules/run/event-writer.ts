@@ -181,6 +181,31 @@ export class RunEventWriter {
   }
 
   /**
+   * 追加一条**内部行**（`agent_event` 行，**不进 SSE**）。
+   *
+   * 与 {@link append} 的唯一区别：**不校验 12 帧白名单**。理由（R3-11）：
+   * 19 通道是"下发给前端的帧"，而 `turn/step` 级事实（`loop.turn.started` /
+   * `context.built` / `intents.validated` …）**只落内部行**、从不下发。
+   * 它们共用同一张 `agent_event` 表与同一个 `seq` 序列 —— 这样"回放一次 run 的完整
+   * 过程"只需要读一张表。
+   *
+   * 终态检查**仍然生效**（终态后零事件对内部行同样成立）。
+   *
+   * @throws {RunTerminalError} run 已终态。
+   */
+  async appendInternal(
+    type: string,
+    payload: Record<string, unknown> = {}
+  ): Promise<{ seq: number; event: AgentEventRow }> {
+    const run = await this.#run();
+    if (run === null || isTerminalRunStatus(run.status as never)) {
+      throw new RunTerminalError(this.#runId, run?.status ?? "MISSING", type);
+    }
+    const appended = await this.#events().append({ type, payload });
+    return { seq: appended.seq, event: appended.row };
+  }
+
+  /**
    * `seq > afterSeq` 的事件（升序）。
    *
    * **不含** gap 语义 —— "遇到洞就停"是续读策略（`sse-stream.ts::continualFrom`），

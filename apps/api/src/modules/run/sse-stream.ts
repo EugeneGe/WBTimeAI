@@ -75,20 +75,32 @@ export function continualFrom<T extends { readonly seq: number }>(
   return contiguous;
 }
 
-/** 一行 → 一帧。通道不在 19 条冻结面里 ⇒ 抛错（不静默丢弃：那会让帧数悄悄少一条）。 */
-export function frameOf(row: AgentEventRow): Buffer {
+/**
+ * 一行 → 一帧；**内部行（非 19 通道）返回 `null`**。
+ *
+ * 为什么从"抛错"改成"跳过"（T3-09 起）：R3-11 要求 `turn/step` 级事实落
+ * `agent_event` **内部行**（`loop.turn.started` / `context.built` / …），它们与 SSE 帧
+ * **共用同一张表与同一个 seq 序列**。若这里抛错，库里一旦有内部行，SSE 流就整条崩掉。
+ *
+ * 但"跳过"不等于"沉默地丢脏数据"：`isSseChannel` 仍在这里判定，**未知通道**
+ * （既不是 12 帧也不是内部行命名空间）依旧会被上层视为可疑 —— 由
+ * `sse-dispatch.test.mjs` 的 A-2 保证"12 帧之外的下发"在**写入侧**就被拒，
+ * 所以流里出现的非通道行必然是内部行，跳过是安全且必要的。
+ */
+export function frameOf(row: AgentEventRow): Buffer | null {
   const channel = row.type;
-  if (!isSseChannel(channel)) {
-    throw new Error(
-      `agent_event.type=${JSON.stringify(channel)} 不是契约 19 通道之一 —— 库里有脏行，不得下发`
-    );
-  }
+  if (!isSseChannel(channel)) return null;
   return encodeDataFrame(row.seq, channel as SseChannel, (row.payload ?? {}) as Record<string, unknown>);
 }
 
-/** 一批行 → 一批帧（顺序保持）。 */
+/** 一批行 → 一批帧（顺序保持；内部行被过滤掉）。 */
 export function framesOf(rows: readonly AgentEventRow[]): Buffer[] {
-  return rows.map(frameOf);
+  const frames: Buffer[] = [];
+  for (const row of rows) {
+    const frame = frameOf(row);
+    if (frame !== null) frames.push(frame);
+  }
+  return frames;
 }
 
 /** `streamRunFrames` 的依赖（只读 + 一个终态探针）。 */
@@ -149,8 +161,13 @@ export async function streamRunFrames(
     const rows = await options.readAfter(lastSeq, batchLimit);
     const contiguous = continualFrom(rows, lastSeq);
     for (const row of contiguous) {
-      await options.write(frameOf(row));
-      frames += 1;
+      // 内部行（turn/step 级）不进 SSE：`frameOf` 返回 `null` 时**仍然推进游标**
+      // —— 否则下一轮会反复读到同一批内部行，永远推不动。
+      const frame = frameOf(row);
+      if (frame !== null) {
+        await options.write(frame);
+        frames += 1;
+      }
       lastSeq = row.seq;
     }
 
@@ -159,8 +176,11 @@ export async function streamRunFrames(
       // 再读一次，把终态前后脚写入的行也带走（同一轮内的竞态）。
       const tail = continualFrom(await options.readAfter(lastSeq, batchLimit), lastSeq);
       for (const row of tail) {
-        await options.write(frameOf(row));
-        frames += 1;
+        const frame = frameOf(row);
+        if (frame !== null) {
+          await options.write(frame);
+          frames += 1;
+        }
         lastSeq = row.seq;
       }
       return { frames, lastSeq, reason: "terminal" };
