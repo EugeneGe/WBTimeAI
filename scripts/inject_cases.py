@@ -918,26 +918,34 @@ def v031_watermark_local_increment(contracts: Path, repo: Path) -> str:
             "apps/api/src/modules/run/sse-watermark.ts",
         ),
         (
-            # 路线 A 的"缺 seq ⇒ 跳过该行"守卫整块删除 ⇒ 该行落进后续下发路径。
+            # **方案 2（QA 主审裁定，2026-10-23）**：把「守卫过滤」改成「本地自增补号」——
+            #   有合法 seq 的行原样保留；无 seq / 非法 seq 的行改写为 `seq = i + 1`
+            #   （i = 该行在本次连接里的下标 ⇒ **连接本地**自增）。
+            #   ⇒ 无 seq 行以**真·整数 id** 静默下发，且编号**落在父 run 的
+            #     (run_id, seq) 空间内**（撞号：第 3 行的合成 id 3 撞上父 run 真 seq 3）
+            #     —— 与用例名 `local-increment` 的字面承诺一致，即 K5b 的真实危险形态。
+            #
+            #   为什么改整条语句（filter→map）而不是只换谓词（§4.6 实测）：
+            #     只把 `Number.isInteger(row.seq)` 换成 `true` 会剩
+            #     `true && row.seq >= 1`，而 `undefined >= 1` 恒为 false ⇒ 守卫照常拦下
+            #     ⇒ 改坏是**语义空操作**（R-14 首判 FAKE-GREEN 的根因）。
+            #     补号必须写进行本身 ⇒ 必须 filter→map。
+            #
+            #   为什么锚点用 `[^;]*;` 跨到语句尾：src 带 as-cast、dist 不带
+            #   （`(row.seq as number) >= 1` vs `row.seq >= 1`），谓词级锚点无法
+            #   两侧同形；语句级锚点两侧各命中 1 次（次数相等），且替换文本
+            #   两边**同形**、各自合法（TS 侧 `{...row, seq}` 与 AgentEventRow 兼容）。
+            #
+            #   若将来实现改成 route-A 形态（`if (!Number.isInteger(row.seq)) continue;`），
+            #   本锚点将不再命中 ⇒ 用例 UNEVALUABLE(12) ⇒ 按纪律重新校准锚点，
+            #   **不得**回退到"只换谓词"的方案 1（那只证明抓得住崩流，不证明抓得住冒充）。
             (
-                r"if\s*\(\s*!\s*Number\.isInteger\(\s*(?:row|r|item|event)\.seq\s*\)\s*\)"
-                r"\s*\{\s*(?:continue|return)\s*;?\s*\}",
-                " ",
+                r"owned\.filter\(\s*\(\s*(?:row|r|item|event)\s*\)\s*=>[^;]*;",
+                "owned.map((row, i) => (Number.isInteger(row.seq) && row.seq >= 1)"
+                " ? row : { ...row, seq: i + 1 });",
             ),
-            # 两条路线共有的"seq 是不是非负整数"判断式 → 失效。
-            # ⚠️ 替换值必须是 `true || false`，**不能是裸 `true`**（§4.6 实测）：
-            #   工程师实现是合取式 `Number.isInteger(row.seq) && (row.seq as number) >= 1`
-            #   （TS 带 as-cast、JS 不带 —— 两边文本因此不同，但这一处调用**两边同形**）。
-            #   若只把它换成 `true`，剩下 `true && row.seq >= 1`，而 `undefined >= 1`
-            #   恒为 false ⇒ 守卫**照常拦下**无 seq 行 ⇒ 改坏是语义空操作 ⇒ FAKE-GREEN
-            #   （R-14 的根因）。`true || false && X` 依优先级 = `true || (false && X)`
-            #   = 恒 true ⇒ **整条合取式失效**，且在 TS/JS 两边都是合法表达式、
-            #   与后面跟什么（cast 与否）无关。
-            (r"Number\.isInteger\(\s*(?:row|r|item|event)\.seq\s*\)", "true || false"),
-            # py 原型同形：`row.seq ?? <兜底>` 的正确形态 → 直接连本地水位自增。
-            (r"(?:row|r|item|event)\.seq\s*\?\?", "lastSeq + 1 ??"),
         ),
-        label=f"④ {VICTIM_V031_WATERMARK}：缺 seq 守卫 → 失效（连接本地自增冒充 id:）",
+        label=f"④ {VICTIM_V031_WATERMARK}：缺 seq 守卫 → 连接本地自增补号（整数 id 静默冒充）",
     )
 
 
