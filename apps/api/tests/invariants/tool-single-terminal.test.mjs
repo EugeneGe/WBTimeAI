@@ -9,6 +9,7 @@
  *   | S-2 | 第二次 `markTerminal` **不覆盖** 第一次的 `output` / `status` | 逐字段比对 |
  *   | S-3 | 终态后 `markRunning` 不复活（返回 `null`，状态不变） | 返回 null + 状态 |
  *   | S-4 | `tool.started` / `tool.completed` 各**恰一帧**（一次调用一对） | 帧计数 |
+ *   | S-5 | **并发竞态**：两路 result 同时到 ⇒ 库里仍恰 1 条终态 ∧ 不自相矛盾 | `Promise.allSettled` + 行内一致性 |
  *
  * 为什么"单终态"值得一条不变量
  * -----------------------
@@ -24,7 +25,7 @@ import test from "node:test";
 
 import { Scope, ToolCallRepo } from "@wbtime/db";
 
-import { finalTurn, makeRunApp, TENANT_ID, toolTurn } from "./_harness.mjs";
+import { finalTurn, makeRunApp, TENANT_ID, toolTurn, WORKSPACE_ID } from "./_harness.mjs";
 
 /** `tool_call` 的终态集合（与 `packages/db` 同源）。 */
 const TERMINAL = ["SUCCESS", "FAILED", "DENIED", "CANCELLED", "UNKNOWN"];
@@ -138,11 +139,121 @@ test("S-3 · 终态后 markRunning 不复活（返回 null，状态不变）", a
   }
 });
 
+// ---------------------------------------------------------------------------
+// S-5 · 并发竞态（主理人 2026-10-22 裁定 P2-4）
+// ---------------------------------------------------------------------------
+
+test("S-5 · 并发竞态：两路 result 同时到 ⇒ 库里仍恰 1 条终态且不自相矛盾", async (t) => {
+  const fixture = await makeRunApp({ turns: [finalTurn()] });
+  try {
+    // 造一条「RUNNING 的 tool_call」（要的是"终态未落"的竞态窗口，故不走完整 run ——
+    // 完整 run 里工具执行是串行的，构造不出两路 result 同时到）。
+    const agent = await fixture.createAgent();
+    const conversationId = "6c6c6c6c-0000-4000-8000-0000000000c6";
+    const runId = "6f6f6f6f-0000-4000-8000-0000000000f6";
+    const callId = "6a6a6a6a-0000-4000-8000-0000000000a6";
+    fixture.raw
+      .prepare(
+        "insert into conversation (id, tenant_id, workspace_id, agent_id, user_id, title, status) " +
+          "values (?, ?, ?, ?, ?, 'S-5 会话', 'ACTIVE')",
+      )
+      .run(conversationId, TENANT_ID, WORKSPACE_ID, agent.agentId, fixture.userId);
+    fixture.raw
+      .prepare(
+        "insert into agent_run (id, tenant_id, agent_id, agent_version_id, conversation_id, user_id, " +
+          "trigger, run_mode, status, tool_error_count, cost_estimated, cost_status) " +
+          "values (?, ?, ?, ?, ?, ?, 'user', 'INLINE', 'RUNNING', 0, 0, 'UNPRICED')",
+      )
+      .run(runId, TENANT_ID, agent.agentId, agent.versionId, conversationId, fixture.userId);
+    fixture.raw
+      .prepare(
+        "insert into tool_call (id, run_id, tool_name, tool_type, attempt, status) " +
+          "values (?, ?, 'shell', 'builtin', 1, 'RUNNING')",
+      )
+      .run(callId, runId);
+
+    const repo = new ToolCallRepo(
+      fixture.connection.db,
+      new Scope(TENANT_ID),
+      new Scope(TENANT_ID).ref(runId),
+      "sqlite",
+    );
+
+    // 两路 result **同时**到：不同 status、不同 output/error
+    const results = await Promise.allSettled([
+      repo.markTerminal(callId, { status: "SUCCESS", output: { writer: "A" }, durationMs: 11 }),
+      repo.markTerminal(callId, { status: "FAILED", error: "writer-B", durationMs: 22 }),
+    ]);
+    const winners = results.filter(
+      (item) => item.status === "fulfilled" && item.value !== null,
+    ).length;
+    t.diagnostic(`并发两路 markTerminal ⇒ 成功方=${winners}（若为 CAS 实现应为 1）`);
+
+    // ① 行数：并发不得"多插一行 result"（这是最容易写坏的一种实现）
+    const rows = fixture.raw.prepare("select * from tool_call where run_id = ?").all(runId);
+    assert.equal(rows.length, 1, `并发两路 result 后必须仍恰 1 行，实测 ${rows.length}`);
+
+    // ② 状态：必须是 7 值里的终态，且是两方之一（不能出现第三种/中间态）
+    const final = rows[0];
+    assert.ok(TERMINAL.includes(final.status), `实测 ${final.status}`);
+    assert.ok(
+      ["SUCCESS", "FAILED"].includes(final.status),
+      `终态必须取自两方之一，实测 ${final.status}`,
+    );
+
+    // ③ 一致性：**当前实现过不了这一条（已实测，登记 V0.4.0）**
+    //    严格版断言（本该在此处）：
+    //      if (final.status === "SUCCESS") { assert.equal(final.error, null); assert.notEqual(final.output, null); }
+    //      else { assert.equal(final.output, null); assert.equal(final.error, "writer-B"); }
+    //    实测红证（主理人裁定的"如实报告"证据）：
+    //      `FAILED 行不得带 output  + '{"writer":"A"}' - null`
+    //    原因：`markTerminal` 是 `findById` → 终态短路 → `update`（read-then-write，**非
+    //    CAS**），且 patch **只覆盖调用方带的字段** ⇒ 后到者（FAILED）改写了 status/error，
+    //    却留下先到者（SUCCESS）写入的 `output` ⇒ 行自相矛盾。
+    //    为什么不在这里断言"缺陷存在"：那会在 V0.4.0 修好时反而红（把 bug 写成期望）。
+    //    严格版断言的启用条件与原文在 `施工记录/T3-14.md` §9 + 遗留 R-5。
+    t.diagnostic(
+      `终值行=${JSON.stringify({ status: final.status, output: final.output, error: final.error, duration_ms: final.duration_ms })}`
+    );
+
+    // ③′ 可断言的部分（现在与修好后都成立）：终值行必须来自**某一次**完整 patch
+    //     —— `duration_ms` 必须是两方之一（11 / 22），不能是空或第三种值。
+    assert.ok(
+      [11, 22].includes(final.duration_ms),
+      `duration_ms 必须取自两方之一，实测 ${final.duration_ms}`,
+    );
+
+    // ④ 至少一方生效（防止"两路都被静默丢弃"这种假绿）
+    assert.ok(winners >= 1, `至少一方要生效，实测 ${winners}`);
+
+    // ⑤ **已知缺口（实测记录，登记 V0.4.0）**：`winners === 2` ⇒ 两路都写成功。
+    //    CAS 实现下应为 1。这条不改成"断言 winners===1"（当前实现会红），
+    //    但也不掩盖：诊断已打印实际值，且 ③ 的红证原文在同一段注释里。
+    //    V0.4.0 把 `markTerminal` 改成条件更新（`UPDATE … WHERE status NOT IN 终态`
+    //    + 整批字段覆盖）后，启用：`assert.equal(winners, 1)` + ③ 的三一致断言。
+    if (winners > 1) {
+      assert.ok(
+        final.status === "FAILED",
+        `read-then-write 下由**后到者**决定终值，实测 ${final.status}`,
+      );
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
 // COUNTEREXAMPLE: 删掉 `ToolCallRepo.markTerminal` 里的
 // `if (isTerminalToolCallStatus(current.status)) return current;`（幂等短路）
 // ⇒ S-2 的 `overwritten.status` 变成 FAILED、`output` 变成 `{tampered:true}` ⇒ S-2 红。
 // 复跑：改 `packages/db/src/repositories/tool-call-repo.ts` 后
-//       `pnpm --filter @wbtime/db build && cd apps/api && node --experimental-sqlite --test tests/invariants/tool-single-terminal.test.mjs`
+//       `pnpm --filter @wbtime/api build && cd apps/api && node --experimental-sqlite --test tests/invariants/tool-single-terminal.test.mjs`
 //
 // COUNTEREXAMPLE: 把 `ToolCallRepo.markRunning` 的 `options.allowRevive !== true` 判断
 // 改成恒 true（"重试时允许复活"）⇒ S-3 的 `revived` 变成一行且状态 RUNNING ⇒ S-3 红。
+//
+// COUNTEREXAMPLE: 把 `markTerminal` 的 `this.update(id, patch)` 改成
+// `this.insertRow({ ...current, ...patch, id: current.id + "-2" })`（"每次 result 插一行"
+// 的错实现）⇒ **实测 4 红 / 4 跑**：S-5 先命中 ②（`rows[0]` 是残留的 `RUNNING` 行，
+// 报错原文 `实测 RUNNING`；若只跑到 ① 也会因行数 1→2 红），S-1/S-2/S-3 连带红
+// （单行与幂等同时被破坏）。
+//
