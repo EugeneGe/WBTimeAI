@@ -34,6 +34,13 @@ export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 /** Provider 适配器产出的分片（比端口 `ModelChunk` 多带归一后的 usage）。 */
 export type ProviderChunk =
   | { readonly type: "text_delta"; readonly text: string }
+  /** 模型请求工具（T3-09：原先被 `default:` 静默跳过，工具回路只有回程没有去程）。 */
+  | {
+      readonly type: "tool_call";
+      readonly id: string;
+      readonly name: string;
+      readonly input: unknown;
+    }
   | { readonly type: "usage"; readonly usage: NormalizedUsage }
   | { readonly type: "finish"; readonly reason: string };
 
@@ -163,10 +170,20 @@ async function* consumeStream(
           yield { type: "usage", usage: normalizeUsage(part.usage) };
           yield { type: "finish", reason: "model_finish" };
           break;
+        case "tool-call":
+          // ⚠️ T3-09 起**不再静默跳过**：模型请求工具是 ReAct 回路的去程，
+          // 丢掉它等于"模型永远只会说话、不会做事"。
+          yield {
+            type: "tool_call",
+            id: String((part as { toolCallId?: unknown }).toolCallId ?? ""),
+            name: String((part as { toolName?: unknown }).toolName ?? ""),
+            input: (part as { input?: unknown }).input,
+          };
+          break;
         case "error":
           throw toProviderError(part.error, meta);
         default:
-          // 其余分片（reasoning / tool-call / metadata）本版不消费，静默跳过。
+          // 其余分片（reasoning / metadata）本版不消费，静默跳过。
           break;
       }
     }
@@ -303,6 +320,9 @@ export async function createProviderAdapter(
 /** 端口分片转换：`ProviderChunk` → `ModelChunk`（usage 命名在这里对齐契约）。 */
 export function toModelChunk(chunk: ProviderChunk): ModelChunk {
   if (chunk.type === "text_delta") return { type: "text_delta", text: chunk.text };
+  if (chunk.type === "tool_call") {
+    return { type: "tool_call", id: chunk.id, name: chunk.name, input: chunk.input };
+  }
   if (chunk.type === "finish") return { type: "finish", reason: chunk.reason };
   const usage = chunk.usage;
   const tokensIn = usage.prompt_tokens ?? 0;

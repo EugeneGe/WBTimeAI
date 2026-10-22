@@ -86,6 +86,19 @@ export interface ModelRequest {
 /** 流式分片。`usage` 与 `finish` 是**终态帧**，一个流各至多一次。 */
 export type ModelChunk =
   | { readonly type: "text_delta"; readonly text: string }
+  /**
+   * 模型请求一次工具调用（T3-09 新增，纯加法）。
+   *
+   * 为什么必须加到**分片**上而不是只加在 `ModelMessage.toolCalls`：后者是"发给模型的
+   * 历史"，前者是"模型这一轮刚说出来的话"。只补前者，工具回路只有回程没有去程 ——
+   * 模型的请求在传输层就被丢掉了（T3-02 首版正是如此：`case "tool-call"` 静默跳过）。
+   */
+  | {
+      readonly type: "tool_call";
+      readonly id: string;
+      readonly name: string;
+      readonly input: unknown;
+    }
   | {
       readonly type: "usage";
       readonly tokensIn: number;
