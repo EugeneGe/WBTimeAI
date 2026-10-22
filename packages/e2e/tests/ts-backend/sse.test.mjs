@@ -82,7 +82,7 @@ test("case-3-ts-sse：真实长连接夹具（真建流/真读帧/真断开/零�
     await fixture.stop();
   }
 
-  // ── 后端腿：真进程 + SSE 端点确缺的反向证明（诚实边界，显式登记） ──────────
+  // ── 后端腿：真进程 + 「无可匿名触达的 SSE 流」反向证明（诚实边界，显式登记） ──
   const backend = await startTsBackend("sse");
   try {
     const runEndpoint = await fetch(`${backend.baseUrl}/api/v1/agents/agent_x/run`, {
@@ -92,17 +92,29 @@ test("case-3-ts-sse：真实长连接夹具（真建流/真读帧/真断开/零�
       signal: AbortSignal.timeout(10_000),
     });
     assertTsEvidence(runEndpoint, backend);
+
+    // 本断言跨 T3-05/T3-08 过渡期保持单一不变量：**匿名请求不得触达任何 SSE 流**。
+    //   * 404 = 端点未注册（V0.2.0 形态，19 op 无 agents 族）；
+    //   * 401 = 端点已注册、匿名被认证层拒绝（T3-05 落地 agents 路由后）；
+    //   * 200 + text/event-stream ⇒ 红（打错对象 / 匿名可达的流，都是违约）。
+    // T3-08 落地 `GET /runs/{id}/events` 后，本反向证明退役 —— SSE 通道矩阵改由
+    // DoD#1 主链 e2e（真帧实流）承接，台账口径随之更新。
+    const contentType = runEndpoint.headers.get("content-type") ?? "";
     assert.equal(
-      runEndpoint.status,
-      404,
-      `POST /agents/{id}/run 在 TS 后端应确缺（404），实得 ${runEndpoint.status} —— 出现 200/SSE 流反而说明打错了对象`,
+      runEndpoint.status === 200 || contentType.includes("text/event-stream"),
+      false,
+      `POST /agents/{id}/run 匿名可触达 SSE 流（status=${runEndpoint.status} ct=${contentType}）—— 打错对象或违约`,
+    );
+    assert.ok(
+      [401, 404].includes(runEndpoint.status),
+      `POST /agents/{id}/run 期望 401（端点已注册、匿名被拒）或 404（端点未注册），实得 ${runEndpoint.status}`,
     );
     const runBody = await runEndpoint.json().catch(() => null);
-    assert.ok(runBody !== null, "404 也应有可解析的失败壳");
+    assert.ok(runBody !== null, "非 2xx 响应也应有可解析的失败壳");
     assert.deepEqual(
       Object.keys(runBody).sort(),
       ["code", "data", "message", "request_id"],
-      "SSE 端点缺失的 404 也必须是四键失败壳",
+      "失败壳必须是四键契约壳",
     );
     assert.equal(typeof runBody.code, "string", "失败码必须是 ErrorCode 字面值");
   } finally {
