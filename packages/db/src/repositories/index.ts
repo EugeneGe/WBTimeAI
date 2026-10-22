@@ -23,7 +23,12 @@ export {
 } from "./scoped-repo.js";
 export { TaskRepo, type TaskRow } from "./task-repo.js";
 export { AgentRepo, type AgentRow } from "./agent-repo.js";
-export { ConversationRepo, type ConversationRow } from "./conversation-repo.js";
+export {
+  ConversationRepo,
+  CONVERSATION_STATUS_ACTIVE,
+  type ConversationRow,
+  type CreateConversationInput,
+} from "./conversation-repo.js";
 
 // ---------------------------------------------------------------------------
 // 方言适配
@@ -133,3 +138,28 @@ export {
   type AppendEventInput,
   type AppendedEvent,
 } from "./agent-event-repo.js";
+export { MessageRepo, type AppendMessageInput, type MessageRow } from "./message-repo.js";
+
+// ---------------------------------------------------------------------------
+// 工具目录族（T3-03 · B1；`tool` 有 tenant_id ⇒ ScopedRepo；含 R3-23 幂等物化）
+// ---------------------------------------------------------------------------
+
+export {
+  ToolRepo,
+  BUILTIN_TOOLS,
+  BUILTIN_TOOL_VERSION,
+  CODE_EXEC_DEFAULT_RUNTIME,
+  CODE_EXEC_RUNTIMES,
+  TOOL_SOURCE_BUILTIN,
+  TOOL_STATUS_ACTIVE,
+  readToolPermissionAction,
+  serializeBuiltinInputSchema,
+  serializeBuiltinToolSpec,
+  toToolCatalogEntry,
+  type BuiltinToolSpec,
+  type BuiltinToolsSummary,
+  type ToolCatalogEntry,
+  type ToolPermissionAction,
+  type ToolRow,
+  type ToolVersionRow,
+} from "./tool-repo.js";
