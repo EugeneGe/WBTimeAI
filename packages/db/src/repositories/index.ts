@@ -208,3 +208,31 @@ export {
   type SkillVersionRow,
   type UpdateSkillMetadataPatch,
 } from "./skill-repo.js";
+
+// ---------------------------------------------------------------------------
+// B2 · MCP 族（`mcp_server` / `mcp_permission` 有 tenant_id ⇒ ScopedRepo；
+// `mcp_tool` 无 tenant_id ⇒ ChildScopedRepo，父 = mcp_server）
+// ---------------------------------------------------------------------------
+
+export {
+  McpPermissionRepo,
+  McpServerRepo,
+  McpToolRepo,
+  MCP_DEFAULT_TRANSPORT,
+  MCP_PERMISSION_ACTIONS,
+  MCP_PERMISSION_DEFAULT_ACTION,
+  MCP_PERMISSION_DEFAULT_EFFECT,
+  MCP_PERMISSION_EFFECTS,
+  MCP_SERVER_STATUS_ACTIVE,
+  MCP_TOOL_STATUS_ACTIVE,
+  MCP_TRANSPORTS,
+  isMcpPermissionAction,
+  isMcpPermissionEffect,
+  isMcpTransport,
+  type DiscoverMcpToolInput,
+  type GrantMcpPermissionInput,
+  type McpPermissionRow,
+  type McpServerRow,
+  type McpToolRow,
+  type RegisterMcpServerInput,
+} from "./mcp-repo.js";
