@@ -78,7 +78,9 @@ const LEAK_KEYS = new Set([
  *
  * `kind` 两种，别混：
  * * `not_found` —— 定向资源 op，必须 **404** 且 `code ∈ {NOT_FOUND, *_NOT_FOUND}`；
- * * `list_no_leak` —— 列表 op，必须 **200** 但**不含他租户行**（列表不会 404，这是语义）。
+ * * `list_no_leak` —— 列表 op，必须 **200** 且**双向**（V0.2.0 审计 #10）：
+ *   「自己的行**出现** + 他租户行**不出现**」。原单向断言下空列表也绿 ——
+ *   路由悄悄漏掉整个租户的行时测试依然通过。列表不会 404，这是语义。
  */
 export const FAMILIES = [
   {
@@ -164,6 +166,19 @@ export const FAMILIES = [
     },
   },
 ];
+
+/**
+ * 覆盖 `list_no_leak` 的**列表族登记表**（V0.2.0 审计 #10）。
+ *
+ * 恰好 3 族（organization / model_credential / tool_permission），每族的
+ * `list_no_leak` case 都要求夹具同时提供 A、B 两租户的真实行 id —— 「查得到自己」
+ * 的正向半边必须有 A 租户的行可查，空跑守卫在这张表上锁长度。
+ */
+export const LIST_FAMILIES = Object.freeze([
+  "organization",
+  "model_credential",
+  "tool_permission",
+]);
 
 /**
  * 本版**无仓储**的 10 族：登记为 `registered-pending`。
@@ -253,11 +268,23 @@ function assertNoExistenceLeak(body, caseId) {
 // 前置：登记表长度（不依赖夹具，永远可跑）
 // ─────────────────────────────────────────────────────────────────────────────
 
-test("族矩阵规模：4 可用族 × {read,write} = 8 case；10 族 registered-pending", () => {
+test("族矩阵规模：4 可用族 × {read,write} = 8 case；10 族 registered-pending；列表族恰 3", () => {
   assert.equal(FAMILIES.length, 4, "可用族必须是 4 个");
   assert.equal(flattenCases().length, 8, "8 个 case（4 族 × 2 槽位）");
   assert.equal(PENDING_FAMILIES.length, 10, "pending 登记表必须正好 10 族");
   assert.equal(new Set(PENDING_FAMILIES).size, 10, "pending 登记不得重复");
+
+  // #10：列表族登记表锁长度 —— 双向 list_no_leak 必须覆盖恰好 3 个列表族。
+  assert.equal(LIST_FAMILIES.length, 3, "list_no_leak 必须恰好覆盖 3 个列表族");
+  assert.equal(new Set(LIST_FAMILIES).size, 3, "列表族登记不得重复");
+  const noLeakFamilies = flattenCases()
+    .filter((item) => item.kind === "list_no_leak")
+    .map((item) => item.family);
+  assert.deepEqual(
+    [...new Set(noLeakFamilies)].sort(),
+    [...LIST_FAMILIES].sort(),
+    "list_no_leak case 的族集合必须与列表族登记表一致（少一族 = 双向覆盖缩水）",
+  );
 
   const notFound = flattenCases().filter((item) => item.kind === "not_found");
   const noLeak = flattenCases().filter((item) => item.kind === "list_no_leak");
@@ -411,17 +438,37 @@ for (const item of flattenCases()) {
         `${item.id}: 跨租户不得用 PERMISSION_DENIED —— 403 只由「权限码不足」触发，混进来就破了 §5.1 边界`,
       );
     } else {
-      // 列表类：200 且不含他租户行
+      // 列表类（#10 双向）：200 且「自己的行出现 + 他租户行不出现」。
       assert.equal(response.statusCode, 200, `${item.id}: 列表 op 必须 200`);
       const body = response.json();
       assertShell(body);
       assert.equal(body.code, 0, `${item.id}: 成功壳 code 必须为 0`);
       const rows = Array.isArray(body.data) ? body.data : [];
+
+      // 双向·正向半边：A 租户**自己的行**必须出现在列表里。
+      // （V0.2.0 审计 #10：原单向断言下空列表也绿 —— 路由漏掉整个租户的行
+      // 也能过。空列表与「查不到自己」从这里开始必红。）
+      const ownResourceId = harness.resourceId(item.family, "a");
+      assert.equal(
+        typeof ownResourceId,
+        "string",
+        `${item.id}: 夹具必须给出 A 租户自己的 ${item.family} 资源 id`,
+      );
+      assert.ok(
+        rows.length >= 1,
+        `${item.id}: 列表不得为空（单向判据的空列表假绿已被 #10 废除）`,
+      );
+      assert.equal(
+        JSON.stringify(body).includes(ownResourceId),
+        true,
+        `${item.id}: 列表里没有 A 租户自己的行（own=${ownResourceId}）—— 「查得到自己」是 list_no_leak 的正向半边`,
+      );
+
       if (item.listField !== null) {
         const offenders = rows.filter((row) => row?.[item.listField] === resourceId);
         assert.deepEqual(offenders, [], `${item.id}: 列表里出现他租户行`);
       }
-      // 通用：整串不得包含 B 租户资源 id
+      // 双向·负向半边：整串不得包含 B 租户资源 id。
       assert.equal(
         JSON.stringify(body).includes(resourceId),
         false,

@@ -168,11 +168,17 @@ export async function createHarness() {
     ["a", appA, tokenA],
     ["b", appB, tokenB],
   ]) {
+    // A 租户的授权记在 **A 的 agent** 名下（`agent_id` ⇒ `subject_type='agent'`）：
+    // `GET /tools/permissions?agent_id=` 是**按主体查**（`listBySubject("agent", …)`），
+    // #10 双向判据要求该列表能查到 A 自己的行 —— 主体若是 user，按 agent 查恒空。
+    // B 租户保持 user 主体（无 agent 夹具），它的行本就不该出现在 A 的列表里。
+    const payload = { tool_id: `tool-conformance-${tenant}` };
+    if (tenant === "a") payload.agent_id = ids.agent.a;
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/tools/permissions",
       headers: { authorization: `Bearer ${token}` },
-      payload: { tool_id: `tool-conformance-${tenant}` },
+      payload,
     });
     assert.equal(
       response.statusCode,
