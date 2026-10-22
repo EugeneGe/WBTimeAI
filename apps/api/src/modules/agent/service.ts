@@ -1,5 +1,5 @@
 /**
- * T3-05 · Agent 服务（7 op 的 6 个主体 + run 前置校验；执行归 T3-08）。
+ * T3-05 · Agent 服务（7 op 的 6 个主体 + run 入口）。
  *
  * 职责与**刻意不做**（逐条对任务卡验收 ①–④）：
  *   - CRUD 三 op + 列表分页（契约 `?page=&page_size=`）；
@@ -7,9 +7,16 @@
  *     §15.5 偏差 #2 的裁决：服务层不绕过状态机；非法迁移 / 词表外值 ⇒ 422，
  *     `data.reason_code='agent_status_transition_invalid'`，**不新增契约错误码**）；
  *   - `publish` / `versions` 委托 {@link AgentVersioningService}（本文件不碰版本行）；
- *   - `run` 只做**入口与前置校验**（R3-13 harness 路由 + R3-06 run_mode + 存在性），
- *     **不创建 run、不执行** —— `agent_run` 计数在本任务恒为装配前值；
- *     响应体是"入口回执"（非 `RunResponse`），T3-08 落执行后替换，登记为偏差。
+ *   - `run` 做**入口与前置校验**（R3-13 harness 路由 + R3-06 run_mode + 存在性）
+ *     **并把执行交给 {@link RunDriver}**（T3-14 起；此前是 `execution:"deferred"` 的
+ *     入口回执 —— 那条偏差已在 T3-14 收口，见 `run/` 的 driver 头注）。
+ *
+ * run 入口的响应体（T3-14 变更）
+ * ---------------------------
+ *   改为 `RunResponse`（21 键，与 `GET /runs/{id}` **同一形态**）。理由：run 现在真的
+ *   被创建了，"入口回执"这个中间形态已无存在理由；客户端拿到 `id` 后即可
+ *   `GET /runs/{id}/events` 收帧。契约该 op 的 `200` schema 是空对象（`{}`），
+ *   故形态变更**不动冻结面**（`compare_openapi` 零变化，由 `gate:openapi` 断言）。
  */
 
 import { randomUUID } from "node:crypto";
@@ -25,6 +32,8 @@ import {
 } from "@wbtime/db";
 
 import { authError } from "../auth/errors.js";
+import { RunDriver } from "../run/driver.js";
+import { toRunView, type RunView } from "../run/run-service.js";
 import {
   assertInlineRunMode,
   routeHarness,
@@ -65,16 +74,17 @@ export interface UpdateAgentInput {
   readonly status?: string | null;
 }
 
-/** run 入口回执（**非** `RunResponse` —— run 未创建，见文件头注；T3-08 替换）。 */
-export interface RunEntryReceipt {
-  readonly agent_id: string;
-  readonly agent_version_id: string;
-  readonly conversation_id: string | null;
-  readonly harness: string;
-  readonly run_mode: "INLINE";
-  /** 恒 `"deferred"`：执行归 T3-08（RunCoordinator + RunEventWriter）。 */
-  readonly execution: "deferred";
-}
+/**
+ * run 入口的旧回执形态（**已删除执行语义**）。
+ *
+ * T3-05 时期它是 `{agent_id, agent_version_id, conversation_id, harness, run_mode,
+ * execution:"deferred"}` —— run 未创建。T3-14 起入口返回 `RunResponse`（见文件头注），
+ * 本类型仅作为**历史口径的说明**保留文档价值，不再有代码引用（`grep` 可为证；
+ * 若日后有人想"顺手恢复回执"，`routes-agents.test.mjs` 的 D 组断言会立刻红）。
+ *
+ * @deprecated 用 `RunView`（`run/run-service.ts`）。
+ */
+export type RunEntryReceiptDeprecated = never;
 
 /** `GET /agents` 的分页口径（契约：`page` 缺省 1；`page_size` 缺省 20、上限 100）。 */
 export const AGENTS_PAGE_SIZE_DEFAULT = 20;
@@ -86,6 +96,13 @@ export interface AgentServiceDeps {
   readonly dialect: SqlDialect;
   /** 时钟（测试注入；缺省真实时钟）。 */
   readonly now?: () => Date;
+  /**
+   * run 执行器（T3-14 起；`runEntry` 的前置校验通过后把执行交给它）。
+   *
+   * 缺省（`undefined`）⇒ `POST /agents/{id}/run` **fail loud**（`CONFIGURATION_ERROR`），
+   * 不静默降级成"只回执不执行"—— 那正是 T3-05 遗留的那条假行为。
+   */
+  readonly driver?: RunDriver;
 }
 
 export class AgentService {
@@ -93,12 +110,14 @@ export class AgentService {
   readonly #dialect: SqlDialect;
   readonly #now: () => Date;
   readonly #versioning: AgentVersioningService;
+  readonly #driver: RunDriver | undefined;
 
   constructor(deps: AgentServiceDeps) {
     this.#db = deps.db;
     this.#dialect = deps.dialect;
     this.#now = deps.now ?? (() => new Date());
     this.#versioning = new AgentVersioningService({ db: deps.db, dialect: deps.dialect });
+    this.#driver = deps.driver;
   }
 
   /** 版本族入口（路由的 publish / versions 直接透传）。 */
@@ -248,24 +267,29 @@ export class AgentService {
   }
 
   /**
-   * 运行入口（`POST /agents/{id}/run`）—— **只做入口与前置校验，不创建 run、不执行**。
-   *
-   * 校验序（先 404 后 422，与既有族一致）：
-   *   1. agent 不可见 ⇒ 404；
-   *   2. `run_mode` ≠ INLINE ⇒ 422 `run_mode_unsupported`（R3-06）；
-   *   3. agent 无当前版本 ⇒ 422（py `load_version` 同文案："Agent 无当前版本且未显式
-   *      指定 version_id"；`RunRequest` 无版本字段，本版不支持请求级指定）；
-   *   4. 当前版本行不存在 / 归属不符 ⇒ 404（py `load_version` NOT_FOUND 同形）；
-   *   5. `runtime_config.harness` 不在白名单 ⇒ 422 `harness_unsupported`（R3-13，
-   *      **不静默回落**；`agent_run` 计数不变 —— 本方法压根不写 run）；
-   *   6. `conversation_id` 给了但不可见 ⇒ 404（续聊自既有会话，I-1 口径）；
-   *      未给 ⇒ **不创建**（会话创建是 run 装配的一部分，归 T3-08）；
-   *   7. `message` 缺失 / 空串 ⇒ 422（py RunRequest.message 是必填；契约 OpenAPI 的
-   *      `required` 为空是生成口径的既有不一致，登记为偏差）。
-   *
-   * 全部通过 ⇒ 落一行 `agent.harness_routed` 审计（R3-13 ⑤，`run_id` 恒 null ——
-   * T3-08 接线补齐）并返回入口回执。
-   */
+ * 运行入口（`POST /agents/{id}/run`）—— 前置校验 → **S1 安全闸** → 真建 run → 异步驱动。
+ *
+ * 校验序（先 404 后 422，与既有族一致）：
+ *   1. agent 不可见 ⇒ 404；
+ *   2. `run_mode` ≠ INLINE ⇒ 422 `run_mode_unsupported`（R3-06）；
+ *   3. `message` 缺失 / 空串 ⇒ 422（py `RunRequest.message` 必填；契约 OpenAPI 的
+ *      `required` 为空是生成口径的既有不一致，登记为偏差）；
+ *   4. agent 无当前版本 ⇒ 422（py `load_version` 同文案）；
+ *   5. 当前版本行不存在 / 归属不符 ⇒ 404（py `load_version` NOT_FOUND 同形）；
+ *   6. `runtime_config.harness` 不在白名单 ⇒ 422 `harness_unsupported`（R3-13，
+ *      **不静默回落**）；
+ *   7. `conversation_id` 给了但不可见 ⇒ 404（续聊自既有会话，I-1 口径）；
+ *   8. **S1 `input` 安全闸**（R3-17 第 1 挂点；DENY ⇒ 422 且 **run 不创建** ——
+ *      这是"挂点在 run 创建前"的唯一可断言形态：`agent_run` 行数为 0）；
+ *   9. 建会话（未给时）/ 落用户消息 / 建 run / 后台驱动（`RunDriver.start`）。
+ *
+ * 回执 = `RunResponse`（21 键，与 `GET /runs/{id}` 同形 —— 见文件头注）。
+ *
+ * 审计：`agent.harness_routed` 在 run 创建**之后**落（`run_id` 不再是 null ——
+ * T3-05 遗留的接线项，R3-13 ⑤ 的原意）。
+ *
+ * @throws {HttpException} 见上表 + `CONFIGURATION_ERROR`（未装配 run 驱动 / 模型网关）。
+ */
   async runEntry(
     tenantId: string,
     agentId: string,
@@ -277,7 +301,15 @@ export class AgentService {
       readonly workspace_id?: string | null;
       readonly run_mode?: string;
     },
-  ): Promise<RunEntryReceipt> {
+  ): Promise<RunView> {
+    if (this.#driver === undefined) {
+      throw authError(
+        ERROR_CODES.CONFIGURATION_ERROR,
+        "未装配 run 驱动：POST /agents/{id}/run 不可用（未配置 ≠ 降级）",
+        { reason_code: "run_driver_not_configured" },
+      );
+    }
+    const driver = this.#driver;
     const agent = await this.get(tenantId, agentId);
 
     const runMode = input.run_mode ?? "INLINE";
@@ -315,26 +347,45 @@ export class AgentService {
       }
     }
 
+    // ---- S1（run 创建之前；DENY ⇒ 422 且不建 run）-------------------------
+    const preflight = await driver.preflight({
+      message: input.message,
+      requestId,
+      conversationId,
+    });
+    const outbound =
+      preflight !== null && preflight.decision === "REDACT" && preflight.redactedContent !== undefined
+        ? preflight.redactedContent
+        : input.message;
+
+    const started = await driver.start({
+      tenantId,
+      userId,
+      agentId,
+      agentVersionId: version.id,
+      systemPrompt: version.system_prompt,
+      modelConfig: version.model_config,
+      runtimeConfig: version.runtime_config,
+      conversationId,
+      workspaceId: input.workspace_id ?? null,
+      agentWorkspaceId: agent.workspace_id,
+      message: outbound,
+      requestId,
+    });
+
     await writeHarnessAudit({
       db: this.#db,
       dialect: this.#dialect,
       tenantId,
       userId,
       agentId,
-      runId: null,
+      runId: started.run.id,
       routed,
       requestId,
       now: this.#now(),
     });
 
-    return {
-      agent_id: agentId,
-      agent_version_id: version.id,
-      conversation_id: conversationId,
-      harness: routed.harness,
-      run_mode: "INLINE",
-      execution: "deferred",
-    };
+    return toRunView(started.run);
   }
 
   /** 非法迁移的 422（复用 `VALIDATION_ERROR` 壳 + 内部 reason_code，不新增契约错误码）。 */

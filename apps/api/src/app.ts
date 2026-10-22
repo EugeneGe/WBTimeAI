@@ -30,8 +30,11 @@ import { ConversationService } from "./modules/conversation/service.js";
 import { McpService } from "./modules/mcp/service.js";
 import { ModelProviderService } from "./modules/model/provider-service.js";
 import { RunCoordinator } from "./modules/run/coordinator.js";
+import { RunDriver } from "./modules/run/driver.js";
 import { RunService } from "./modules/run/run-service.js";
 import { OrganizationService } from "./modules/organization/service.js";
+import { SafetyGate } from "./modules/safety/gate.js";
+import { LocalProcessSandbox } from "./modules/sandbox/local-process.js";
 import { SkillService } from "./modules/skill/service.js";
 import { ToolService } from "./modules/tool/service.js";
 import { createFakeProvider } from "./modules/model/fake-provider.js";
@@ -43,6 +46,7 @@ import {
   assertKnownProviderKind,
   createSdkProviderAdapter,
   type ProviderAdapter,
+  type ProviderChunk,
   type ProviderKind,
 } from "./modules/model/providers/factory.js";
 import { authRoutes } from "./routes/auth.js";
@@ -106,6 +110,15 @@ export interface ModelStackOptions {
   readonly baseURL?: string;
   /** 显式放行 fake；缺省看 `config.modelAllowFakeProvider`。 */
   readonly allowFakeProvider?: boolean;
+  /**
+   * fake 的脚本化分片（**仅 `kind==="fake"` 生效**；R3-19 的"脚本化 chunk 序列"）。
+   *
+   * 为什么装配面要开这个口：运行时的工具回路需要"模型先请求一个工具、再给最终答复"，
+   * 而缺省 fake 只吐一段固定文本。e2e 因此必须能注入脚本 —— 否则要么伪造工具调用
+   * （假绿），要么整条工具链路无法离线验证。脚本**只在 fake 被闸门放行时可用**
+   * （`assertFakeProviderAllowed`），生产误配仍然启动失败。
+   */
+  readonly fakeScript?: readonly ProviderChunk[];
 }
 
 /**
@@ -124,7 +137,9 @@ export function buildModelStack(options: ModelStackOptions): ModelStack {
   if (kind === "fake") {
     // 闸门：生产装配 fake 等同伪造能力，宁可启动失败。
     assertFakeProviderAllowed(env, options.allowFakeProvider ?? config.modelAllowFakeProvider);
-    const provider = createFakeProvider({});
+    const provider = createFakeProvider({
+      ...(options.fakeScript === undefined ? {} : { script: options.fakeScript }),
+    });
     return { kind, provider, gateway: new ModelGateway({ provider }) };
   }
 
@@ -179,6 +194,15 @@ export interface BuildAppOptions {
    * `ConfigError`（`CONFIGURATION_ERROR`），装配后的网关挂 `app.modelGateway`。
    */
   readonly model?: ModelStackOptions;
+  /**
+   * **预建**的模型网关（T3-14；与 `model` **互斥**）。
+   *
+   * 为什么需要它：运行时 e2e 要"模型先请求工具、再给答复"的脚本化序列，而
+   * {@link buildModelStack} 的 fake 只吐固定文本。装配方（e2e 启动器）自建
+   * `new ModelGateway({provider: createFakeProvider({script})})` 后从这里注入，
+   * 既保持"真端口真 HTTP"（不是 mock 掉 Fastify），又不给产品代码塞测试专用分支。
+   */
+  readonly modelGateway?: ModelGateway;
 }
 
 /** 挂了模型栈的实例：`modelGateway` 仅在 `buildApp({ model })` 时存在。 */
@@ -204,10 +228,33 @@ export function buildIdentityStack(args: {
   readonly database: DrizzleDatabase;
   readonly dialect?: SqlDialect;
   readonly tenantId?: string;
+  /**
+   * 模型网关（T3-14 起必需于 run 执行）。缺省 ⇒ `runEntry` fail loud
+   * （`CONFIGURATION_ERROR`），**不静默降级**：没有网关就无法执行，假装能跑
+   * 只会把"未配置"推迟到用户第一次点运行。
+   */
+  readonly gateway?: ModelGateway;
 }): IdentityDeps {
   const secretKey = requireSecretKey(args.config);
   const dialect = args.dialect ?? "pg";
   const tenantId = args.tenantId ?? process.env.WBTIME_AI_TENANT_ID ?? DEFAULT_TENANT_ID;
+  // 协调器**单实例**：`RunService.cancel` 的进程内 abort 信号与 `RunDriver` 的取消
+  // 传播必须是同一个对象 —— 两个实例各持一份 Map，取消就有一半收不到。
+  const coordinator = new RunCoordinator({ db: args.database, dialect, tenantId });
+  // 沙箱：本机子进程（T3-10）。会话按 run 建、按 run 销（`RunDriver` 负责 destroy）。
+  const sandbox = new LocalProcessSandbox({});
+  // 安全闸（T3-13）：六挂点在 `RunDriver` 里逐个接线（见 `modules/safety/hooks.ts`）。
+  const safety = new SafetyGate({ db: args.database, dialect, tenantId });
+  const driver = new RunDriver({
+    db: args.database,
+    dialect,
+    tenantId,
+    coordinator,
+    sandbox,
+    safety,
+    ...(args.gateway === undefined ? {} : { gateway: args.gateway }),
+    ...(mcpEgressAllowlist() === undefined ? {} : { egressAllowlist: mcpEgressAllowlist() }),
+  });
   return {
     db: args.database,
     dialect,
@@ -215,26 +262,20 @@ export function buildIdentityStack(args: {
     auth: new AuthService({ db: args.database, dialect, tenantId, secretKey }),
     organizations: new OrganizationService({ db: args.database, dialect }),
     credentials: new CredentialService({ db: args.database, dialect, secretKey }),
-    // T3-05：Agent 族 7 op（发布 / 版本 / run 前置校验；执行归 T3-08）。
-    agents: new AgentService({ db: args.database, dialect }),
+    // T3-05 + T3-14：Agent 族 7 op（run 入口真建 run 并异步驱动，见 `RunDriver`）。
+    agents: new AgentService({ db: args.database, dialect, driver }),
     // T3-06：Skill 族 7 op（清单解析 / 装载见 modules/skill；执行不在范围）。
     skills: new SkillService({ db: args.database, dialect }),
     // T3-07：Conversation 族 5 op（消息写入是服务层入口，不挂路由 —— 契约无该 op）。
     conversations: new ConversationService({ db: args.database, dialect }),
-    // T3-12：审批族 4 op（决议只改状态与时间戳，**不触发执行** —— 执行归 T3-08 恢复路径）。
+    // T3-12：审批族 4 op（决议只改状态与时间戳；执行侧读决议的是 `RunDriver`）。
     approvals: new ApprovalService({ db: args.database, dialect }),
     // T3-12：模型目录 6 op（供应商目录 4 + 模型目录 2；凭证族 5 op 仍走 `credentials`）。
     providers: new ModelProviderService({ db: args.database, dialect }),
     // T3-12：工具目录 1 op（`GET /tools` 先幂等物化内置注册表再读回，R3-23 口径）。
     tools: new ToolService({ db: args.database, dialect }),
-    // T3-08：runs 3 op。协调器在此**单实例**：`cancel` 的进程内 abort 信号与 CAS 都归它，
-    // 多一个实例就多一份互相看不见的取消状态。
-    runs: new RunService({
-      db: args.database,
-      dialect,
-      tenantId,
-      coordinator: new RunCoordinator({ db: args.database, dialect, tenantId }),
-    }),
+    // T3-08：runs 3 op（与 `RunDriver` 共用同一个协调器实例）。
+    runs: new RunService({ db: args.database, dialect, tenantId, coordinator }),
     // T3-11：MCP 8 op（只做 client）。出网白名单从 env 读（逗号分隔；缺省空 = 拒绝全部，
     // 与 `guards/ssrf` 的默认口径一致 —— stdio transport 不受影响）。
     mcp: new McpService({
@@ -264,6 +305,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const config = options.config ?? loadConfig();
   const enableLogging = options.enableLogging ?? true;
 
+  // 两个网关来源互斥：同时给的话"哪一个在跑"不可判定（decorate 会后者覆盖前者或直接
+  // 抛重复装饰），而两条装配路径各持一份 `onUsage` 观测 ⇒ 用量会被记两次或漏记。
+  if (options.model !== undefined && options.modelGateway !== undefined) {
+    throw new ConfigError(
+      "`model` 与 `modelGateway` 互斥：只保留一个网关来源（两处装配会让用量观测重复）",
+      ["model", "modelGateway"],
+    );
+  }
+
   const serverOptions: FastifyServerOptions = {
     // request_id 直接做成 Fastify 的 `request.id`：日志、错误对象、响应头三处同源。
     genReqId: (request) => genReqId(request),
@@ -288,6 +338,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   healthRoutes(app);
 
   // 5) 身份族 19 op（需要 db；缺省不装配，见 `database` 的说明）
+  //
+  // 网关**先于**身份族装配：`RunDriver` 是 `AgentService` 的依赖，而它需要网关。
+  // 两个来源互斥（同时给 ⇒ 装配期报错，不做"后者覆盖前者"）：
+  //   - `options.modelGateway`：装配方已有现成网关（e2e 的脚本化 fake）；
+  //   - `options.model`：按严格口径现建（缺 key ⇒ 抛 `ConfigError`）。
+  const gateway =
+    options.modelGateway ??
+    (options.model === undefined ? undefined : buildModelStack({ config, ...options.model }).gateway);
   const identity =
     options.identity ??
     (options.database === undefined
@@ -297,6 +355,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           database: options.database,
           ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
           ...(options.tenantId === undefined ? {} : { tenantId: options.tenantId }),
+          ...(gateway === undefined ? {} : { gateway }),
         }));
   if (identity !== undefined) {
     authRoutes(app, identity);
@@ -319,11 +378,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     mcpRoutes(app, identity);
   }
 
-  // 6) 模型栈（给了 `model` 才装配；缺 key 在上面就抛，不会走到这里）
-  if (options.model !== undefined) {
-    // 用 `decorate` 而不是直接赋值：Fastify 会因同名重复装饰而报错，
-    // 而"两个任务各自装配一个网关、后者静默覆盖前者"正是装配面要防的事故。
-    app.decorate("modelGateway", buildModelStack({ config, ...options.model }).gateway);
+  // 6) 挂网关（用 `decorate` 而不是直接赋值：Fastify 会因同名重复装饰而报错，
+  //    而"两个任务各自装配一个网关、后者静默覆盖前者"正是装配面要防的事故）。
+  if (gateway !== undefined) {
+    app.decorate("modelGateway", gateway);
   }
 
   return app;

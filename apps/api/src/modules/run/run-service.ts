@@ -150,8 +150,13 @@ export class RunService {
   }
 }
 
-/** 行 → 契约视图（21 键逐字对齐）。 */
-function toRunView(row: AgentRunRow): RunView {
+/**
+ * 行 → 契约视图（21 键逐字对齐）。
+ *
+ * T3-14 起**导出**：`POST /agents/{id}/run` 的入口回执与 `GET /runs/{id}` 必须是
+ * 同一形态（21 键），两处各写一份映射就是两条会漂移的真相源。
+ */
+export function toRunView(row: AgentRunRow): RunView {
   return {
     id: row.id,
     tenant_id: row.tenant_id ?? null,

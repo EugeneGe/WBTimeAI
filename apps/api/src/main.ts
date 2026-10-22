@@ -18,7 +18,8 @@ import { createPgDb, createSqliteDb } from "@wbtime/db/connection";
 import type { DrizzleDatabase, SqlDialect } from "@wbtime/db";
 import { createLogger } from "@wbtime/logging";
 
-import { buildApp } from "./app.js";
+import { buildApp, type ModelStackOptions } from "./app.js";
+import { assertKnownProviderKind } from "./modules/model/providers/factory.js";
 import { createShutdownHandler, type ShutdownLogger } from "./shutdown.js";
 
 /** 监听地址（回环）。 */
@@ -84,6 +85,37 @@ export function resolvePort(config: Config): number {
 }
 
 /**
+ * 从环境读模型栈装配选项（T3-14）。
+ *
+ * 为什么必须在生产路径上装配：T3-02 的 `buildModelStack` 建好之后一直没有调用点
+ * （`main` 从不传 `model`），于是"有没有模型能力"取决于测试夹具 —— 而 run 执行
+ * （T3-14）需要一个真网关。未配置 ⇒ **不装配**（返回 `undefined`），`runEntry`
+ * 随即 fail loud（`CONFIGURATION_ERROR`）：未配置 ≠ 降级。
+ *
+ * 只读一个变量：`WBTIME_MODEL_PROVIDER`（`openai` / `anthropic` / `google` /
+ * `openai-compatible` / `fake`）。key / baseURL 仍由 `buildModelStack` 按既有约定
+ * 从 `*_API_KEY` / `OPENAI_COMPATIBLE_BASE_URL` 取 —— 本函数不复制那套映射。
+ *
+ * @param env 环境变量源（缺省 `process.env`）。
+ * @returns 装配选项；未设置 provider ⇒ `undefined`。
+ * @throws {ConfigError} provider 不在白名单（`assertKnownProviderKind`，QA F-2）。
+ */
+export function modelStackFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): ModelStackOptions | undefined {
+  const raw = env.WBTIME_MODEL_PROVIDER;
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const kind = assertKnownProviderKind(raw.trim());
+  return {
+    kind,
+    env,
+    ...(env.OPENAI_COMPATIBLE_BASE_URL === undefined
+      ? {}
+      : { baseURL: env.OPENAI_COMPATIBLE_BASE_URL }),
+  };
+}
+
+/**
  * 启动服务（可被测试 / 脚本复用；不读 `process.argv`）。
  *
  * @param config 已加载的配置。
@@ -98,10 +130,12 @@ export async function start(
   // 配置闸在**建连之前**：密钥缺失 / 太短是纯配置问题，不该先花时间连库再失败。
   requireSecretKey(config);
   const handle = options.database ?? createDatabase(config);
+  const model = modelStackFromEnv();
   const app = buildApp({
     config,
     database: handle.database,
     dialect: handle.dialect,
+    ...(model === undefined ? {} : { model }),
   });
   const port = resolvePort(config);
   try {

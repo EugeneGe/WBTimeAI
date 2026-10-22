@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { loadConfig } from "@wbtime/config";
 import { createSqliteDb } from "@wbtime/db/connection";
 
-import { buildApp } from "../dist/app.js";
+import { buildApp, buildModelStack } from "../dist/app.js";
 
 /** 仓库根（apps/api/tests → apps/api → apps → 根）。 */
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -47,9 +47,32 @@ export function testConfig(extra = {}) {
 }
 
 /**
+ * 脚本化 fake 网关（T3-14 的 run 执行需要一个真网关）。
+ *
+ * 走 `buildModelStack` 的**同一道闸门**（`allowFakeProvider:true` = 显式放行），
+ * 不绕过 `assertFakeProviderAllowed` —— 测试里"直接用假 provider"不等于产品可以。
+ *
+ * @param {Array<object>} [script] 自定义分片序列（缺省：一段文本 + usage + finish）。
+ * @returns {import("../dist/modules/model/gateway.js").ModelGateway}
+ */
+export function fakeGateway(script) {
+  const stack = buildModelStack({
+    kind: "fake",
+    config: testConfig({ WBTIME_AI_ALLOW_FAKE_PROVIDER: "1" }),
+    allowFakeProvider: true,
+    ...(script === undefined ? {} : { fakeScript: script }),
+  });
+  return stack.gateway;
+}
+
+/**
  * 建一个装了 19 op 的应用并注册一个用户。
  *
- * @param {{username?: string, extraEnv?: Record<string,string>}} [options]
+ * @param {{username?: string, extraEnv?: Record<string,string>, model?: boolean}} [options]
+ *   `model:true` ⇒ 装配**脚本化 fake 模型栈**（走 `buildModelStack` 的闸门，
+ *   `allowFakeProvider:true`）：T3-14 起 `POST /agents/{id}/run` 需要网关，
+ *   否则 `runEntry` 按"未配置 ≠ 降级"抛 `CONFIGURATION_ERROR`。
+ *   缺省 `false` —— 多数用例不需要模型能力，不装配就不会有后台 run 干扰行数断言。
  * @returns 夹具对象（`app` / `connection` / `userId` / `authHeader` / `tokens` / `raw`）。
  */
 export async function makeApp(options = {}) {
@@ -63,6 +86,7 @@ export async function makeApp(options = {}) {
     database: connection.db,
     dialect: "sqlite",
     tenantId: TENANT_ID,
+    ...(options.model === true ? { modelGateway: fakeGateway(options.fakeScript) } : {}),
   });
   await app.ready();
 

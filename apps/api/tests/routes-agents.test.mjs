@@ -19,6 +19,55 @@ import test from "node:test";
 
 import { RunRequestSchema } from "../dist/routes/schemas-run.js";
 import { makeApp, OTHER_TENANT_ID, request } from "./routes-harness.mjs";
+import { seedWorkspace, WORKSPACE_ID } from "./fixtures/run-fixture.mjs";
+
+/** 契约 `RunResponse` 的 21 键（v0018 的 20 + v0019 的 `stop_reason`）。 */
+const RUN_KEYS = [
+  "agent_id",
+  "agent_version_id",
+  "completed_at",
+  "conversation_id",
+  "cost",
+  "cost_status",
+  "duration_ms",
+  "error",
+  "error_type",
+  "id",
+  "run_mode",
+  "started_at",
+  "status",
+  "stop_reason",
+  "success",
+  "task_id",
+  "tenant_id",
+  "token_usage",
+  "trace_id",
+  "trigger",
+  "user_id",
+];
+
+/** 终态集合（与 DDL 口径同源；此处只用于轮询退出条件）。 */
+const TERMINAL = ["SUCCEEDED", "FAILED", "CANCELLED"];
+
+/**
+ * 等 run 落到终态（后台驱动是异步的 ⇒ 断言前必须先等它收尾）。
+ *
+ * @param {object} fixture {@link makeApp} 产物（要 `raw`）。
+ * @param {string} runId run 标识。
+ * @param {number} [timeoutMs] 上限（缺省 15s；超时抛错并带上当前行，便于排障）。
+ * @returns {Promise<Record<string, unknown>>} 终态行。
+ */
+async function waitForTerminal(fixture, runId, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const row = fixture.raw.prepare("select * from agent_run where id = ?").get(runId);
+    if (row !== undefined && TERMINAL.includes(row.status)) return row;
+    if (Date.now() > deadline) {
+      throw new Error(`run ${runId} 在 ${timeoutMs}ms 内未到终态：${JSON.stringify(row)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 
 /** 造一个 agent（真 HTTP 路由；返回响应 data）。 */
 async function createAgent(fixture, overrides = {}) {
@@ -316,24 +365,34 @@ test("D · run 前置校验：无当前版本 ⇒ 422；AGENT 不存在 ⇒ 404�
   }
 });
 
-test("D · run 缺省 harness ⇒ general + audit_log 有 agent.harness_routed（R3-13 判据 ②）", async () => {
-  const fixture = await makeApp({ username: "agent-i" });
+test("D · run 缺省 harness ⇒ general + 真建 run + audit_log 有 agent.harness_routed（R3-13 ②/⑤；T3-14 起）", async () => {
+  // T3-14：run 入口不再返回 `execution:"deferred"` 回执，而是**真建 run**（21 键
+  // `RunResponse`）并在后台驱动。故本用例需要 ① 一个真网关 ② 一个 workspace
+  // （新建会话的 `conversation.workspace_id` NOT NULL）。
+  const fixture = await makeApp({ username: "agent-i", model: true });
   try {
+    seedWorkspace(fixture);
     const created = await createAgent(fixture);
     const version = await publish(fixture, created.id, { runtime_config: {} });
 
     const res = await request(fixture, "POST", `/api/v1/agents/${created.id}/run`, {
-      payload: { message: "你好" },
+      payload: { message: "你好", workspace_id: WORKSPACE_ID },
     });
     assert.equal(res.statusCode, 200, res.body);
-    const receipt = JSON.parse(res.body).data;
-    assert.equal(receipt.harness, "general", "缺省路由到 general");
-    assert.equal(receipt.agent_version_id, version.id);
-    assert.equal(receipt.run_mode, "INLINE");
-    assert.equal(receipt.execution, "deferred", "T3-05 只做前置校验，执行归 T3-08");
+    const run = JSON.parse(res.body).data;
+    assert.deepEqual(Object.keys(run).sort(), RUN_KEYS, "入口回执 = RunResponse 21 键（与 GET /runs/{id} 同形）");
+    assert.equal(run.agent_id, created.id);
+    assert.equal(run.agent_version_id, version.id);
+    assert.ok(["QUEUED", "RUNNING", "SUCCEEDED"].includes(run.status), `实测 status=${run.status}`);
 
-    // R3-13 ⑤：audit_log 一行 agent.harness_routed（T3-05 的 run 未创建 ⇒ run_id 恒 null，
-    // T3-08 接线补齐 —— 见 policy.ts 文件头注）
+    // 对照：run 真的落库了（不是回执里编出来的一个 id）
+    assert.equal(
+      fixture.raw.prepare("select count(*) as n from agent_run where id = ?").get(run.id).n,
+      1,
+      "agent_run 必须真有一行（T3-14 前这里是 0）",
+    );
+
+    // R3-13 ⑤：audit_log 一行 agent.harness_routed，且 run_id / resource_id 指向真 run
     const audit = fixture.raw
       .prepare("select * from audit_log where action = 'agent.harness_routed'")
       .all();
@@ -342,9 +401,21 @@ test("D · run 缺省 harness ⇒ general + audit_log 有 agent.harness_routed�
     assert.equal(audit[0].resource_type, "agent_run");
     assert.equal(audit[0].outcome, "success");
     assert.deepEqual(JSON.parse(audit[0].metadata).route_reason, "default");
+    assert.equal(audit[0].run_id, run.id, "T3-05 遗留：run_id 不再是 null");
+    assert.equal(audit[0].resource_id, run.id);
 
-    // agent_run 计数不变（本任务不写 run）
-    assert.equal(fixture.raw.prepare("select count(*) as n from agent_run").get().n, 0);
+    // ---- 后台驱动收尾（终态 + model_finish）------------------------------
+    const final = await waitForTerminal(fixture, run.id);
+    assert.equal(final.status, "SUCCEEDED", JSON.stringify(final));
+    assert.equal(final.stop_reason, "model_finish");
+    // 12 帧里的 4 个主链帧必须真的发出来（其余见 e2e 的 12/7 双向断言）
+    const channels = fixture.raw
+      .prepare("select type from agent_event where run_id = ? order by seq")
+      .all(run.id)
+      .map((row) => row.type);
+    for (const channel of ["agent.started", "agent.thinking", "message.delta", "agent.completed"]) {
+      assert.ok(channels.includes(channel), `缺帧 ${channel}（实测 ${channels.join(",")}）`);
+    }
   } finally {
     await fixture.close();
   }
