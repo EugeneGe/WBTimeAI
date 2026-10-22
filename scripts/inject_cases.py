@@ -626,10 +626,97 @@ def sse_channel_dropped(contracts: Path, repo: Path) -> str:
 #   本脚本禁止。故改坏点**双写**：`src` 是契约件（记录"改的是什么语义"），`dist`
 #   是测试真正 import 的件（让改坏生效）。
 #
-#   由此派生一条强约束：**两处必须命中同一个锚点，且各恰好一次**。
+#   由此派生一条强约束：**两处必须命中同一锚点，且命中次数相等**（≥1，全部替换）。
 #   `src` 命中而 `dist` 不命中 ⇒ `dist` 落后于 `src` ⇒ 报 `V031_DIST_STALE`
 #   （exit 12，不是假绿）—— 先 `pnpm -C apps/api build` 再跑注入。
+#
+#   计数必须**只数代码、不数注释**（§4.5 实测）：`sse-stream.ts` 的归属过滤说明把
+#   `agent_event.run_id === runId` 写进了文档注释，编译后注释剥掉 ⇒ src=2、dist=1，
+#   若按原文计数会误报 `V031_DIST_STALE`（dist 比 src 还新）。故先算注释区间，
+#   只把**完全落在代码区**的命中算数；替换也只落在这些命中上，注释原样保留。
 # ---------------------------------------------------------------------------
+
+
+def _comment_spans(text: str) -> "list[tuple[int, int]]":
+    """返回 JS/TS 注释的字符区间（半开）列表，**字符串字面量与模板串保护**。
+
+    为什么不用 `re.sub(r"/\\*.*?\\*/", "", text)`：那会把注释体连换行一起删掉，
+    也会误伤字符串里的 `//`（如 `"https://…"`）。这里走一个字符级扫描器，
+    记录区间而不是改写文本 —— 调用方据此过滤正则命中、并保留原文本做替换。
+    """
+    spans: "list[tuple[int, int]]" = []
+    i = 0
+    n = len(text)
+    state = "code"  # code | squote | dquote | template | line | block
+    start = 0
+    while i < n:
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        if state == "code":
+            if ch == "/" and nxt == "/":
+                state = "line"
+                start = i
+                i += 2
+                continue
+            if ch == "/" and nxt == "*":
+                state = "block"
+                start = i
+                i += 2
+                continue
+            if ch == "'":
+                state = "squote"
+            elif ch == '"':
+                state = "dquote"
+            elif ch == "`":
+                state = "template"
+            i += 1
+            continue
+        if state in ("squote", "dquote", "template"):
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if (state == "squote" and ch == "'") or (state == "dquote" and ch == '"') or (state == "template" and ch == "`"):
+                state = "code"
+            i += 1
+            continue
+        if state == "line":
+            if ch == "\n":
+                spans.append((start, i))
+                state = "code"
+            i += 1
+            continue
+        # block
+        if ch == "*" and nxt == "/":
+            spans.append((start, i + 2))
+            state = "code"
+            i += 2
+            continue
+        i += 1
+    if state == "line":  # 文件以行注释结尾
+        spans.append((start, n))
+    return spans
+
+
+def _code_matches(text: str, pattern: str) -> "list[re.Match[str]]":
+    """正则命中，**剔除落在注释里的** —— 注释是给人看的，不是实现。"""
+    spans = _comment_spans(text)
+    hits: "list[re.Match[str]]" = []
+    for match in re.finditer(pattern, text):
+        begin, end = match.span()
+        if any(begin < cend and cbegin < end for cbegin, cend in spans):
+            continue
+        hits.append(match)
+    return hits
+
+
+def _replace_code_matches(path: Path, hits: "list[re.Match[str]]", replacement: object) -> None:
+    """按命中区间**从后往前**替换（保持前面的偏移量有效）；注释原样保留。"""
+    text = path.read_text(encoding="utf-8-sig")
+    for match in reversed(hits):
+        new = replacement(match) if callable(replacement) else str(replacement)
+        begin, end = match.span()
+        text = text[:begin] + new + text[end:]
+    path.write_text(text, encoding="utf-8")
 
 
 def _v031_patch(
@@ -639,12 +726,15 @@ def _v031_patch(
     *,
     label: str,
 ) -> str:
-    """在克隆里把一段实现改坏（`src` 与 `dist` 双写，同锚点各一次）。
+    """在克隆里把一段实现改坏（`src` 与 `dist` 双写，同锚点、命中次数相等）。
 
     Args:
         repo: 克隆仓库根。
-        src_candidates: `src` 侧候选文件（相对仓库根，按顺序取第一个存在的）。
-        alternatives: `(pattern, replacement)` 候选，按顺序取第一个"两侧各命中一次"的。
+        src_candidates: `src` 侧候选文件（相对仓库根）。**取第一个含锚点的**，
+            不是第一个存在的 —— §4.4 实测：豁免判据落在 `coordinator.ts`，而
+            `run-service.ts` 存在但不含锚点，按"第一个存在的"会把已落地的实现
+            误报成 `V031_IMPL_NOT_LANDED`。
+        alternatives: `(pattern, replacement)` 候选，按顺序取第一个"两侧命中次数相等且 ≥1"的。
             `replacement` 可以是字符串，也可以是 `re.Match -> str` 回调。
         label: 人类描述（写进证据行）。
 
@@ -652,60 +742,58 @@ def _v031_patch(
         一行"改了什么"。
 
     Raises:
-        MutationError: 实现未落地 / dist 落后 / 锚点命中次数不为 1。
+        MutationError: 实现未落地 / dist 落后 / 两侧命中次数不等。
     """
-    existing = [name for name in src_candidates if (repo / Path(*name.split("/"))).is_file()]
-    if not existing:
-        raise MutationError(
-            f"{MARKER_IMPL_NOT_LANDED}: {label} —— {' / '.join(src_candidates)} 均不存在。"
-            " 生产实现尚未落地，本用例今日**不可判**（exit 12，与「注入了但门没红」的 10 严格区分）"
-        )
-    src_name = existing[0]
-    dist_name = src_name.replace("apps/api/src/", "apps/api/dist/").removesuffix(".ts") + ".js"
-    src = repo / Path(*src_name.split("/"))
-    dist = repo / Path(*dist_name.split("/"))
-    if not dist.is_file():
-        raise MutationError(
-            f"{MARKER_DIST_STALE}: {dist_name} 不存在 —— 请先 `pnpm -C apps/api build` 再跑注入"
-        )
-
-    src_text = src.read_text(encoding="utf-8-sig")
-    dist_text = dist.read_text(encoding="utf-8-sig")
-
     last_miss = ""
-    for pattern, replacement in alternatives:
-        src_hits = list(re.finditer(pattern, src_text))
-        dist_hits = list(re.finditer(pattern, dist_text))
-        if not src_hits:
-            last_miss = f"src 未命中 {pattern!r}"
+    for src_name in src_candidates:
+        src = repo / Path(*src_name.split("/"))
+        if not src.is_file():
+            last_miss = f"{src_name} 不存在"
             continue
-        if not dist_hits:
-            last_miss = f"dist 未命中同一锚点 {pattern!r}（dist 落后于 src？）"
+        dist_name = src_name.replace("apps/api/src/", "apps/api/dist/").removesuffix(".ts") + ".js"
+        dist = repo / Path(*dist_name.split("/"))
+        if not dist.is_file():
+            last_miss = f"{dist_name} 不存在 —— 请先 `pnpm -C apps/api build` 再跑注入"
             continue
 
-        # 为什么是"全部替换 + 两侧次数相等"，而不是前 5 条用例的"恰好一次"
-        # ------------------------------------------------------------
-        #   契约件里的对象可以钉死到唯一一个（`ix_memory_vector_hnsw` 只有一个），
-        #   实现里的判据**不能**：例如 `run_id` 归属过滤在 `streamRunFrames` 里
-        #   天然出现两处（主轮询 + 终态前的尾读），写"恰好一次"会让用例在实现
-        #   落地后**永远** UNEVALUABLE —— 那是把判据写成了不可判。
-        #   故改为：两侧命中次数**必须相等**（不等 ⇒ dist 落后于 src），且 ≥ 1，
-        #   然后**全部**替换（只改一处等于"过滤了一半"，反而是个含糊的注入）。
-        if len(src_hits) != len(dist_hits):
-            raise MutationError(
-                f"{MARKER_DIST_STALE}: {label} —— 锚点 {pattern!r} 命中 src={len(src_hits)} 次、"
-                f"dist={len(dist_hits)} 次，两侧不等 ⇒ dist 落后于 src，请先 `pnpm -C apps/api build`"
+        src_text = src.read_text(encoding="utf-8-sig")
+        dist_text = dist.read_text(encoding="utf-8-sig")
+
+        for pattern, replacement in alternatives:
+            src_hits = _code_matches(src_text, pattern)
+            dist_hits = _code_matches(dist_text, pattern)
+            if not src_hits:
+                last_miss = f"{src_name}: src（剔除注释后）未命中 {pattern!r}"
+                continue
+            if not dist_hits:
+                last_miss = f"{src_name}: dist 未命中同一锚点 {pattern!r}（dist 落后于 src？）"
+                continue
+
+            # 为什么是"全部替换 + 两侧次数相等"，而不是前 5 条用例的"恰好一次"
+            # ------------------------------------------------------------
+            #   契约件里的对象可以钉死到唯一一个（`ix_memory_vector_hnsw` 只有一个），
+            #   实现里的判据**不能**：例如 `run_id` 归属过滤在 `streamRunFrames` 里
+            #   天然出现两处（主轮询 + 终态前的尾读），写"恰好一次"会让用例在实现
+            #   落地后**永远** UNEVALUABLE —— 那是把判据写成了不可判。
+            #   故改为：两侧命中次数**必须相等**（不等 ⇒ dist 落后于 src），且 ≥ 1，
+            #   然后**全部**替换（只改一处等于"过滤了一半"，反而是个含糊的注入）。
+            #   计数只数**代码命中**（注释剔除，见 §4.5）。
+            if len(src_hits) != len(dist_hits):
+                raise MutationError(
+                    f"{MARKER_DIST_STALE}: {label} —— 锚点 {pattern!r} 命中 src={len(src_hits)} 次、"
+                    f"dist={len(dist_hits)} 次（均只数代码），两侧不等 ⇒ dist 落后于 src，"
+                    "请先 `pnpm -C apps/api build`"
+                )
+
+            _replace_code_matches(src, src_hits, replacement)
+            _replace_code_matches(dist, dist_hits, replacement)
+            return (
+                f"{label}: {src_name} ×{len(src_hits)} + {dist_name} ×{len(dist_hits)}"
+                f"（锚点 {pattern!r}，只数代码命中）"
             )
 
-        def _sub(match: "re.Match[str]") -> str:
-            return replacement(match) if callable(replacement) else str(replacement)
-
-        src.write_text(re.sub(pattern, _sub, src_text), encoding="utf-8")
-        dist.write_text(re.sub(pattern, _sub, dist_text), encoding="utf-8")
-        return f"{label}: {src_name} ×{len(src_hits)} + {dist_name} ×{len(dist_hits)}（锚点 {pattern!r}）"
-
     raise MutationError(
-        f"{MARKER_IMPL_NOT_LANDED}: {label} —— 在 {src_name} / {dist_name} 里均未命中任何候选锚点"
+        f"{MARKER_IMPL_NOT_LANDED}: {label} —— 在 {' / '.join(src_candidates)} 里均未命中任何候选锚点"
         f"（最后一条：{last_miss}）。实现未按《调用契约》落地 ⇒ 本用例今日不可判（exit 12）"
     )
 
