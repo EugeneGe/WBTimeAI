@@ -56,11 +56,33 @@ Absence is only legal when the root is **registered**: an absent root that no
 declared-absence registry knows about is ``INVALID(unregistered-absence)``, not
 a skip.
 
+Registered per-file exceptions (T3-17, audit F-4)
+--------------------------------------------------
+One user authorisation (2026-10-22, main commit ``c091bd6``) removed the cost
+display from the evaluation page, so four files under ``apps/web/src/**`` now
+differ from the archive *legitimately*.  A gate that just turned red here would
+be silently excluded from ``gate:all`` within a week — that is the failure mode
+F-4 flags.  So the gate carries an explicit exception manifest
+(:data:`FDIFF_EXCEPTIONS`), one entry per authorised file, and each entry pins
+**the exact blob sha the authorisation covered**:
+
+* a manifest file that differs from the archive **and** still hashes to its
+  pinned blob  → reported out loud (``[except] ...``) and *not* a violation;
+* the same file after **any further edit** (blob ≠ pinned)  → a violation
+  again.  An exception locks one authorisation, it never whitewashes the next
+  edit;
+* a manifest file that is identical to the archive again  → ordinary pass; the
+  entry becomes redundant and is kept, counted, and said so;
+* a file **not** in the manifest that differs  → unchanged behaviour: exit 1.
+
+Every run prints an ``[except] summary`` line, so "the gate passed because of
+exceptions" is never silent.
+
 Exit codes::
 
     0   PASS (or PARTIAL with ``--allow-declared-absence``)
-    1   violation: hash/bytes mismatch, non-empty diff, INVALID root, or PARTIAL
-        without the allowance flag
+    1   violation: hash/bytes mismatch, non-empty diff, INVALID root, PARTIAL
+        without the allowance flag, or a stale/malformed exception entry
     2   usage error, or an artifact that cannot be loaded
     9   ``--self-test`` failed
 
@@ -94,9 +116,13 @@ __all__ = [
     "SCAN_ROOTS",
     "REQUIRED_ROOTS",
     "ROOT_MIN_FILES",
+    "FDIFF_EXCEPTIONS",
+    "FdiffException",
+    "ExceptionVerdict",
     "RootReport",
     "collect_relative_files",
     "compare_trees",
+    "classify_exceptions",
     "evaluate",
     "main",
 ]
@@ -130,6 +156,210 @@ ROOT_MIN_FILES: Final[dict[str, int]] = {
     ROOT_LEGACY: MIN_FILES,
     ROOT_BASELINE: 1,
 }
+
+
+# ---------------------------------------------------------------------------
+# Registered per-file exceptions (T3-17, audit F-4)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FdiffException:
+    """One authorised divergence from the archived original.
+
+    An entry is *not* a blanket pardon: it locks exactly the blob sha the
+    authorisation covered.  Any later edit to the file changes its blob and the
+    gate goes red again — the exception must then be re-decided, not reused.
+
+    Attributes:
+        path: Repository-relative path (``apps/web/src/...``).
+        blob: ``git hash-object`` sha the authorisation pinned — the blob of
+            the file as of the authorising commit.
+        reason: What the authorisation actually changed (human readable).
+        source: Where the authorisation is recorded (audit id / commit / date).
+    """
+
+    path: str
+    blob: str
+    reason: str
+    source: str
+
+
+#: The exception manifest.  Registered **once**, explicitly, with the evidence
+#: inline — the same shape as the Q-5 freeze (audit-gate.mjs ``Q5_NOTE``): the
+#:口径 lives in the gate, not in someone's memory.  Empty is the normal state;
+#: every entry must carry all four fields.
+FDIFF_EXCEPTIONS: Final[tuple[FdiffException, ...]] = (
+    FdiffException(
+        path="apps/web/src/pages/studio/Evaluation.tsx",
+        blob="24ca59dfb577b3db82c1a08c77c029ec8353ad41",
+        reason="删「平均成本」指标卡片与对比表行（价目只留入口不启用）",
+        source="F-4 / c091bd6, 2026-10-22 用户授权",
+    ),
+    FdiffException(
+        path="apps/web/src/i18n/locales/zh-CN.ts",
+        blob="70a4fdbbcfa13890cda9d2d54f4ccaf4103e5184",
+        reason="同步删 studio.evaluation.metric.cost 中文键",
+        source="F-4 / c091bd6, 2026-10-22 用户授权",
+    ),
+    FdiffException(
+        path="apps/web/src/i18n/locales/en.ts",
+        blob="f1019668af7c91c63755a7acd6a8412ecd550d8e",
+        reason="同步删 studio.evaluation.metric.cost 英文键",
+        source="F-4 / c091bd6, 2026-10-22 用户授权",
+    ),
+    FdiffException(
+        path="apps/web/src/pages/studio/__tests__/Evaluation.test.tsx",
+        blob="1150b13a8f49609ea4c76b4a455753a14463ec51",
+        reason="成本断言改为「不渲染成本」/ N-A 语义",
+        source="F-4 / c091bd6, 2026-10-22 用户授权",
+    ),
+)
+
+
+@dataclass
+class ExceptionVerdict:
+    """Per-entry outcome of matching the manifest against the live comparison.
+
+    Attributes:
+        matched: Entries whose file differs from the archive **and** still
+            hashes to the pinned blob — authorised, reported, not a violation.
+        stale: Entries whose file differs **and** no longer hashes to the
+            pinned blob — the excepted file was edited again.  Always fatal.
+        satisfied: Entries whose file is identical to the archive again — the
+            authorisation was reverted; the entry is redundant but harmless.
+        not_present: Entries whose file took no part in the comparison
+            (absent on either side).  Inert here; any missing-file violation
+            the comparison recorded still stands.
+        malformed: Entries whose path is not under :data:`WEB_SRC_REL` and can
+            therefore never match a compared file.  Always fatal.
+    """
+
+    matched: list[tuple[FdiffException, str]] = field(default_factory=list)
+    stale: list[tuple[FdiffException, str]] = field(default_factory=list)
+    satisfied: list[FdiffException] = field(default_factory=list)
+    not_present: list[FdiffException] = field(default_factory=list)
+    malformed: list[FdiffException] = field(default_factory=list)
+
+    @property
+    def excepted_paths(self) -> frozenset[str]:
+        """``apps/web/src``-relative paths whose divergence is authorised."""
+        return frozenset(
+            _src_relative(entry.path) for entry, _observed in self.matched
+        )
+
+
+def _src_relative(repo_relative: str) -> str:
+    """Strip the ``apps/web/src/`` prefix from a manifest path.
+
+    Args:
+        repo_relative: Repository-relative path as stored in the manifest.
+
+    Returns:
+        The path relative to the candidate scan root.
+
+    Raises:
+        ValueError: The path is not under ``apps/web/src/`` — such an entry
+            could never match a compared file and must never be silently
+            ignored (K-11).
+    """
+    prefix = WEB_SRC_REL + "/"
+    if not repo_relative.startswith(prefix):
+        raise ValueError(f"exception path not under {prefix}: {repo_relative}")
+    return repo_relative[len(prefix) :]
+
+
+def classify_exceptions(
+    exceptions: Sequence[FdiffException],
+    *,
+    mismatched: frozenset[str],
+    observed_blobs: "dict[str, str] | None",
+) -> ExceptionVerdict:
+    """Match each manifest entry against the live comparison.
+
+    Pure function: no filesystem, no git — the self-test drives it with
+    synthetic fixtures.
+
+    Args:
+        exceptions: The manifest.
+        mismatched: ``apps/web/src``-relative paths that differ from the
+            archive (blob or raw bytes; ``filter_masked`` is deliberately
+            excluded — an equal blob there means "changed back", and a raw
+            difference under an equal blob stays fatal regardless).
+        observed_blobs: Relative path → candidate-side blob sha, or ``None``
+            when no candidate side exists (missing required root).
+
+    Returns:
+        The :class:`ExceptionVerdict` for every entry, one bucket each.
+    """
+    verdict = ExceptionVerdict()
+    for entry in exceptions:
+        try:
+            relative = _src_relative(entry.path)
+        except ValueError:
+            verdict.malformed.append(entry)
+            continue
+        observed = None if observed_blobs is None else observed_blobs.get(relative)
+        if observed is None:
+            verdict.not_present.append(entry)
+        elif relative not in mismatched:
+            verdict.satisfied.append(entry)
+        elif observed == entry.blob:
+            verdict.matched.append((entry, observed))
+        else:
+            verdict.stale.append((entry, observed))
+    return verdict
+
+
+def process_exceptions(
+    comparison: Comparison,
+    candidate_dir: Path,
+    exceptions: Sequence[FdiffException],
+) -> ExceptionVerdict:
+    """Compute the exception verdict against a real (or empty) comparison.
+
+    Args:
+        comparison: The :class:`Comparison` produced by :func:`compare_trees`.
+            An empty comparison (a root was INVALID) yields ``not_present``
+            buckets — the root violations already stand on their own.
+        candidate_dir: ``<repo>/apps/web/src`` (blobs are hashed from here so
+            the same ``.gitattributes`` face as the comparison applies).
+        exceptions: The manifest.
+
+    Returns:
+        The :class:`ExceptionVerdict`.
+
+    Raises:
+        RuntimeError: git could not be consulted (never downgraded to a pass).
+    """
+    usable: list[FdiffException] = []
+    verdict = ExceptionVerdict()
+    for entry in exceptions:
+        try:
+            _src_relative(entry.path)
+        except ValueError:
+            verdict.malformed.append(entry)
+        else:
+            usable.append(entry)
+    if not usable:
+        return verdict
+    observed_blobs: dict[str, str] | None
+    if candidate_dir.is_dir():
+        observed_blobs = _GIT_RUNNER(
+            [_src_relative(entry.path) for entry in usable], candidate_dir
+        )
+    else:
+        observed_blobs = None
+    mismatched = frozenset(comparison.blob_mismatch) | frozenset(comparison.raw_mismatch)
+    classified = classify_exceptions(
+        usable, mismatched=mismatched, observed_blobs=observed_blobs
+    )
+    verdict.matched = classified.matched
+    verdict.stale = classified.stale
+    verdict.satisfied = classified.satisfied
+    verdict.not_present = classified.not_present
+    return verdict
+
 
 #: States a root report can carry.
 STATE_OK: Final[str] = "OK"
@@ -638,6 +868,8 @@ def _self_test() -> int:
     5. floor lowered to 0         → case 3 turns green (positive proof that the
                                     floor, not luck, is what made it red)
     6. real runner on the real trees → the actual ⑤-a fact, not a simulation
+    7. exception classification   → matched / stale / satisfied / malformed
+                                    land in their own buckets (T3-17, F-4)
 
     Returns:
         ``0`` when every case holds, ``9`` otherwise.
@@ -758,23 +990,78 @@ def _self_test() -> int:
     for root in (ROOT_NEW, ROOT_LEGACY):
         if real[root].state != STATE_OK:
             failures.append(f"case6 real root {root}: {real[root].render()}")
-    if not comparison.clean:
+    # T3-17: the four authorised files legitimately differ from the archive, so
+    # "clean" is no longer the assertion — every difference must be covered by a
+    # manifest entry pinned to its authorised blob, with nothing left over.
+    real_verdict = process_exceptions(
+        comparison, paths.repo_root / WEB_SRC_REL, FDIFF_EXCEPTIONS
+    )
+    if real_verdict.stale or real_verdict.malformed:
         failures.append(
-            "case6 real trees differ: "
-            f"blob={len(comparison.blob_mismatch)} raw={len(comparison.raw_mismatch)} "
-            f"missing_candidate={len(comparison.missing_in_candidate)} "
-            f"missing_legacy={len(comparison.missing_in_legacy)}"
+            f"case6 exception verdict: stale={real_verdict.stale} malformed={real_verdict.malformed}"
         )
+    if not comparison.clean:
+        leftovers = {
+            "blob": [p for p in comparison.blob_mismatch if p not in real_verdict.excepted_paths],
+            "raw": [p for p in comparison.raw_mismatch if p not in real_verdict.excepted_paths],
+            "missing_candidate": comparison.missing_in_candidate,
+            "missing_legacy": comparison.missing_in_legacy,
+            "filter_masked": comparison.filter_masked,
+        }
+        if any(leftovers.values()):
+            failures.append(f"case6 real trees differ beyond registered exceptions: {leftovers}")
     if comparison.common < MIN_FILES:
         failures.append(f"case6 common files {comparison.common} below floor {MIN_FILES}")
+
+    # case 7: exception classification (pure — synthetic fixtures) ------------
+    entry_ok = FdiffException(
+        path=f"{WEB_SRC_REL}/pages/Ok.tsx", blob="pin-ok", reason="r", source="s"
+    )
+    entry_bad = FdiffException(
+        path=f"{WEB_SRC_REL}/pages/Bad.tsx", blob="pin-bad", reason="r", source="s"
+    )
+    entry_reverted = FdiffException(
+        path=f"{WEB_SRC_REL}/pages/Gone.tsx", blob="pin-gone", reason="r", source="s"
+    )
+    entry_outside = FdiffException(
+        path="contracts/x.ts", blob="pin-out", reason="r", source="s"
+    )
+    v = classify_exceptions(
+        [entry_ok, entry_bad, entry_reverted, entry_outside],
+        mismatched=frozenset({"pages/Ok.tsx", "pages/Bad.tsx"}),
+        observed_blobs={
+            "pages/Ok.tsx": "pin-ok",
+            "pages/Bad.tsx": "edited-again",
+            "pages/Gone.tsx": "pin-gone",
+        },
+    )
+    if [e.path for e, _obs in v.matched] != [entry_ok.path]:
+        failures.append(f"case7 matched bucket: {v.matched}")
+    if [e.path for e, _obs in v.stale] != [entry_bad.path]:
+        failures.append(f"case7 stale bucket: {v.stale}")
+    if [e.path for e in v.satisfied] != [entry_reverted.path]:
+        failures.append(f"case7 satisfied bucket: {v.satisfied}")
+    if [e.path for e in v.malformed] != [entry_outside.path]:
+        failures.append(f"case7 malformed bucket: {v.malformed}")
+    if v.excepted_paths != frozenset({"pages/Ok.tsx"}):
+        failures.append(f"case7 excepted_paths: {v.excepted_paths}")
+
+    # case 7b: a pinned match must be removable from the violation lists ------
+    v2 = classify_exceptions(
+        [entry_ok],
+        mismatched=frozenset({"pages/Ok.tsx"}),
+        observed_blobs={"pages/Ok.tsx": "pin-ok"},
+    )
+    if v2.excepted_paths != frozenset({"pages/Ok.tsx"}) or v2.stale or v2.malformed:
+        failures.append(f"case7b pinned match not cleanly excepted: {v2}")
 
     if failures:
         for problem in failures:
             print(f"self-test FAIL: {problem}")
         return 9
     print(
-        "self-test OK (6 cases): identical|flipped|emptied|archive-gone|floor=0|real"
-        f"(common={comparison.common})"
+        "self-test OK (7 cases): identical|flipped|emptied|archive-gone|floor=0|real"
+        f"(common={comparison.common})|exceptions"
     )
     return 0
 
@@ -829,6 +1116,59 @@ def main(argv: list[str] | None = None) -> int:
     for report in reports:
         _gate_io.log(TAG, report.render())
 
+    # T3-17 (F-4): match the exception manifest against the live comparison
+    # BEFORE the violation lists are built — an excepted file is removed from
+    # them (loudly, one line per entry), never silently tolerated.
+    exception_verdict = process_exceptions(
+        comparison, paths.repo_root / WEB_SRC_REL, FDIFF_EXCEPTIONS
+    )
+    excepted = exception_verdict.excepted_paths
+    comparison.blob_mismatch = [
+        path for path in comparison.blob_mismatch if path not in excepted
+    ]
+    comparison.raw_mismatch = [
+        path for path in comparison.raw_mismatch if path not in excepted
+    ]
+    for entry, observed in exception_verdict.matched:
+        _gate_io.log(
+            TAG,
+            f"[except] {entry.path} differs from _old — registered exception "
+            f"({entry.source}; {entry.reason}) pinned_blob={observed}",
+        )
+    for entry, _observed in exception_verdict.stale:
+        _gate_io.log(
+            TAG,
+            f"[except] STALE {entry.path} pinned_blob={entry.blob} — 例外文件被再次改动，"
+            "例外只锁一次授权，不掩盖后续改动",
+        )
+    for entry in exception_verdict.satisfied:
+        _gate_io.log(
+            TAG,
+            f"[except] {entry.path} identical to _old again — redundant entry kept "
+            f"({entry.source})",
+        )
+    for entry in exception_verdict.not_present:
+        _gate_io.log(
+            TAG,
+            f"[except] {entry.path} took no part in the comparison — entry inert; "
+            "any missing-file violation stands",
+        )
+    for entry in exception_verdict.malformed:
+        _gate_io.log(
+            TAG,
+            f"[except] MALFORMED {entry.path} — not under {WEB_SRC_REL}/, "
+            "can never match a compared file",
+        )
+    _gate_io.log(
+        TAG,
+        f"[except] summary: matched={len(exception_verdict.matched)} "
+        f"stale={len(exception_verdict.stale)} "
+        f"satisfied={len(exception_verdict.satisfied)} "
+        f"not_present={len(exception_verdict.not_present)} "
+        f"malformed={len(exception_verdict.malformed)} "
+        f"manifest={len(FDIFF_EXCEPTIONS)}",
+    )
+
     violations: list[str] = []
     for report in reports:
         if report.state == STATE_INVALID:
@@ -860,6 +1200,12 @@ def main(argv: list[str] | None = None) -> int:
         violations.append(
             f"missing in archive n={len(comparison.missing_in_legacy)} e.g. {sample}"
         )
+    for entry, _observed in exception_verdict.stale:
+        violations.append(
+            f"exception-stale: {entry.path} pinned={entry.blob} — 例外文件被再次改动"
+        )
+    for entry in exception_verdict.malformed:
+        violations.append(f"exception-malformed: {entry.path}")
 
     effective = sum(1 for report in reports if report.effective)
     absent = [report for report in reports if report.state == STATE_ABSENT]

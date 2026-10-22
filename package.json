@@ -39,7 +39,7 @@
     "gate:meta": "python scripts/meta_gate.py",
     "gate:selfproof": "python scripts/selfproof/run_selfproof.py",
     "gate:offline": "python scripts/check_ddl_parity.py && python scripts/check_ddl_parity.py --schema v0019 && python scripts/compare_openapi.py && python scripts/check_bucket3_coverage.py && python scripts/check_control_flow.py && python scripts/check_frontend_baseline.py && python scripts/check_manifest_semantics.py",
-    "gate:all": "python scripts/check_ddl_parity.py && python scripts/check_ddl_parity.py --schema v0019 && python scripts/compare_openapi.py && python scripts/check_bucket3_coverage.py && python scripts/check_control_flow.py && python scripts/check_frontend_baseline.py && python scripts/oracle_recompute.py --oracle legacy && python scripts/inject_counterexample.py --all && python scripts/meta_gate.py && python scripts/selfproof/run_selfproof.py && python scripts/check_manifest_semantics.py",
+    "gate:all": "python scripts/check_ddl_parity.py && python scripts/check_ddl_parity.py --schema v0019 && python scripts/compare_openapi.py && python scripts/check_bucket3_coverage.py && python scripts/check_control_flow.py && python scripts/check_frontend_baseline.py && python scripts/check_frontend_diff.py && python scripts/oracle_recompute.py --oracle legacy && python scripts/inject_counterexample.py --all && python scripts/meta_gate.py && python scripts/selfproof/run_selfproof.py && python scripts/check_manifest_semantics.py",
     "test:e2e": "pnpm --filter @wbtime/e2e run test:forward",
     "test:e2e:selfproof": "python scripts/selfproof/run_selfproof.py",
     "test:smoke": "node scripts/run-smoke.mjs",
