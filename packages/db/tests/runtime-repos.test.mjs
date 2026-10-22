@@ -22,6 +22,10 @@ import {
   AgentEventRepo,
   AgentRunRepo,
   ChildConflictError,
+  CONVERSATION_STATUS_ACTIVE,
+  ConversationRepo,
+  MessageRepo,
+  ScopeError,
   TERMINAL_TOOL_CALL_STATUSES,
   ToolCallRepo,
   TOOL_CALL_STATUSES,
@@ -504,4 +508,177 @@ test("run 状态常量：7 值（v0019）", () => {
     "CANCELLED",
   ]);
   assert.equal(AGENT_RUN_STATUSES.length, 7);
+});
+
+// ---------------------------------------------------------------------------
+// D · conversation / message（B1：替换只读桩 + 唯一非 run_id 父列的子表）
+// ---------------------------------------------------------------------------
+
+/** 造一个属于 A 租户的新会话（顺带把 `create` 的缺省值口径测掉）。 */
+async function createConversation(repo, overrides = {}) {
+  return repo.create({
+    id: overrides.id ?? "dddd0000-0000-4000-8000-0000000000a1",
+    workspaceId: IDS.wsA,
+    agentId: IDS.agentA,
+    userId: IDS.userA,
+    ...overrides,
+  });
+}
+
+test("D · conversation：双档构造（sqlite 档真跑）——桩只能跑 PG 的缺口已补", () => {
+  const { db, scopeA } = seed();
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+  assert.equal(conversations.tableName, "conversation");
+  // 缺省仍是生产档 pg（不是"只有 SQLite 能构造"）
+  assert.equal(new ConversationRepo(db, scopeA).tableName, "conversation");
+});
+
+test("D · conversation.create：注入 status 缺省 ACTIVE（契约 default），title 缺省空串", async () => {
+  assert.equal(CONVERSATION_STATUS_ACTIVE, "ACTIVE", "缺省值只有一处定义，测试直接锁常量");
+  const { db, scopeA } = seed();
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+  const created = await createConversation(conversations);
+  assert.equal(created.status, "ACTIVE");
+  assert.equal(created.title, "");
+  assert.equal(created.tenant_id, T_A, "tenant_id 由 scope 注入");
+});
+
+test("D · conversation.list：能列出本租户会话（桩连 list 都没有）", async () => {
+  const { db, scopeA } = seed();
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+  const before = await conversations.list();
+  assert.equal(before.length, 1, "夹具里 A 租户有 1 个会话");
+  await createConversation(conversations);
+  assert.equal((await conversations.list()).length, 2);
+});
+
+test("D · conversation.rename：只改 title，并同步推进 updated_at", async () => {
+  const { db, scopeA, runA } = seed();
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+  void runA;
+  const created = await createConversation(conversations);
+  const ref = conversations.scope.ref(created.id);
+  const renamed = await conversations.rename(ref, "新标题");
+  assert.equal(renamed.title, "新标题");
+  assert.equal(renamed.status, "ACTIVE", "改名不动状态");
+  // SQLite 的 updated_at 无 ON UPDATE 触发器 ⇒ 必须由仓储显式写。
+  // 同秒内 rename 会让两个值相等，故只断言"不倒退"，不断言"必变"。
+  assert.ok(
+    String(renamed.updated_at) >= String(created.updated_at),
+    "updated_at 不得倒退（SQLite 文本时间可直接字符串比较）",
+  );
+});
+
+test("D · conversation：listByAgent / listByUser 接受本 scope 的 ref，拒绝裸 id", async () => {
+  const { db, scopeA } = seed();
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+  const agentRef = scopeA.ref(IDS.agentA);
+  const userRef = scopeA.ref(IDS.userA);
+  assert.equal((await conversations.listByAgent(agentRef)).length, 1);
+  assert.equal((await conversations.listByUser(userRef)).length, 1);
+  // 同步抛（不是返回 rejected promise）⇒ 用 assert.throws
+  assert.throws(
+    () => conversations.listByAgent(IDS.agentA, {}),
+    (error) => error instanceof ScopeError,
+    "裸 id 必须当场抛（ScopedRef 品牌在运行时也校验）",
+  );
+});
+
+test("D · conversation：跨租户不可见（本 scope 的 ref 包别人的 id ⇒ null；别人的 ref ⇒ 抛）", async () => {
+  const { db, scopeA } = seed();
+  const scopeB = new Scope(T_B);
+  const conversationsA = new ConversationRepo(db, scopeA, DIALECT);
+
+  // ① 品牌合法但 id 属别的租户 ⇒ 查不到（404 口径，不是 403）
+  assert.equal(await conversationsA.findById(scopeA.ref(IDS.convB)), null);
+  // 对照：本租户的会话查得到（证明"查不到"不是因为夹具没插）
+  assert.ok(await conversationsA.findById(scopeA.ref(IDS.convA)));
+  // ② 品牌都不属于本 scope ⇒ 当场拒（findById 是 async ⇒ 以 rejection 形式抛）
+  await assert.rejects(
+    () => conversationsA.findById(scopeB.ref(IDS.convB)),
+    (error) => error instanceof ScopeError,
+  );
+});
+
+test("D · message：父列是 conversation_id（不是 run_id）—— 追加 / 升序 / 父由基类注入", async () => {
+  const { db, scopeA } = seed();
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+  const convRef = scopeA.ref(IDS.convA);
+  const messages = new MessageRepo(db, scopeA, convRef, DIALECT);
+  void conversations;
+
+  const first = await messages.append({ role: "user", content: "你好" });
+  const second = await messages.append({
+    role: "assistant",
+    content: "在的",
+    contentParts: [{ type: "text", text: "在的" }],
+    tokenCount: 7,
+    runId: IDS.runA,
+  });
+  assert.equal(first.conversation_id, IDS.convA, "父列由基类注入（调用方传不进来）");
+  assert.ok(first.id, "id 由仓储生成（DDL 无默认值）");
+  assert.equal(second.run_id, IDS.runA);
+
+  const listed = await messages.list();
+  assert.equal(listed.length, 2);
+  assert.equal(listed[0].id, first.id, "按 created_at 升序 ⇒ 先写在前");
+  assert.equal(listed[1].id, second.id);
+  assert.equal(listed[0].token_count, null, "未统计 ⇒ null，不是 0");
+});
+
+test("D · message.listByRun：只在**本会话域内**按 run 过滤（父谓词恒在）", async () => {
+  const { db, scopeA } = seed();
+  const convRef = scopeA.ref(IDS.convA);
+  const messages = new MessageRepo(db, scopeA, convRef, DIALECT);
+  await messages.append({ role: "user", content: "无 run 的输入" });
+  await messages.append({ role: "tool", content: "工具结果", runId: IDS.runA });
+
+  const runRef = scopeA.ref(IDS.runA);
+  const byRun = await messages.listByRun(runRef);
+  assert.equal(byRun.length, 1, "只取 run_id 命中的那条");
+  assert.equal(byRun[0].run_id, IDS.runA);
+  assert.equal((await messages.list()).length, 2, "对照：本会话总量是 2（证明过滤真的在过滤）");
+});
+
+test("D · message.listByRun：跨租户 run ref ⇒ ScopeError（不从「查不到」退化成 0 行）", async () => {
+  const { db, scopeA } = seed();
+  const scopeB = new Scope(T_B);
+  const messages = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+  // 同步抛（listByRun 不是 async 包装的 promise）⇒ assert.throws
+  assert.throws(
+    () => messages.listByRun(scopeB.ref(IDS.runB)),
+    (error) => error instanceof ScopeError,
+  );
+});
+
+test("D · message：跨租户会话 ref ⇒ 构造即 ScopeError（验收 ④ 的「绕过 conversation scope」）", () => {
+  const { db, scopeA } = seed();
+  const scopeB = new Scope(T_B);
+  assert.throws(
+    () => new MessageRepo(db, scopeA, scopeB.ref(IDS.convB), DIALECT),
+    (error) => error instanceof ScopeError,
+    "拿别的租户的会话 ref 建 message 仓储，必须当场抛，不得返回空列表",
+  );
+});
+
+test("D · message：同租户的**另一个**会话也不可见（父谓词恒在的直接证明）", async () => {
+  const { db, scopeA } = seed();
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+  const other = await createConversation(conversations, {
+    id: "dddd0000-0000-4000-8000-0000000000b2",
+  });
+
+  const convA = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+  const convOther = new MessageRepo(db, scopeA, scopeA.ref(other.id), DIALECT);
+
+  await convA.append({ role: "user", content: "会话 A 的消息" });
+  await convOther.append({ role: "user", content: "另一个会话的消息" });
+
+  const inA = await convA.list();
+  const inOther = await convOther.list();
+  assert.equal(inA.length, 1);
+  assert.equal(inOther.length, 1);
+  assert.equal(inA[0].conversation_id, IDS.convA);
+  assert.equal(inOther[0].conversation_id, other.id);
+  assert.notEqual(inA[0].id, inOther[0].id);
 });
