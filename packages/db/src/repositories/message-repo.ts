@@ -8,7 +8,11 @@
  * 隔离口径（三条，缺一条就可串流）
  * -------------------------------
  *   1. 父引用是 `conversation` 的 `ScopedRef`，**没有默认值**且必须是本 scope 产出
- *      （裸 id / 跨租户 ref ⇒ 构造即抛 `ScopeError`）；
+ *      （裸 id / **别租户 scope 铸造**的 ref ⇒ 构造即抛 `ScopeError`）；
+ *      ⚠️ 但「本 scope 铸造 + id 指向**别租户**的会话」**构造期放行** ——
+ *      `Scope#owns()` 只校验铸造来源（mint provenance），**不校验行归属**。
+ *      那一格由首次使用时的父查询（`parentExists` 的 scoped `findById`）兜住，
+ *      见 `tests/child-scope.test.mjs` 里「父存在但属于另一租户」那条决定性夹具；
  *   2. 所有查询经基类 `scopedWhere()`，父谓词恒在 —— 同租户的**另一个会话**也看不见；
  *   3. ⚠️ `message` 还有一条**可空** FK `run_id` 回指 `agent_run`：
  *      {@link MessageRepo.listByRun} 只在**当前会话域内**按 run 过滤，
@@ -91,7 +95,18 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
    * ⚠️ 父谓词由基类自动 and 上 —— 本方法**不可能**跨会话取数。
    * 这是"按 run 查消息"唯一允许的形态（见文件头注第 3 条）。
    *
-   * @throws {ScopeError} `runRef` 不是本 scope 产出的（裸 id / 跨租户）。
+   * @throws {ScopeError} **仅当** `runRef` 由**别租户的 scope** 铸造
+   *   （`owns()` 比 `tenantId`，这种挡得住）。
+   *
+   * ⚠️ `owns()` **挡不住**另一种：`runRef` 由**本 scope** 铸造、但 `id` 指向**别租户的
+   * run**（`scopeA.ref(runB)`）。此时**不抛**，返回的是**本会话内** `run_id` 匹配的消息 ——
+   * 因为父谓词（`conversation_id`）把取数范围锁死在本会话。
+   *
+   * 也就是说：**行归属由父谓词保证，不是 `owns()` 保证**。`Scope#ref(id)` 接受任意字符串、
+   * 只把 `tenantId` 盖成本 scope 的，所以 `owns()` 验的是「这个 ref 由谁铸造」
+   * （mint provenance），**不是**「这个 id 的行属于本租户」（row ownership）。
+   * 实测（B-4：把基类的父谓词摘掉后同一调用）：`inConvA.listByRun(scopeA.ref(runB))`
+   * 从 **0 行**变成 **3 行、全是 convB（别的租户）的消息** ⇒ 兜住它的是父谓词。
    */
   listByRun(runRef: ScopedRef, options: ListOptions = {}): Promise<MessageRow[]> {
     if (!this.scope.owns(runRef)) {
