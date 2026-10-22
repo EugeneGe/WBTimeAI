@@ -347,12 +347,9 @@ test("E-1 · 静态：审批路由与服务**不得**从任何执行器 / 沙箱
   ];
   // 判据是**导入面**而不是全文：注释里提到 "AgentLoop" 只是说明文字，不构成依赖；
   // 真正会"顺手把工具跑了"的是 import 了执行器模块。
-  const forbiddenPaths = [
-    "modules/tool",
-    "modules/sandbox",
-    "modules/run",
-    "modules/runtime",
-  ];
+  // ⚠️ 用**路径片段**而不是 `modules/xxx`：`modules/approval/service.ts` 里的同层导入
+  //     写的是 `../tool/service.js`，用 `modules/tool` 匹配会漏（T3-08 的 CE-T8-2 实证）。
+  const forbiddenPaths = ["/tool/", "/sandbox/", "/run/", "/runtime/"];
 
   for (const file of files) {
     const source = readFileSync(file, "utf8");

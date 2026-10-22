@@ -1,7 +1,7 @@
 /**
  * T2-07 · **OpenAPI 对齐测试**（本任务最关键的一条）。
  *
- * 背景：`packages/contracts` 没有 OpenAPI 的 TS 生成物，49 个 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1）的 TypeBox schema
+ * 背景：`packages/contracts` 没有 OpenAPI 的 TS 生成物，52 个 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1 + runs 3）的 TypeBox schema
  * 只能手写 ⇒ **天然是第二真相源**。没有这条测试，"手写 schema"等于裸奔：改契约（或改
  * schema）时不会有任何东西红，直到联调时前端才崩。
  *
@@ -13,7 +13,7 @@
  *  3. **响应属性名集合相等**：契约成功响应的属性名（数组响应取 `items`）== 我 schema 的
  *     属性名集合。**多一个键**会污染壳，**少一个键**会让前端拿到 undefined。
  *
- * 另外断言"恰好 49 个"（T3-12 起：身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1）—— 多一条说明加了契约外端点，少一条说明漏实现。
+ * 另外断言"恰好 52 个"（T3-08 起：T3-12 的 49 + runs 3）—— 多一条说明加了契约外端点，少一条说明漏实现。
  */
 
 import assert from "node:assert/strict";
@@ -24,7 +24,16 @@ import { test } from "node:test";
 import { OPERATION_IDS, OPERATION_SCHEMAS } from "../dist/routes/schemas.js";
 import { ROOT } from "./routes-harness.mjs";
 
-const SPEC = JSON.parse(readFileSync(join(ROOT, "contracts", "openapi.v1.frozen.json"), "utf8"));
+/**
+ * ⚠️ 读 **v0019** 而不是 v0018（T3-08 起）。
+ *
+ * 依据（实测，不是推测）：v0019 相对 v0018 **只多** `RunResponse.stop_reason` 与
+ * `RunOut.stop_reason` 两个属性，`paths` / `operations` / `schemas` 三集合**逐项相同**
+ * （100 / 134 / 116）。v0019 是 T3-01 的正式增量（`00-契约增量-v0019.md`），
+ * runs 3 op 的响应必须带 `stop_reason` ⇒ 对齐守卫也必须按 v0019 判，
+ * 否则"响应键集合"这条会把合法响应判成多一个键。
+ */
+const SPEC = JSON.parse(readFileSync(join(ROOT, "contracts", "openapi.v1.frozen.v0019.json"), "utf8"));
 
 /** 契约里全部 op 的 `[method, path, operationId]` 三元组（直接从契约读，不抄表）。 */
 function contractOperations() {
@@ -60,10 +69,10 @@ function schemaRequired(schema) {
   return [...(schema?.required ?? [])].sort();
 }
 
-test("恰好 49 个 op（不多不少），且每个 operationId 都能在契约里找到", () => {
-  assert.equal(OPERATION_IDS.length, 49, "本版做 49 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1）");
+test("恰好 52 个 op（不多不少），且每个 operationId 都能在契约里找到", () => {
+  assert.equal(OPERATION_IDS.length, 52, "本版做 52 op（身份 19 + Agent 7 + Skill 7 + Conversation 5 + Approval 4 + 模型目录 6 + 工具目录 1 + runs 3）");
   const contract = contractOperations();
-  assert.equal(contract.length, 49, `契约里应能对上 49 个 op，实测 ${contract.length}`);
+  assert.equal(contract.length, 52, `契约里应能对上 52 个 op，实测 ${contract.length}`);
 
   const contractIds = new Set(contract.map((item) => item.operationId));
   for (const id of OPERATION_IDS) {
@@ -148,7 +157,7 @@ test("成功响应属性名集合与契约逐条相等（数组响应取 items�
   }
 });
 
-test("49 op 的 operationId 与本任务交付的清单逐字相同（防「顺手改名」）", () => {
+test("52 op 的 operationId 与本任务交付的清单逐字相同（防「顺手改名」）", () => {
   // 清单来源：01-身份与授权.md §1（19 行）+ T3-05 任务卡（7 行）+ T3-06 任务卡（7 行）
   //           + T3-07 任务卡（5 行）；
   // 只做"字符串层面没被改过"的守卫。
@@ -208,6 +217,10 @@ test("49 op 的 operationId 与本任务交付的清单逐字相同（防「顺�
     "register_model_api_v1_models_providers__provider_id__models_post",
     // ---- 工具目录族（T3-12 · 1 op）----
     "list_tools_api_v1_tools_get",
+    // ---- runs 族（T3-08 · 3 op）----
+    "get_run_api_v1_runs__run_id__get",
+    "cancel_run_api_v1_runs__run_id__cancel_post",
+    "list_run_events_api_v1_runs__run_id__events_get",
   ];
   assert.deepEqual([...OPERATION_IDS].sort(), [...expected].sort());
 });
