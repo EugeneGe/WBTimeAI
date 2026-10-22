@@ -124,10 +124,19 @@ export {
   ModelProviderRepo,
   CREDENTIAL_STATUS_ACTIVE,
   PROVIDER_STATUS_ACTIVE,
+  PROVIDER_STATUS_DISABLED,
   type CredentialState,
   type ModelProviderRow,
   type ProviderKeyCarrier,
 } from "./model-provider-repo.js";
+// T3-12：`model` 表的子表仓储（父 = `model_provider`；卡面外文件域扩张，已登记）。
+export {
+  ModelRepo,
+  MODEL_STATUS_ACTIVE,
+  MODEL_TYPE_CHAT,
+  type CreateModelInput,
+  type ModelRow,
+} from "./model-repo.js";
 
 // ---------------------------------------------------------------------------
 // 运行时族（T3-03 · W2；**不在** T2-03 的 11 张身份表内）

@@ -44,6 +44,15 @@ export const CREDENTIAL_STATUS_ACTIVE = "ACTIVE";
 /** 供应商的「可用」状态值（同上：与 service 层写入值同源，`model_provider.status`）。 */
 export const PROVIDER_STATUS_ACTIVE = "ACTIVE";
 
+/**
+ * 供应商的「已禁用」状态值（T3-12 · `DELETE /models/providers/{id}` 是**软删**）。
+ *
+ * py `catalog_service.py:136` 的 `MODEL_PROVIDER_STATUS_DISABLED` 同值；
+ * 端点语义也是「禁用」而不是删行（契约 `DELETE` 回 **200 + ModelProviderResponse**，
+ * 204 才是零字节删除 —— 这条成功码本身就是软删的证据）。
+ */
+export const PROVIDER_STATUS_DISABLED = "DISABLED";
+
 /** 凭据载体的解析结果：**为什么 `null` 必须说清原因**。 */
 export type CredentialState =
   /** 已绑定且状态可用 ⇒ `credential` 非 null。 */
@@ -178,6 +187,25 @@ export class ModelProviderRepo extends ScopedRepo<ModelProviderRow> {
   unbindCredential(providerRef: ScopedRef): Promise<ModelProviderRow | null> {
     this.assertOwnRef(providerRef, "providerRef");
     return this.update(providerRef, { credential_id: null });
+  }
+
+  /**
+   * 禁用供应商（T3-12 · `DELETE /api/v1/models/providers/{provider_id}` 的实现）。
+   *
+   * **不是删行**：契约该 op 的成功响应是 **200 + `ModelProviderResponse`**（不是 204），
+   * py `catalog_service.disable_provider` 也只改 `status = DISABLED` 后 `update`。
+   * 删行会让该供应商下的模型（`model.provider_id` FK）变成悬空引用，而契约没有任何
+   * 级联删除的声明 —— 软删是唯一与契约自洽的形态。
+   *
+   * 幂等性：重复禁用 ⇒ 仍返回同一行（`status` 已是 `DISABLED`），不报错。
+   * 这一点与 py 同形（py 只 `_require_provider` 后再赋值，不看当前状态）。
+   *
+   * @param providerRef 供应商在本 scope 下的引用。
+   * @returns 更新后的行；供应商不存在或跨租户时 `null`（→ 调用方折 404）。
+   */
+  disable(providerRef: ScopedRef): Promise<ModelProviderRow | null> {
+    this.assertOwnRef(providerRef, "providerRef");
+    return this.update(providerRef, { status: PROVIDER_STATUS_DISABLED });
   }
 
   create(row: TenantScopedInsert<ModelProviderRow>): Promise<ModelProviderRow> {
