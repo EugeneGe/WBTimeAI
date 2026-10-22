@@ -51,6 +51,20 @@ export const AGENT_RUN_STATUSES = [
 /** 终态（终态后零事件 —— Harness §1-5）。 */
 export const TERMINAL_AGENT_RUN_STATUSES = ["SUCCEEDED", "FAILED", "CANCELLED"] as const;
 
+/**
+ * **活跃态**集合（可被推进 / 可被取消的四个状态）。
+ *
+ * 与 `TERMINAL_AGENT_RUN_STATUSES` 互补：7 值 = 4 活跃 + 3 终态。条件终态写
+ * （{@link AgentRunRepo.finalizeIfActive}）用它当 `WHERE status IN (...)` 的谓词 ——
+ * 这就是「取消不复活」的数据面落点：**终态行永远不可能被再次写终态**。
+ */
+export const ACTIVE_AGENT_RUN_STATUSES = [
+  "QUEUED",
+  "RUNNING",
+  "WAITING_APPROVAL",
+  "WAITING_INPUT",
+] as const;
+
 export function isTerminalAgentRunStatus(status: string): boolean {
   return (TERMINAL_AGENT_RUN_STATUSES as readonly string[]).includes(status);
 }
@@ -75,6 +89,23 @@ export interface FinalizeRunPatch {
   readonly errorType?: string | null;
   readonly completedAt?: Date | string;
   readonly durationMs?: number | null;
+}
+
+/**
+ * 条件终态写的结果（**调用点必须能区分"已终态故未写"与"行不存在"** —— AUD-03）。
+ *
+ * 两种失败形态的处置完全不同：
+ *   - `applied=false` 且 `row !== null` ⇒ 行**在**，但已经不是活跃态（先到者已定终态）
+ *     ⇒ 上层按"幂等 / 静默收敛"处理，**不抛 404、不覆写**；
+ *   - `applied=false` 且 `row === null` ⇒ 行不存在（或跨租户不可见）⇒ 上层只能 404。
+ *
+ * 折成一个 `AgentRunRow | null` 会把这两件事混成同一个返回值，404 与幂等就再也分不开。
+ */
+export interface FinalizeIfActiveOutcome {
+  /** 写入后的行（`applied=true`）或**当前**行（`applied=false`，可能为 `null`）。 */
+  readonly row: AgentRunRow | null;
+  /** 是否真的写进去了（`false` = CAS 未命中，**一行都没改**）。 */
+  readonly applied: boolean;
 }
 
 export class AgentRunRepo extends ScopedRepo<AgentRunRow> {
@@ -138,11 +169,52 @@ export class AgentRunRepo extends ScopedRepo<AgentRunRow> {
   /**
    * 终态落库（含 **v0019 的 `stop_reason`**）。
    *
+   * ⚠️ **无条件写**：只适用于"非并发收敛"场景（测试夹具、运维修数、单写者回填）。
+   *    并发收敛必须用 {@link AgentRunRepo.finalizeIfActive} —— 本方法与
+   *    `coordinator.get` + `finalize` 的组合之间有窗口：读到 `RUNNING` 之后、写之前
+   *    别的请求落了 `CANCELLED`，这次写就会把 `CANCELLED` 覆写成 `SUCCEEDED`
+   *    （即"取消复活"，AUD-03）。
+   *
    * 不做状态矩阵校验（那是 `packages/domain` 的 `run-stop-reason.ts`）；本层只保证
    * 「写得到、写得进、双档同型」。
    */
   async finalize(runRef: ScopedRef, patch: FinalizeRunPatch): Promise<AgentRunRow | null> {
     this.assertOwnRef(runRef, "runRef");
+    return this.update(runRef, this.#terminalValues(patch) as never);
+  }
+
+  /**
+   * **条件终态写（CAS）**：`WHERE id = ? AND tenant_id = ? AND status IN (活跃态)`。
+   *
+   * 存在的理由（AUD-03）：`#settle` 与 `cancel` 可能交错到达。
+   *   - 没有 CAS 时：`#settle` 先读状态（还是 `RUNNING`）、发终态帧、再 `finalize`，
+   *     而 `cancel` 在这条缝里落了 `CANCELLED` ⇒ 后写的 `SUCCEEDED` 把取消**复活**；
+   *   - 有 CAS 时：两次终态写里**恰有一次**命中活跃态，另一次命中 0 行 ⇒ 终态由
+   *     **先到者**决定，后到者拿到 `applied=false` 且**一行都没改**。
+   *
+   * @returns `applied=true` + 写入后的行；CAS 未命中 ⇒ `applied=false` + 当前行
+   *   （行不存在时 `row=null`）。调用方据此区分"幂等返回"与 404。
+   */
+  async finalizeIfActive(
+    runRef: ScopedRef,
+    patch: FinalizeRunPatch,
+  ): Promise<FinalizeIfActiveOutcome> {
+    this.assertOwnRef(runRef, "runRef");
+    const rows = await this.updateManyWhere(
+      and(
+        eq(this.columns.id, runRef.id),
+        inArray(this.columns.status, [...ACTIVE_AGENT_RUN_STATUSES]),
+      ),
+      this.#terminalValues(patch) as never,
+    );
+    const updated = rows[0];
+    if (updated !== undefined) return { row: updated, applied: true };
+    // CAS 未命中：再读一次，把"已终态"（有行）与"不存在"（无行）分开。
+    return { row: await this.findById(runRef), applied: false };
+  }
+
+  /** 终态 patch → 列值（`finalize` 与 `finalizeIfActive` 共用，避免两处漂移）。 */
+  #terminalValues(patch: FinalizeRunPatch): Record<string, unknown> {
     const values: Record<string, unknown> = { status: patch.status };
     if (patch.stopReason !== undefined) values.stop_reason = patch.stopReason;
     if (patch.success !== undefined) values.success = patch.success;
@@ -150,7 +222,7 @@ export class AgentRunRepo extends ScopedRepo<AgentRunRow> {
     if (patch.errorType !== undefined) values.error_type = patch.errorType;
     if (patch.durationMs !== undefined) values.duration_ms = patch.durationMs;
     if (patch.completedAt !== undefined) values.completed_at = this.#instant(patch.completedAt);
-    return this.update(runRef, values as never);
+    return values;
   }
 
   create(row: TenantScopedInsert<AgentRunRow>): Promise<AgentRunRow> {

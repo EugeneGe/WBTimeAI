@@ -153,10 +153,12 @@ export {
 export {
   AgentRunRepo,
   AGENT_RUN_STATUSES,
+  ACTIVE_AGENT_RUN_STATUSES,
   TERMINAL_AGENT_RUN_STATUSES,
   isTerminalAgentRunStatus,
   type AcquireLeaseOptions,
   type AgentRunRow,
+  type FinalizeIfActiveOutcome,
   type FinalizeRunPatch,
 } from "./agent-run-repo.js";
 export {
@@ -174,7 +176,12 @@ export {
   type AppendEventInput,
   type AppendedEvent,
 } from "./agent-event-repo.js";
-export { MessageRepo, type AppendMessageInput, type MessageRow } from "./message-repo.js";
+export {
+  MessageRepo,
+  type AppendMessageInput,
+  type ListTailOptions,
+  type MessageRow,
+} from "./message-repo.js";
 
 // ---------------------------------------------------------------------------
 // 工具目录族（T3-03 · B1；`tool` 有 tenant_id ⇒ ScopedRepo；含 R3-23 幂等物化）

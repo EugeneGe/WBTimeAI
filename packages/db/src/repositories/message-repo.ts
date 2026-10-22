@@ -60,6 +60,18 @@ import {
 export type MessageRow = InferSelectModel<typeof pgMessage>;
 
 /**
+ * {@link MessageRepo.listTail} 的入参（**只有 `limit`**）。
+ *
+ * 为什么不复用 `ListOptions`：那个类型带 `orderBy` / `descending`。尾部窗口的语义
+ * 是"取最近 N 条再反转成升序"，**没有**"按别的列排"这种用法 —— 收下一个会被
+ * 静默忽略的 `orderBy` 等于允许调用方写一个看起来生效、其实无效的参数。
+ */
+export interface ListTailOptions {
+  /** 窗口大小（最近 N 条；合法区间 1..500，由 {@link resolveListLimit} 校验）。 */
+  readonly limit?: number;
+}
+
+/**
  * 追加一条消息的入参。
  *
  * `id` 不在这里：双档 DDL 的 `id` **无默认值**，由仓储用 `randomUUID()` 生成 ——
@@ -132,6 +144,41 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
    */
   list(options: ListOptions = {}): Promise<MessageRow[]> {
     return this.#findOrdered(undefined, options);
+  }
+
+  /**
+   * 本会话**最近 `limit` 条**消息（**尾部窗口**；返回值仍按 `(created_at asc, id asc)` 升序）。
+   *
+   * 为什么需要它（AUD-01：长会话上下文静默截断）
+   * -----------------------------------------
+   *   {@link MessageRepo.list} 是 `(created_at asc, id asc) + LIMIT` ⇒ 加了 `limit` 之后
+   *   取到的是**最旧的** N 条。长会话一旦超过 N，模型看到的就是"开头那一段"，
+   *   而**本次 run 刚写入的用户消息在最末尾** ⇒ 模型答非所问，且没有任何报错。
+   *   尾部窗口把 `LIMIT` 的语义改成"最近 N 条"，再反转回升序（上下文必须按时间正序）。
+   *
+   * 确定性口径（与 `list` 同源，理由见 {@link MessageRepo.#findOrdered}）
+   * ---------------------------------------------------------------
+   *   - 排序键恒为 `(created_at, id)` 的**降序**取窗口，再 `reverse()` 成升序；
+   *   - `id` 是主键、全序、不随时间变化 ⇒ 同秒并列时"取哪几条"仍由数据决定，
+   *     **不依赖 rowid / 堆序**；
+   *   - 不重排内容、不 trim、不改写任何列。
+   *
+   * @param options 窗口大小（缺省 100，与 `resolveListLimit` 的约定一致）。
+   * @throws {ScopeError} 父不可见（与 `list` 同款：父不可见不是"空集"）；或 `limit` 非法。
+   */
+  async listTail(options: ListTailOptions = {}): Promise<MessageRow[]> {
+    await this.ensureParent();
+    const limit = resolveListLimit(this.tableName, options.limit);
+    const chain = this.db
+      .select()
+      .from(this.#table)
+      .where(this.scopedWhere(undefined))
+      // 降序取窗口：`LIMIT` 从"最旧 N 条"变成"最新 N 条"。
+      .orderBy(desc(this.columns.created_at), desc(this.columns.id))
+      .limit(limit);
+    const rows = await (chain as unknown as PromiseLike<MessageRow[]>);
+    // 反转回升序：模型上下文必须是时间正序（否则对话因果颠倒）。
+    return rows.slice().reverse();
   }
 
   /**
