@@ -11,6 +11,10 @@
  * 3. **没有缺省值**：契约 `ConversationResponse.status` 的 default 是 `"ACTIVE"`，
  *    桩的 `create` 什么都不注入 ⇒ 调用方漏填就写出一行 `status` 未定义的会话。
  *
+ * 本次额外补的一处（B1 复核发现）：`list()` 只按 `updated_at` 排序，而该列是
+ * **秒粒度**的 `CURRENT_TIMESTAMP` ⇒ 同秒创建的会话次序不确定（分页会静默重复/漏行）。
+ * 现由 {@link ConversationRepo} 的私有 `#findOrdered` 统一补 `id` 作第二排序键。
+ *
  * 与契约的对应（5 op，**没有 DELETE**）
  * ------------------------------------
  * | op | 仓储 |
@@ -25,12 +29,13 @@
  * 给它加业务方法等于凭空造一个契约外的删除口子（真删会话还会连带孤儿消息）。
  */
 
-import { eq, type InferSelectModel } from "drizzle-orm";
+import { asc, desc, eq, type InferSelectModel, type SQL, type Table } from "drizzle-orm";
 
 import { conversation as pgConversation } from "../schema/pg/conversation.js";
 import { conversation as sqliteConversation } from "../schema/sqlite/conversation.js";
 import { instantLiteral, resolveTable, type SqlDialect } from "./dialect.js";
 import {
+  resolveListLimit,
   ScopedRepo,
   type DrizzleDatabase,
   type ListOptions,
@@ -65,32 +70,70 @@ export interface CreateConversationInput {
 
 export class ConversationRepo extends ScopedRepo<ConversationRow> {
   readonly #dialect: SqlDialect;
+  readonly #table: Table;
 
   constructor(db: DrizzleDatabase, scope: Scope, dialect: SqlDialect = "pg") {
-    super(db, resolveTable(dialect, pgConversation, sqliteConversation), scope);
+    const table = resolveTable(dialect, pgConversation, sqliteConversation);
+    super(db, table, scope);
     this.#dialect = dialect;
+    // 基类不暴露表对象；本类的有序列举要自己拼 `orderBy`，故在构造时留一份。
+    this.#table = table;
   }
 
   /**
    * 本租户的会话列表（最近的在前）。
    *
    * 排序按 `updated_at`：会话列表页的使用场景是"最近聊过的在前"，
-   * 而 `created_at` 会让长期会话永远沉底。
+   * 而 `created_at` 会让长期会话永远沉底。同时以 `id` 作第二排序键（见
+   * {@link ConversationRepo.#findOrdered} 的说明：同秒记录必须有确定次序）。
    */
   list(options: ListOptions = {}): Promise<ConversationRow[]> {
-    return this.findManyWhere(undefined, { orderBy: "updated_at", ...options });
+    return this.#findOrdered(undefined, "updated_at", options);
   }
 
   /** 按 agent 列举会话：agent 也必须以 ``ScopedRef`` 传入（不能是裸 id）。 */
   listByAgent(agentRef: ScopedRef, options: ListOptions = {}): Promise<ConversationRow[]> {
     this.assertOwnRef(agentRef, "agentRef");
-    return this.findManyWhere(eq(this.columns.agent_id, agentRef.id), options);
+    return this.#findOrdered(eq(this.columns.agent_id, agentRef.id), "created_at", options);
   }
 
   /** 按用户列举会话：同上，必须是本 scope 产出的引用。 */
   listByUser(userRef: ScopedRef, options: ListOptions = {}): Promise<ConversationRow[]> {
     this.assertOwnRef(userRef, "userRef");
-    return this.findManyWhere(eq(this.columns.user_id, userRef.id), options);
+    return this.#findOrdered(eq(this.columns.user_id, userRef.id), "created_at", options);
+  }
+
+  /**
+   * 带 `id` 兜底排序的列举（本类三个 list 方法的唯一查询出口）。
+   *
+   * 为什么必须兜底：双档 DDL 的 `created_at` / `updated_at` 都是
+   * `DEFAULT CURRENT_TIMESTAMP` —— **秒粒度**。同一秒内创建（或同一秒内被 `rename`
+   * 推进）的会话 `updated_at` 完全相同，只按它排序时同值记录之间的先后**不由数据决定**：
+   * SQLite 通常吐 rowid 序、PG 吐堆序，一次 `UPDATE` 就能让它换一种顺序。
+   * 后果不是"看起来乱"，而是**分页静默重复/漏行**（同一个 limit/offset 两次翻到同一行）。
+   * `id` 是主键、全序且不随时间变化 ⇒ 作第二排序键后，同秒记录的次序成为数据的函数。
+   *
+   * @param condition 除 scope 谓词外的附加条件（`undefined` = 不限）。
+   * @param defaultOrderBy 调用方未指定 `orderBy` 时使用的时间列。
+   */
+  async #findOrdered(
+    condition: SQL | undefined,
+    defaultOrderBy: NonNullable<ListOptions["orderBy"]>,
+    options: ListOptions,
+  ): Promise<ConversationRow[]> {
+    const limit = resolveListLimit(this.tableName, options.limit);
+    const orderColumn = this.columns[options.orderBy ?? defaultOrderBy];
+    const primary: SQL[] =
+      orderColumn === undefined
+        ? []
+        : [options.descending === false ? asc(orderColumn) : desc(orderColumn)];
+    const chain = this.db
+      .select()
+      .from(this.#table)
+      .where(this.scopedWhere(condition))
+      .orderBy(...primary, asc(this.columns.id))
+      .limit(limit);
+    return (await (chain as unknown as PromiseLike<ConversationRow[]>)).slice();
   }
 
   /**

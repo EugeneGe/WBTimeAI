@@ -552,6 +552,49 @@ test("D · conversation.list：能列出本租户会话（桩连 list 都没有�
   assert.equal((await conversations.list()).length, 2);
 });
 
+test("D · conversation.list：**同秒**两条的记录次序由 id 兜底决定，且两次调用稳定", async () => {
+  const { connection, db, scopeA } = seed();
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+
+  // 双档 DDL 的 `updated_at` 是 `DEFAULT CURRENT_TIMESTAMP`（**秒粒度**）⇒ 同秒创建的
+  // 会话时间戳完全相同；只按它排序时，同值记录的先后由引擎决定（SQLite 走 rowid、
+  // PG 走堆序），分页会静默重复/漏行。这里把两条显式拉平成同一时间戳，
+  // 不依赖"两次 insert 恰好落在同一秒"的运气。
+  const idLater = "dddd0000-0000-4000-8000-0000000000c2"; // id 较大 → 先插（rowid 在前）
+  const idEarlier = "dddd0000-0000-4000-8000-0000000000c1"; // id 较小 → 后插
+  await createConversation(conversations, { id: idLater, title: "later-id" });
+  await createConversation(conversations, { id: idEarlier, title: "earlier-id" });
+  connection.raw
+    .prepare("update conversation set updated_at = '2026-11-01 00:00:00' where id in (?, ?)")
+    .run(idLater, idEarlier);
+
+  // 对照路径：两条确实共享同一个时间戳（否则本用例在验一个不存在的场景）。
+  const stamps = connection.raw
+    .prepare("select distinct updated_at as t from conversation where id in (?, ?)")
+    .all(idLater, idEarlier);
+  assert.equal(stamps.length, 1, "两条必须同 updated_at（秒粒度撞车）—— 夹具没造出来就别往下断言");
+
+  const first = await conversations.list();
+  const second = await conversations.list();
+  assert.equal(first.length, 3, "夹具里的 convA + 新造两条");
+  assert.equal(stamps[0].t, "2026-11-01 00:00:00");
+  assert.equal(first[2].id, IDS.convA, "更早的会话排在最后（时间仍是第一排序键）");
+
+  const tied = first
+    .filter((row) => row.id === idLater || row.id === idEarlier)
+    .map((row) => row.id);
+  assert.deepEqual(
+    tied,
+    [idEarlier, idLater],
+    "同 updated_at 的记录必须按 id 升序（第二排序键；摘掉它这里就变成 rowid 序 c2,c1）",
+  );
+  assert.deepEqual(
+    second.map((row) => row.id),
+    first.map((row) => row.id),
+    "两次调用次序必须逐条一致（翻页稳定性）",
+  );
+});
+
 test("D · conversation.rename：只改 title，并同步推进 updated_at", async () => {
   const { db, scopeA, runA } = seed();
   const conversations = new ConversationRepo(db, scopeA, DIALECT);
