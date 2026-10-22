@@ -31,6 +31,9 @@ secrets/
 # 未来 Electron 大包只需不为该版本加放行规则即可继续被排除。
 release/*
 !release/v0.1.0/
+# 2026-10-22（T3-16）：V0.3.0 同为**基座包**形态（9 个 npm tarball + web dist，
+# 合计约 1.0 M），按 §4.2-2「必出包」产出 ⇒ 与 v0.1.0 同策略放行。
+!release/v0.3.0/
 *.exe
 *.msi
 *.AppImage

@@ -1,6 +1,6 @@
 {
   "name": "@wbtime/ports",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "WBTimeAI 端口层 · 队列 / 调度端口接口 + 空实现（V0.1.0：全部未启用，真实实现归 V0.5.0）",
   "type": "module",

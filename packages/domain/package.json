@@ -1,6 +1,6 @@
 {
   "name": "@wbtime/domain",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "WBTimeAI 域层 · Task 实体与状态机 —— 零 ORM / 零 Web import，字段以 contracts/schema.v0018.pg.normalized.json 实测列为准",
   "type": "module",

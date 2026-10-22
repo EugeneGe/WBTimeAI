@@ -1,6 +1,6 @@
 {
   "name": "@wbtime/security",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "WBTimeAI 安全原语 · 敏感信息扫描（scanSensitive）—— V0.2.0 M-04 下沉落点，纯函数、零外部依赖",
   "type": "module",

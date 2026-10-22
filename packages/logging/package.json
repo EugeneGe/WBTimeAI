@@ -1,6 +1,6 @@
 {
   "name": "@wbtime/logging",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "WBTimeAI 平台基座 · pino 封装 + AsyncLocalStorage 贯通 request_id（继承旧线 request_id 语义）",
   "type": "module",

@@ -50,7 +50,11 @@ describe("package manifest", () => {
     const manifest = JSON.parse(read("package.json"));
     assert.deepEqual(manifest.dependencies, {});
     assert.equal(manifest.name, "@wbtime/contracts");
-    assert.equal(manifest.version, "0.1.0");
+    // 版本基线改从「根 package.json」取，而不是写字面量 `0.1.0`：
+    // 纪律 §4.2-1 要求「全栈同版」，字面量会让每次版本回写都要改测试（V0.3.0 回写即撞上）。
+    // 判据不变仍是严格相等 —— 只是把基线换成单一真相源，版本漂移照样红。
+    const rootManifest = JSON.parse(read("../../package.json"));
+    assert.equal(manifest.version, rootManifest.version);
     assert.equal(manifest.type, "module");
   });
 });
