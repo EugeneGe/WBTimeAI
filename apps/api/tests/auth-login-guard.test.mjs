@@ -163,12 +163,50 @@ test("§3.4 · login_attempt 不含口令、不含口令哈希（列清单断言
   connection.close();
 });
 
-test("§3.4 · 锁定窗口按「最近一次失败」起算：窗口外不锁", async () => {
+/**
+ * 解析 SQLite 毫秒精度 UTC 时间文本（`login-attempt-sink.ts` 的
+ * `toSortableTimestamp` 形状 `YYYY-MM-DD HH:MM:SS.sss`）⇒ UTC 毫秒。
+ *
+ * 与生产侧 `parseDbInstant`（`apps/api/src/modules/auth/refresh.ts`）同一语义：
+ * **必须**按 UTC 分量手工拼 —— `Date.parse` 会把无时区的串按本地时区解释，
+ * 在 UTC+8 上会偏 8 小时，边界断言就全错。
+ */
+function parseSqliteStampMs(text) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/.exec(
+    String(text).trim(),
+  );
+  assert.ok(match !== null, `无法解析的 SQLite 时间戳：${JSON.stringify(text)}`);
+  return Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    Number(match[6]),
+    match[7] === undefined ? 0 : Number(match[7].padEnd(3, "0")),
+  );
+}
+
+/** 最近一次失败的 `created_at`（UTC 毫秒）—— 假时钟边界的**锚点**。 */
+function lastFailureAtMs(raw, username) {
+  const row = raw
+    .prepare(
+      "SELECT created_at FROM login_attempt WHERE username = ? AND success = 0 " +
+        "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+    )
+    .get(username);
+  assert.ok(row !== undefined, "必须已有失败行（前置：连续失败已落库）");
+  return parseSqliteStampMs(row.created_at);
+}
+
+test("§3.4 · 锁定窗口按「最近一次失败」起算，900s 精确边界：899s 锁可用 / 901s 锁失效（#19 假时钟）", async () => {
   const connection = freshDb();
   seedTenant(connection.raw);
-  // 时钟锚在**真实当前时刻**：`LoginAttemptSink` 的 `created_at` 用它自己的授时
-  // （T2-03 的实现，本任务不得改 db），所以固定成"未来/过去"的时钟会让
-  // `now - created_at` 变成负值或巨大值，测出来的就不是窗口语义了。
+  // 假时钟：可变绑定注入（`AuthService` → `LoginGuard` 一路透传）。`created_at`
+  // 由 `LoginAttemptSink` 用它自己的授时落库（T2-03 实现，不得改 db），所以锚点
+  // 从**库里读回**最近一次失败的真实时刻，再把假时钟拨到 锚点 + 899s / + 901s
+  // —— 判据（login-guard.ts）是 `now − created_at <= 900s`，毫秒精度全保留，
+  // 两个边界点都是确定值，不再依赖「跑得多快」。
   let now = new Date();
   const service = makeService({ db: connection.db, now: () => now });
   await service.register({ username: "alice", email: "alice@a.example", password: PASSWORD });
@@ -182,12 +220,15 @@ test("§3.4 · 锁定窗口按「最近一次失败」起算：窗口外不锁",
     "5 次连续失败后立刻应锁定"
   );
 
-  // 把时钟推到窗口外（lock_seconds=900 ⇒ 拨 +1800s），锁定必须自动解除。
-  // 余量必须覆盖 5 次失败登录的真实耗时 E —— 全量并行跑时 CPU 争用可使 E > 1s；
-  // 判锁条件（login-guard.ts）展开为 `1800 − E > 900`，E 无论多慢（远小于 900s）
-  // 都不影响判定。（曾用 +901s：E ≥ 1s 即假红，全量跑偶发 AUTH_ACCOUNT_LOCKED。）
-  now = new Date(now.getTime() + 1_800_000);
-  const afterWindow = await service.login({ username: "alice", password: PASSWORD });
-  assert.ok(afterWindow.tokens.access_token, "窗口外应允许登录（锁定不是永久的）");
+  const anchorMs = lastFailureAtMs(connection.raw, "alice");
+  // 899s：仍在 900s 窗口内 ⇒ 锁**可用**（正确口令也 423；该尝试不落库）。
+  now = new Date(anchorMs + 899_000);
+  const at899 = await capture(() => service.login({ username: "alice", password: PASSWORD }));
+  assert.equal(at899.status, 423, "距最近一次失败 899s：仍在锁定窗口内（锁可用）");
+
+  // 901s：窗口外 ⇒ 锁**失效**（自动解锁，锁定不是永久的）。
+  now = new Date(anchorMs + 901_000);
+  const at901 = await service.login({ username: "alice", password: PASSWORD });
+  assert.ok(at901.tokens.access_token, "距最近一次失败 901s：锁定已解除（窗口外不锁）");
   connection.close();
 });
