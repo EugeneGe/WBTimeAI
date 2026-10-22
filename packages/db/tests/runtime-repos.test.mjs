@@ -39,6 +39,24 @@ function seed() {
   return { connection, db, scopeA, runA: scopeA.ref(IDS.runA), runA2: scopeA.ref(IDS.runA2) };
 }
 
+/**
+ * **连接级写次数**（SQLite `total_changes()`）。
+ *
+ * 存在的唯一理由：`markRunning` 的 UPDATE **只写 `status` 一个列**，所以"第二次调用
+ * 有没有发 UPDATE"在**字段值上观测不到**（摘掉幂等分支后行内容一模一样）。
+ * `total_changes()` 对任何 `INSERT`/`UPDATE`/`DELETE` 都会递增、对 `SELECT` 不递增，
+ * 取两次调用前后的差值即可判定"到底写没写"。
+ *
+ * 它不是 DDL、不进 `contracts/**`、也不是业务代码 —— 只是连接自带的计数器（Q-1 的观测手段）。
+ *
+ * @param connection {@link freshConnection} 的返回值（需其原生 `raw` 句柄）。
+ * @returns 该连接自建立以来的累计变更行数。
+ */
+function totalChanges(connection) {
+  const row = connection.raw.prepare("select total_changes() as n").get();
+  return Number(row.n);
+}
+
 // ---------------------------------------------------------------------------
 // A · agent_run：lease / CAS 原语 + v0019 stop_reason
 // ---------------------------------------------------------------------------
@@ -182,12 +200,54 @@ test("① intent：createPending ⇒ PENDING + attempt=1", async () => {
   assert.equal(created.run_id, IDS.runA, "父由基类注入");
 });
 
-test("③ execute：markRunning 幂等 —— 第二次**不重写任何业务字段**", async () => {
-  // 可观测口径（踩过一次才写清楚）：`tool_call` **没有 started_at / updated_at 列**
-  // （零 DDL 红线 ⇒ 不能加），所以「第二次有没有真的发一条 UPDATE」在现有列上
-  // **不可观测**。能观测、且真正要守的是：重复 execute **不得重置** attempt /
-  // output —— 重试计数与结果一旦被 execute 段改写，回放与计费就都不可信了。
-  // 下面的 output 用原生 SQL 预置（哨兵值），就是为了把「没被改写」做成可见事实。
+test("③ execute：markRunning 幂等 —— 第二次**不发 UPDATE**（锁写次数，不锁字段值）", async () => {
+  // 这一条是 Q-1 的修复。前因（必须写清楚，否则后人会误读）：
+  // `markRunning` 的 UPDATE **只写 `status` 一个列**，所以把幂等分支摘掉之后，
+  // 第二次调用只是多发一条"值不变"的 UPDATE，**行内容一模一样** ——
+  // 任何"字段没被改"的断言（包括下面那条 attempt/output 的）都会**照样绿**，
+  // 即"空过"。实测：摘掉 `if (current.status === "RUNNING") return current;`
+  // ⇒ 本文件 28/28 全绿。所以真正要锁的语义是 **第二次不产生写操作**，
+  // 观测手段是连接级 `total_changes()`（见 {@link totalChanges}）。
+  //
+  // 判据（两段，缺一不可）：
+  //   ① 首次 PENDING→RUNNING **必须恰好写 1 行** —— 否则"第二次 0 行"可能只是
+  //      "这个仓储从来不写"，断言就退化成永真；
+  //   ② 第二次已 RUNNING ⇒ **写 0 行**（幂等分支存在）；且返回行与首次**深度相等**。
+  const { connection, db, scopeA, runA } = seed();
+  const calls = new ToolCallRepo(db, scopeA, runA, DIALECT);
+  const created = await calls.createPending({
+    id: "cccc0000-0000-4000-8000-000000000007",
+    tool_name: "read_file",
+    tool_type: "builtin",
+  });
+
+  const beforeFirst = totalChanges(connection);
+  const first = await calls.markRunning(created.id);
+  const afterFirst = totalChanges(connection);
+  assert.equal(afterFirst - beforeFirst, 1, "首次 PENDING→RUNNING 必须恰好写 1 行");
+  assert.equal(first.status, "RUNNING");
+
+  const beforeSecond = totalChanges(connection);
+  const second = await calls.markRunning(created.id);
+  const afterSecond = totalChanges(connection);
+  assert.equal(
+    afterSecond - beforeSecond,
+    0,
+    "第二次 markRunning 必须 0 次写 —— 这条锁的是**写次数**，不是字段值（字段值摘掉幂等分支也照样相等）",
+  );
+  assert.equal(second.status, "RUNNING", "仍在 RUNNING（不报错、不回退）");
+  assert.deepEqual(second, first, "返回行与首次深度相等（行为面与写次数面互补）");
+});
+
+test("③ execute：markRunning 幂等 —— 附带锁「不重置 attempt / output」（**不能**单独证明幂等分支存在）", async () => {
+  // ⚠️ 本条的定位（Q-1 里被降级）：它防的是**另一种错法** ——
+  // "把 execute 段实现成 `update({status, attempt: 1, output: null})`"，
+  // 那会把重试计数与已有结果冲掉。**但它不能证明幂等分支存在**：
+  // 因为只写 status 的实现在摘掉幂等分支后字段值不变，本条仍会绿（实测过）。
+  // 真正的幂等判据在上一条（写次数）。两条互补，别再合并。
+  //
+  // `tool_call` 没有 started_at / updated_at 列（零 DDL 红线 ⇒ 不能加），
+  // 所以 output 用原生 SQL 预置哨兵值，把"没被清空"做成可见事实。
   const { connection, db, scopeA, runA } = seed();
   const calls = new ToolCallRepo(db, scopeA, runA, DIALECT);
   const created = await calls.createPending({
