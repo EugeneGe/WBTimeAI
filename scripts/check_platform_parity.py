@@ -52,6 +52,10 @@ ROOT: Final[Path] = Path(__file__).resolve().parent.parent
 CONTRACT_ERRORS: Final[str] = "contracts/errors.json"
 CONTRACT_ENVELOPE: Final[str] = "contracts/envelope.schema.json"
 CONTRACT_CHANNELS: Final[str] = "contracts/sse/channels.json"
+# V0.3.1 · T031-05：生成面 = 基线 19 项 + delta（subagent.*）。delta 文件存在时并入
+# 期望面（基线 19 项本身逐字节冻结、零变化 —— 本脚本不放宽基线，只是把"契约真源"
+# 从单文件扩为"基线 + 唯一登记的 delta 增量"）；文件缺失时行为与 V0.3.0 完全一致。
+CONTRACT_CHANNELS_DELTA: Final[str] = "contracts/sse/channels.delta.json"
 
 TS_ERROR_CODES: Final[str] = "packages/core/src/generated/errors.generated.ts"
 TS_ENVELOPE: Final[str] = "packages/core/src/generated/envelope.generated.ts"
@@ -208,6 +212,13 @@ def evaluate(root: Path) -> tuple[int, list[str]]:
     envelope_doc = load_json(envelope_path)
     channels_doc = load_json(channels_path)
 
+    # V0.3.1 · T031-05：基线 + delta（存在才并入）。
+    delta_path = root / CONTRACT_CHANNELS_DELTA
+    delta_channels: list[str] = []
+    if delta_path.is_file():
+        delta_channels = contract_channels(load_json(delta_path))
+    expected_channels = contract_channels(channels_doc) + delta_channels
+
     ts_errors_path = root / TS_ERROR_CODES
     ts_envelope_path = root / TS_ENVELOPE
     ts_channels_path = root / TS_CHANNELS
@@ -242,10 +253,10 @@ def evaluate(root: Path) -> tuple[int, list[str]]:
     ok_all &= ok
     lines.append(line)
 
-    # 3) SSE 通道：集合 + 契约 index 顺序全等
+    # 3) SSE 通道：集合 + 契约 index 顺序全等（基线在前、delta 追加，与生成器同源）
     ok, line = _report(
-        "通道    @wbtime/event ← contracts/sse/channels.json",
-        contract_channels(channels_doc),
+        "通道    @wbtime/event ← contracts/sse/channels.json(+delta)",
+        expected_channels,
         extract_string_array(ts_channels_text, "SSE_CHANNEL_LIST"),
         ordered=True,
     )
@@ -262,7 +273,7 @@ def evaluate(root: Path) -> tuple[int, list[str]]:
     # PascalCase, TS uses SCREAMING_SNAKE); comparing them adds a naming-convention
     # coupling without adding safety, so only the *values* and the *count* are locked.
     ts_enum = extract_ts_const_object(ts_channels_text, "SSE_CHANNELS")
-    contract_values = sorted(contract_channels(channels_doc))
+    contract_values = sorted(expected_channels)
     ts_values = sorted(ts_enum.values())
     if not ts_enum or not contract_values:
         ok_all = False

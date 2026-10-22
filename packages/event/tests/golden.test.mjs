@@ -281,13 +281,17 @@ test("K-9-delta delta 恰 2 帧、golden 逐字节与磁盘全等、且不得漏
     ["subagent.finished", "subagent.started"],
     "delta 通道名单必须逐字同源（V0.3.1 计划 §1④）",
   );
-  // 登记边界：通道名登记 ≠ 下发面注册。生成白名单仍钉死 19 项 ——
-  // subagent.* 进 SSE_CHANNELS / event-writer 发帧注册归 T031-05，提前出现 = 越权。
+  // ⚠️ **K-9-delta 反转（T031-05）登记**：T031-01 时期本断言是「subagent.* **不得**
+  // 出现在 SSE_CHANNEL_LIST」（防提前注册，`registration_boundary`）。T031-05 完成
+  // 生成面注册（`scripts/gen_platform_contracts.mjs` 合并 channels.delta.json →
+  // channels.generated.ts 21 项）后，本断言**反转为「必须出现」** —— 防"注册悄悄
+  // 丢失"（比如有人重跑旧版生成器把 delta 冲掉）。变更登记：
+  // 「K-9-delta 反转（T031-01 防提前注册守卫 → T031-05 注册后正 assert）」。
   for (const name of deltaNames) {
     assert.equal(
       SSE_CHANNEL_LIST.includes(name),
-      false,
-      `${name} 不得在生成白名单里（注册归 T031-05；提前出现会让 payload 校验面悄然扩张）`,
+      true,
+      `${name} 必须在生成白名单里（T031-05 已注册；缺失 = 注册丢失，判红）`,
     );
   }
 
@@ -363,6 +367,58 @@ test("K-9-delta message.delta.keys 冻结件：键名版与键名:类型版 sha 
     expectedNames,
     "从 keys.txt 剥离类型推导的键名版 sha ≠ 参考值 —— 两派生摘要不再同源",
   );
+});
+
+test("K-9-delta-exit · T031-05 出口判据：subagent.* 经**真实 encodeDataFrame** 与 golden 逐字节全等（关门判据）", () => {
+  // channels.delta.json `meta.t031_05_exit_criteria` 逐字：subagent.* 进生成面后，
+  // 须各产一帧**真实 encodeDataFrame** 产物与 golden 逐字节比对 —— T031-01 时期
+  // golden 只受模板等价性（K-9-e0）保护；注册完成后这个口子由本断言关门。
+  const delta = readJson(join(SSE_DIR, "channels.delta.json"));
+  let checked = 0;
+  for (const spec of delta.channels) {
+    const payload = buildEventPayload(spec.channel, spec.constructor.kwargs ?? {});
+    const frame = encodeDataFrame(spec.frame.seq, spec.channel, payload);
+    const golden = readFileSync(join(SSE_DIR, spec.golden));
+    assert.ok(
+      frame.equals(golden),
+      `${spec.channel}: 真实 encodeDataFrame 产物与 golden 逐字节失配 —— 关门判据红\n` +
+        `  got : ${JSON.stringify(frame.toString("utf8"))}\n` +
+        `  want: ${JSON.stringify(golden.toString("utf8"))}`,
+    );
+    assert.equal(sha256(frame), spec.golden_sha256, `${spec.channel}: 帧 sha256 与契约 golden_sha256 不等`);
+    checked += 1;
+  }
+  assert.equal(checked, 2, "必须逐个校验完 2 帧");
+});
+
+test("K-9-delta-child · 子 run 侧载体：与 golden 同形、仅 run_id=子（golden_sample_side 条件①）", () => {
+  // channels.delta.json `meta.golden_sample_side`：golden 样本钉**父流侧**（run_id=父）；
+  // 子 run 自身事件行同形，仅 run_id 取子 run id —— 子侧载体断言归 T031-05（本条）。
+  const delta = readJson(join(SSE_DIR, "channels.delta.json"));
+  let checked = 0;
+  for (const spec of delta.channels) {
+    const kwargs = spec.constructor.kwargs ?? {};
+    const parentRunId = kwargs.run_id;
+    const childRunId = kwargs.child_run_id;
+    assert.ok(
+      typeof parentRunId === "string" && typeof childRunId === "string" && parentRunId !== childRunId,
+      `${spec.channel}: 契约 kwargs 必须给出一对可区分的 run_id（父 ≠ 子）`,
+    );
+    // 子侧行：run_id = 子 run，其余键不变（parent_run_id 仍指父 —— 双源还原语义）。
+    const childPayload = buildEventPayload(spec.channel, { ...kwargs, run_id: childRunId });
+    const childFrame = encodeDataFrame(spec.frame.seq, spec.channel, childPayload).toString("utf8");
+    // 同形判据：把 golden 里父侧 run_id 的**取值**换成子侧后逐字节全等。
+    // （替换只命中 `"run_id":"<父>"` 这个键值对 —— `parent_run_id` 的引号前是 `_`，不会误伤。）
+    const golden = readFileSync(join(SSE_DIR, spec.golden)).toString("utf8");
+    const expectedChild = golden.replaceAll(`"run_id":"${parentRunId}"`, `"run_id":"${childRunId}"`);
+    assert.equal(
+      childFrame,
+      expectedChild,
+      `${spec.channel}: 子侧帧与 golden 不同形（仅 run_id=子）—— golden_sample_side 语义破`,
+    );
+    checked += 1;
+  }
+  assert.equal(checked, 2, "必须逐个校验完 2 帧");
 });
 
 test("K-9-e0 · 模板组装 == encodeDataFrame：19/19 既有通道逐字节等价（E-0 常驻 gate）", () => {
@@ -552,6 +608,13 @@ test("encodeHeartbeat 守卫：now_ms 必须是非负整数", () => {
   }
 });
 
-test("SSE_CHANNEL_LIST 与契约通道顺序全等（编码器接受的通道面 === 冻结面）", () => {
-  assert.deepEqual([...SSE_CHANNEL_LIST], channels.channels.map((spec) => spec.channel));
+test("SSE_CHANNEL_LIST 与契约通道顺序全等（基线 19 项 + delta 2 项；编码器接受的通道面 === 契约面）", () => {
+  // V0.3.1 · T031-05：基线（channels.json，顺序 = 契约 index 升序）在前、
+  // delta（channels.delta.json，index 20/21）在后追加 —— 与生成器的合并顺序同源。
+  const delta = readJson(join(SSE_DIR, "channels.delta.json"));
+  const expected = [
+    ...channels.channels.map((spec) => spec.channel),
+    ...delta.channels.map((spec) => spec.channel),
+  ];
+  assert.deepEqual([...SSE_CHANNEL_LIST], expected);
 });

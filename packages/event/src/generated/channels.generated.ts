@@ -1,12 +1,12 @@
-// @generated —— 由 scripts/gen_platform_contracts.mjs 从 contracts/sse/channels.json 生成。
+// @generated —— 由 scripts/gen_platform_contracts.mjs 从 contracts/sse/channels.json + channels.delta.json 生成。
 // 请勿手改。
 //
 // contract_version: 1
 // channels_digest_sha256: 9edda3baea0cee3a7bf0fb9aa4036fe90b0423797141ab5936abdd1d2e350fc5
-// 通道数量（实测，以读取为准）: 19
+// 通道数量（实测，以读取为准）: 21（基线 19 + delta 2，V0.3.1 · T031-05 生成面注册）
 // payload 键序 = payload_keys_in_order：TS 侧必须保序（契约键序 == 插入序）。
 
-/** 全部 SSE 通道（19 条正式通道；浮点归一化 guard 帧不在内）。 */
+/** 全部 SSE 通道（基线 19 条正式通道 + V0.3.1 delta 2 条（subagent.*）；浮点归一化 guard 帧不在内）。 */
 export const SSE_CHANNELS = {
   AGENT_STARTED: "agent.started",
   AGENT_THINKING: "agent.thinking",
@@ -27,6 +27,8 @@ export const SSE_CHANNELS = {
   MEMORY_WRITTEN: "memory.written",
   APPROVAL_REQUESTED: "approval.requested",
   APPROVAL_DECIDED: "approval.decided",
+  SUBAGENT_STARTED: "subagent.started",
+  SUBAGENT_FINISHED: "subagent.finished",
 } as const;
 
 export type SseChannel = (typeof SSE_CHANNELS)[keyof typeof SSE_CHANNELS];
@@ -52,6 +54,8 @@ export const SSE_CHANNEL_LIST: readonly SseChannel[] = [
   "memory.written",
   "approval.requested",
   "approval.decided",
+  "subagent.started",
+  "subagent.finished",
 ];
 
 /** 单通道规格：payload 键序是契约的一部分（sort_keys=False，字节可比的前提）。 */
@@ -378,6 +382,46 @@ export const SSE_CHANNEL_SPECS: Readonly<Record<string, SseChannelSpec>> = {
     ],
     requiredPayloadKeys: [
       "approval_id",
+      "status",
+    ],
+  },
+  "subagent.started": {
+    channel: "subagent.started",
+    eventClass: "",
+    domainType: "subagent.started",
+    phase: "delta",
+    payloadKeysInOrder: [
+      "run_id",
+      "child_run_id",
+      "parent_run_id",
+      "target_agent_id",
+      "task",
+    ],
+    requiredPayloadKeys: [
+      "run_id",
+      "child_run_id",
+      "parent_run_id",
+      "target_agent_id",
+      "task",
+    ],
+  },
+  "subagent.finished": {
+    channel: "subagent.finished",
+    eventClass: "",
+    domainType: "subagent.finished",
+    phase: "delta",
+    payloadKeysInOrder: [
+      "run_id",
+      "child_run_id",
+      "parent_run_id",
+      "status",
+      "duration_ms",
+      "error",
+    ],
+    requiredPayloadKeys: [
+      "run_id",
+      "child_run_id",
+      "parent_run_id",
       "status",
     ],
   },

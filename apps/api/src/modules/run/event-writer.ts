@@ -3,11 +3,13 @@
  *
  * 三条不变量（卡面验收 ③⑤ + 反例 ③）
  * ---------------------------------
- *   ① **只允许 12 帧**（R3-11a）：`RUN_SSE_CHANNELS` 是白名单，其余 7 条通道
- *      （`agent.failed` / `agent.message` / `knowledge.indexed` / `memory.written` /
- *      `workflow.started|completed|failed`）**一律拒绝**。19 条通道是 `packages/event`
- *      的冻结面，**本卡不新增、不删减** —— 只是"哪些能经 run 流下发给前端"由本卡定义。
- *      反例「下发 13 帧或出现 `workflow.*` ⇒ 必红」的落点就在这里。
+ *   ① **只允许白名单帧**：`RUN_SSE_CHANNELS` 是白名单，其余通道
+ *      （`agent.failed` / `agent.message` / `workflow.*` 五条 / `knowledge.indexed` /
+ *      `memory.written`）**一律拒绝**。基线 19 条通道是 `packages/event` 的冻结面；
+ *      V0.3.1 · T031-05 起，delta 契约（`contracts/sse/channels.delta.json`，恰 2 项
+ *      `subagent.started` / `subagent.finished`）经生成面注册后**并入本白名单**
+ *      （12 → 14 帧；`registration_boundary` 由本卡解除）。反例「下发 `workflow.*` /
+ *      未注册通道 ⇒ 必红」的落点在这里。
  *   ② **终态后零事件**（验收 ⑤）：每次写入**先查 run 当前状态**，终态
  *      （`SUCCEEDED / FAILED / CANCELLED`）⇒ 抛 {@link RunTerminalError}，一行不写。
  *      为什么每次查库而不是缓存：多 worker 下"别人刚把 run 推到终态"必须立刻生效；
@@ -43,10 +45,11 @@ import {
 } from "@wbtime/event";
 
 /**
- * 允许经 run 流下发的 **12 帧**（R3-11a 逐字，顺序即契约清单顺序）。
+ * 允许经 run 流下发的 **14 帧**（R3-11a 的 12 帧 + V0.3.1 · T031-05 注册的 2 条 delta）。
  *
  * 顺序不参与判据，但保持契约顺序便于人眼比对。**不要**按"看着像同一个东西"往这里加
- * —— 加一条就等于新增 SSE 帧，属卡面范围红线（`不新增 SSE 帧`）。
+ * —— 加一条就等于新增 SSE 帧：基线 19 项通道属冻结面（channels.json 永久冻结），
+ * 追加帧只能经 `channels.delta.json` 契约登记 + 生成面注册（T031-05）进入本清单。
  */
 export const RUN_SSE_CHANNELS = [
   "agent.started",
@@ -61,6 +64,10 @@ export const RUN_SSE_CHANNELS = [
   "skill.resolved",
   "approval.requested",
   "approval.decided",
+  // V0.3.1 · T031-05 发帧注册（T031-01 契约 `registration_boundary` 的解除）：
+  // 此前对这 2 帧维持"既有拒发行为"；生成面注册完成后此处正常放行。
+  "subagent.started",
+  "subagent.finished",
 ] as const;
 
 export type RunSseChannel = (typeof RUN_SSE_CHANNELS)[number];
@@ -68,7 +75,7 @@ export type RunSseChannel = (typeof RUN_SSE_CHANNELS)[number];
 /** 12 帧的集合形态（`has` 判据 O(1)）。 */
 const RUN_SSE_CHANNEL_SET: ReadonlySet<string> = new Set(RUN_SSE_CHANNELS);
 
-/** 通道不在 12 帧白名单内（含"通道本身未知"与"已知但不许下发"两种）。 */
+/** 通道不在 run 流白名单内（含"通道本身未知"与"已知但不许经 run 流下发"两种）。 */
 export class RunChannelRejectedError extends Error {
   readonly name = "RunChannelRejectedError";
   readonly code = ERROR_CODES.VALIDATION_ERROR;
@@ -76,7 +83,7 @@ export class RunChannelRejectedError extends Error {
 
   constructor(channel: string) {
     super(
-      `通道 ${JSON.stringify(channel)} 不在 run 流 12 帧白名单内` +
+      `通道 ${JSON.stringify(channel)} 不在 run 流下发白名单内` +
         `（允许：${RUN_SSE_CHANNELS.join(" / ")}）`,
     );
     this.channel = channel;
@@ -139,12 +146,12 @@ export class RunEventWriter {
    * @param channel 通道名（必须 ∈ {@link RUN_SSE_CHANNELS}）。
    * @param values payload 的**其余**键（`run_id` 由本方法注入，调用方不必传；
    *   传了会被本方法的同值覆盖，不构成第二个真相源）。
-   * @throws {RunChannelRejectedError} 通道不在 12 帧白名单。
+   * @throws {RunChannelRejectedError} 通道不在 run 流白名单。
    * @throws {RunTerminalError} run 已终态。
    * @throws {EventPayloadError} payload 多键 / 缺必填键（来自 `buildEventPayload`）。
    */
   async append(channel: string, values: Record<string, unknown> = {}): Promise<AppendedRunEvent> {
-    // ① 白名单先判：不在 12 帧里的通道连 run 状态都不用查（也避免把 workflow.* 写进库）。
+    // ① 白名单先判：不在白名单里的通道连 run 状态都不用查（也避免把 workflow.* 写进库）。
     if (!RUN_SSE_CHANNEL_SET.has(channel) || !isSseChannel(channel)) {
       throw new RunChannelRejectedError(channel);
     }

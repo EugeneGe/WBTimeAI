@@ -3,9 +3,10 @@
  *
  * 判据（卡面验收 ③ + 反例 ③）
  * ------------------------
- *   ① **12 帧逐条可下发**：用 `SSE_CHANNEL_SPECS[channel].requiredPayloadKeys`
+ *   ① **白名单帧逐条可下发**（V0.3.1 起 14 帧：R3-11a 的 12 帧 + T031-05 注册的 2 条
+ *      delta）：用 `SSE_CHANNEL_SPECS[channel].requiredPayloadKeys`
  *      **自动**构造最小合法 payload（不手抄字段名 —— 手抄就会漏掉将来新增的必填键），
- *      逐条 `append`，断言 12 条全部成功且 seq 连续。
+ *      逐条 `append`，断言全部成功且 seq 连续。
  *   ② **反例 ③（必红）**：`workflow.started` / `workflow.completed` / `agent.failed` /
  *      `agent.message` 这些**在 19 通道里但不在 12 帧里**的通道 ⇒ `RunChannelRejectedError`，
  *      且**零写**（连 `agent_event` 行都不该多）。
@@ -88,7 +89,9 @@ test("A-1 · 12 帧**逐条**可下发，且 seq 连续（用契约必填键自�
       runId,
     });
 
-    assert.equal(RUN_SSE_CHANNELS.length, 12, "白名单必须恰好 12 条（R3-11a）");
+    // ⚠️ V0.3.1 · T031-05：白名单 12 → 14（`subagent.started` / `subagent.finished`
+    // 经 channels.delta.json 契约 + 生成面注册并入；基线 12 帧零变化）。
+    assert.equal(RUN_SSE_CHANNELS.length, 14, "白名单必须恰好 14 条（R3-11a 12 帧 + T031-05 注册 2 条 delta）");
 
     let expectedSeq = 1;
     for (const channel of RUN_SSE_CHANNELS) {
@@ -98,7 +101,7 @@ test("A-1 · 12 帧**逐条**可下发，且 seq 连续（用契约必填键自�
       expectedSeq += 1;
     }
 
-    assert.equal(countRows(fixture, "agent_event", `run_id = '${runId}'`), 12);
+    assert.equal(countRows(fixture, "agent_event", `run_id = '${runId}'`), 14);
   } finally {
     await fixture.close();
   }
@@ -115,7 +118,7 @@ test("A-2 · 反例③：19 通道里**不在 12 帧**的 7 条一律拒绝，�
       runId,
     });
 
-    // 19 - 12 = 7 条（实测 `SSE_CHANNEL_LIST`）：
+    // 契约通道总数 - 白名单 = 7 条（实测 `SSE_CHANNEL_LIST`；V0.3.1 起 21 - 14 = 7）：
     // `workflow.*` 五条 + `knowledge.indexed` + `memory.written`。
     // ⚠️ 19 通道里**没有** `agent.failed` / `agent.message` —— 凭印象写会在这里撞
     //    "通道不在 19 通道定义里"，这条错误信息本身就是一次提醒：白名单要读契约，别记。

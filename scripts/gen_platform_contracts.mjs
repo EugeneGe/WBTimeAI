@@ -16,7 +16,7 @@
 // Python: 本脚本是 Node 脚本，因为消费方是 TS；比对门禁另见
 // scripts/check_platform_parity.py（Python 标准库 only）。
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -264,12 +264,65 @@ function parseFixedDecimals(numericFormat) {
   return frac.length;
 }
 
+/**
+ * 读取 V0.3.1 的 delta 契约（`contracts/sse/channels.delta.json`，T031-01 建）。
+ *
+ * V0.3.1 · T031-05 生成面注册（`registration_boundary` 的解除方）：**通道名登记到此
+ * 进入生成白名单**。基线 19 项（channels.json）逐字节冻结、零变化；delta 是
+ * §1 唯一允许的契约增量（恰 2 项），此处只做**机器合并**并守住三条自洽性：
+ *   ① delta 声明的基线 digest 必须与 channels.json 实际 digest 全等（基线漂移即红）；
+ *   ② delta 通道名不得与基线重复；
+ *   ③ delta `meta.count` 必须与实际条数全等。
+ *
+ * @param {object} baseDoc channels.json 的契约对象。
+ * @returns {{channels: Array<object>, count: number}} 合并进生成面的 delta 通道。
+ */
+function deltaChannels(baseDoc) {
+  const path = join(ROOT, "contracts", "sse", "channels.delta.json");
+  if (!existsSync(path)) {
+    return { channels: [], count: 0 };
+  }
+  const doc = JSON.parse(readFileSync(path, "utf8"));
+  const channels = doc.channels ?? [];
+  const declared = doc.meta?.count ?? channels.length;
+  if (channels.length === 0 || channels.length !== declared) {
+    throw new Error(
+      `channels.delta.json: meta.count(${String(declared)}) 与实际条数(${String(channels.length)}) 不一致`,
+    );
+  }
+  if (doc.meta?.base_channels_count !== (baseDoc.channels ?? []).length) {
+    throw new Error(
+      `channels.delta.json: base_channels_count(${String(doc.meta?.base_channels_count)}) ` +
+        `与 channels.json 实际通道数(${String((baseDoc.channels ?? []).length)}) 不一致`,
+    );
+  }
+  if (doc.meta?.base_channels_digest_sha256 !== baseDoc.meta?.channels_digest_sha256) {
+    throw new Error(
+      "channels.delta.json: base_channels_digest_sha256 与 channels.json 实际 digest 不一致 —— 基线漂移，判红",
+    );
+  }
+  const baseNames = new Set((baseDoc.channels ?? []).map((c) => c.channel));
+  for (const channel of channels) {
+    if (baseNames.has(channel.channel)) {
+      throw new Error(`channels.delta.json: 通道 ${channel.channel} 与基线重复 —— 判红`);
+    }
+    if (channel.phase !== "delta") {
+      throw new Error(
+        `channels.delta.json: 通道 ${channel.channel} 的 phase 必须是 "delta"，实测 ${String(channel.phase)}`,
+      );
+    }
+  }
+  return { channels, count: channels.length };
+}
+
 function genChannels() {
   const doc = contract("sse/channels.json");
-  const list = doc.channels ?? [];
-  if (list.length === 0) {
+  const baseList = doc.channels ?? [];
+  if (baseList.length === 0) {
     throw new Error("contracts/sse/channels.json: channels 为空 —— 空集合必须红，不得生成");
   }
+  const delta = deltaChannels(doc);
+  const list = [...baseList, ...delta.channels];
 
   const byChannel = doc.by_channel ?? {};
   const fixedDecimals = parseFixedDecimals(doc.numeric_format);
@@ -334,15 +387,15 @@ function genChannels() {
 
   const digest = doc.meta?.channels_digest_sha256 ?? "unknown";
 
-  return `// @generated —— 由 scripts/gen_platform_contracts.mjs 从 contracts/sse/channels.json 生成。
+  return `// @generated —— 由 scripts/gen_platform_contracts.mjs 从 contracts/sse/channels.json + channels.delta.json 生成。
 // 请勿手改。
 //
 // contract_version: ${doc.contract_version ?? "unknown"}
 // channels_digest_sha256: ${digest}
-// 通道数量（实测，以读取为准）: ${list.length}
+// 通道数量（实测，以读取为准）: ${list.length}（基线 ${baseList.length} + delta ${delta.count}，V0.3.1 · T031-05 生成面注册）
 // payload 键序 = payload_keys_in_order：TS 侧必须保序（契约键序 == 插入序）。
 
-/** 全部 SSE 通道（19 条正式通道；浮点归一化 guard 帧不在内）。 */
+/** 全部 SSE 通道（基线 ${baseList.length} 条正式通道 + V0.3.1 delta ${delta.count} 条（subagent.*）；浮点归一化 guard 帧不在内）。 */
 export const SSE_CHANNELS = {
 ${constRows}
 } as const;
@@ -429,7 +482,9 @@ console.log(
   `  envelope.schema.json   字段 = ${(envelope.$defs?.successEnvelope?.required ?? []).length} (${(envelope.$defs?.successEnvelope?.required ?? []).join(",")})`,
 );
 console.log(`  sse/channels.json      channels = ${(channels.channels ?? []).length}`);
-
+console.log(
+  `  sse/channels.delta.json delta   = ${((deltaChannels(channels).channels) ?? []).length}（V0.3.1 · T031-05 已并入生成面）`,
+);
 if (CHECK_ONLY && drift > 0) {
   console.error(`gen_platform_contracts: --check 发现 ${drift} 处生成物与契约不一致`);
   process.exit(1);
