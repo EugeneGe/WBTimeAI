@@ -14,12 +14,13 @@
  * py oracle 逐字对齐：`list_by_conversation` / `list_by_run` 都是
  * `order_by(created_at.asc(), id.asc())`（`message_repository.py:79` / `:90`）。
  *
- * 判据（本文件 4 条，名字即判据，注入任一拆掉第二键 ⇒ 第 1/2/4 条必红）：
+ * 判据（本文件 5 条，名字即判据，注入任一拆掉第二键 ⇒ 第 1/2/4 条必红）：
  *   1. `list`：**乱序插入**的 6 条同秒消息 ⇒ 返回次序 = `(created_at, id)` 全序；
  *   2. `listByRun`：同一 run 的 3 条同秒消息 ⇒ 同上（幂等查询用的就是这条路径）；
  *   3. `LIMIT` 截断的**集合**确定性：`limit < 同秒行数` ⇒ 取到的必须是该序的**前 N 条**，
  *      两次调用逐字一致（这条是"服务层重排救不了截断"的直接证据）；
- *   4. 跨**秒**混排：早一秒的行必须整体排在前面（第二键不得覆盖主键语义）。
+ *   4. 跨**秒**混排：早一秒的行必须整体排在前面（第二键不得覆盖主键语义）；
+ *   5. **非法 `orderBy` ⇒ `ScopeError`**（不静默降级成 `created_at` —— 仓纪「非法值直接拒绝」）。
  *
  * 复跑：`cd packages/db && npx tsc -b && node --experimental-sqlite --test tests/message-order.test.mjs`
  */
@@ -27,7 +28,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { MessageRepo, Scope } from "../dist/repositories/index.js";
+import { MessageRepo, Scope, ScopeError } from "../dist/repositories/index.js";
 
 import { DIALECT, freshConnection, IDS, seedParents, T_A } from "./fixtures/runtime-fixture.mjs";
 
@@ -141,6 +142,34 @@ test("④ 跨秒混排：早一秒的行整体在前（第二键不得覆盖主�
       [...earlier].sort().concat([...SCRAMBLED].sort()),
       "次序 = created_at 主键 + id 兜底（时间优先，id 只在同秒内生效）",
     );
+  } finally {
+    connection.close();
+  }
+});
+
+test("⑤ 非法 orderBy ⇒ ScopeError（不静默降级成 created_at）", async () => {
+  const { connection, raw, messages } = seed();
+  try {
+    insertMessage(raw, { id: SCRAMBLED[0], createdAt: "2026-10-22 00:00:03" });
+
+    // `message` 没有 updated_at 列 ⇒ 显式传它必须**当场拒**。
+    // 反例形态：若实现写成 `columns[orderBy] ?? columns.created_at`，这里会静默按
+    // created_at 排出一行"看起来正常"的结果 —— 调用方的编程错误就被吞掉了。
+    for (const bogus of ["updated_at", "no_such_column"]) {
+      await assert.rejects(
+        () => messages.list({ orderBy: bogus }),
+        (error) => {
+          assert.ok(error instanceof ScopeError, `必须 ScopeError，实测 ${String(error)}`);
+          assert.match(error.message, /orderBy 非法/);
+          return true;
+        },
+        `orderBy=${bogus} 必须抛错`,
+      );
+    }
+
+    // 对照：合法列仍然可用（否则"抛错"可能只是整条路坏了）
+    assert.equal((await messages.list({ orderBy: "created_at" })).length, 1);
+    assert.equal((await messages.list({ orderBy: "id" })).length, 1);
   } finally {
     connection.close();
   }

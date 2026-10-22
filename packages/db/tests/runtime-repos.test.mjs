@@ -665,9 +665,31 @@ test("D · message：父列是 conversation_id（不是 run_id）—— 追加 /
 
   const listed = await messages.list();
   assert.equal(listed.length, 2);
-  assert.equal(listed[0].id, first.id, "按 created_at 升序 ⇒ 先写在前");
-  assert.equal(listed[1].id, second.id);
-  assert.equal(listed[0].token_count, null, "未统计 ⇒ null，不是 0");
+
+  // ⚠️ T3-07 修：原断言 `listed[0].id === first.id`（"按 created_at 升序 ⇒ 先写在前"）
+  // 是**弱断言** —— 两次 `append` 落在同一秒（`created_at` 是秒粒度的
+  // `DEFAULT CURRENT_TIMESTAMP`），而 `id` 是 `randomUUID()`。单键 `ORDER BY created_at`
+  // 时同值由 SQLite 按 **rowid** 返回 = 插入序，断言只是**恰好**成立（靠实现的巧合）；
+  // `MessageRepo` 自 T3-07 起按 py oracle 补 `asc(id)` 第二键（`message_repository.py:79`）
+  // ⇒ 同秒内改成 UUID 字典序，该断言约 50% 概率失败（实测连跑 8 次 5 红 3 绿）。
+  // 修法：**不改排序**（py 就是双键），把断言换成不依赖巧合的**全序**判据 ——
+  // 期望值由数据自算（`(created_at, id)`），并断"无重复、无丢行"。
+  const ids = listed.map((row) => row.id);
+  assert.deepEqual([...ids].sort(), [first.id, second.id].sort(), "集合相等（不丢行、不多行）");
+  assert.equal(new Set(ids).size, ids.length, "无重复行");
+  assert.deepEqual(
+    ids,
+    [...listed]
+      .sort((a, b) => {
+        if (a.created_at < b.created_at) return -1;
+        if (a.created_at > b.created_at) return 1;
+        if (a.id < b.id) return -1;
+        return a.id > b.id ? 1 : 0;
+      })
+      .map((row) => row.id),
+    "升序 = (created_at, id) 全序（期望值由数据自算，不写死插入序）",
+  );
+  assert.equal(listed.find((row) => row.id === first.id).token_count, null, "未统计 ⇒ null，不是 0");
 });
 
 test("D · message.listByRun：只在**本会话域内**按 run 过滤（父谓词恒在）", async () => {

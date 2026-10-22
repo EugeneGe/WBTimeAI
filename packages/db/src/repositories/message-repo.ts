@@ -179,13 +179,29 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
    * 排序方向：`descending === true` 才降序（缺省升序 —— 与 py `created_at.asc()`
    * 一致，也保持本类改造前的行为）。第二键恒 `asc(id)`，与 `ConversationRepo` 一致。
    *
+   * 非法 `orderBy`（显式传了本表不存在的列，如 `updated_at`）⇒ **抛 `ScopeError`**，
+   * **不**静默降级成 `created_at`：静默兜底会把调用方的编程错误变成"排序看起来正常、
+   * 其实按别的列"的哑失败 —— 与本仓 `resolveListLimit` 的既有纪律（"非法值直接拒绝，
+   * 不静默夹取"）一致。
+   *
+   * `ensureParent()` 在改造前后**都在**（基类 `ChildScopedRepo.findManyWhere` 原本就调，
+   * 见 `child-scoped-repo.ts:272`）—— 本类改成自拼链后显式保留，语义零变化：
+   * 父不可见 ⇒ `ScopeError`（不是返回 `[]`）。
+   *
    * @param condition 除父谓词外的附加条件（`undefined` = 不限）。
    * @param options 排序 / 上限（`limit` 的合法区间由 {@link resolveListLimit} 校验）。
+   * @throws {ScopeError} 父不可见；或显式 `orderBy` 指向本表不存在的列。
    */
   async #findOrdered(condition: SQL | undefined, options: ListOptions): Promise<MessageRow[]> {
     await this.ensureParent();
     const limit = resolveListLimit(this.tableName, options.limit);
-    const orderColumn = this.columns[options.orderBy ?? "created_at"] ?? this.columns.created_at;
+    const orderColumn = this.columns[options.orderBy ?? "created_at"];
+    if (orderColumn === undefined) {
+      throw new ScopeError(
+        `表 ${this.tableName}：orderBy 非法（实测 ${JSON.stringify(options.orderBy)}）—— ` +
+          "本表的合法排序列为 created_at / id；非法值直接拒绝，不静默降级成 created_at",
+      );
+    }
     const primary = options.descending === true ? desc(orderColumn) : asc(orderColumn);
     const chain = this.db
       .select()
