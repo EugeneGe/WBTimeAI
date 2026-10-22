@@ -6,7 +6,7 @@
  * 的 `SMOKE`，文件清单与 `minPass` 都从那里读 —— 单一来源）
  *   ① `case-1-ts-auth`（register 201 / login 200 / 错口令 401 / 5 错后 423）
  *   ② `case-2-ts-pagination`（列表完整性 + 确定性）
- *   ③ `case-3-ts-sse`（无 SSE 端点 ⇒ /healthz 活性 + run 端点确缺）
+ *   ③ `case-3-ts-sse`（真实长连接 SSE 夹具：真建流/真读帧/真断开/零泄漏 + 后端 run 端点确缺）
  *   ④ `case-4-ts-reverse`（kill 后端口 ECONNREFUSED）
  *
  * 前置：`apps/api/dist/main.js` 必须已编译（`pnpm test:ts` 会先 build；

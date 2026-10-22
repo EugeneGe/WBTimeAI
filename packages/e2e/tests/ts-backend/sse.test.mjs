@@ -1,65 +1,90 @@
 /**
- * T2-10 · TS 后端冒烟 case 3 —— SSE 语义的**替代面**（对齐 py `tests/e2e/sse.test.mjs`）。
+ * T2-10 · TS 后端冒烟 case 3 —— SSE 语义的**真实长连接夹具**（V0.2.0 审计 #11）。
  *
- * **如实裁定（不是 skip、不是 mock）**：py case-3 打的是 agent run 的 SSE 帧流
- * （9 核心通道逐帧观察）。TS 后端 V0.2.0 的 19 op 里**没有任何 SSE 端点**——
- * `POST /api/v1/agents/{id}/run` 连路由都未注册（agents 族整族不在 19 op 内）。
- * 因此本 case 以可测的等价面替代，逐条可审计：
+ * **演进（#11）**：本 case 原先用 `/healthz` + 404 **替代** SSE 语义。替代面证明的
+ * 只是「端点不存在」，从未真正走过 SSE 链路。现在由
+ * `packages/e2e/lib/sse-longconn.mjs` 补上真实链路 —— **真建流、真读帧、真断开、
+ * 零泄漏**：
  *
- *   1. **真进程真端口的活性与壳契约**：`GET /healthz` ⇒ 200 + 四键成功壳 +
- *      `data = {status:"ok", uptime_seconds}`（TS 特有字段，py /health 无此形态）+
- *      `x-request-id` 头与体 `request_id` 相等（「体 == 头」，TS 中间件链的自证）；
- *   2. **content-type 必须是 JSON 而非 text/event-stream** —— 若有人日后把 healthz
- *      误做成 SSE，这里当场红；
- *   3. **SSE 端点确缺的反向证明**：`POST /api/v1/agents/agent_x/run` ⇒ 404 四键失败壳
- *      —— 证明「TS 后端无 SSE 端点」是**实测事实**，不是本套件跳过了它。
+ *   1. **真建流**：`fetch(Accept: text/event-stream)` 建真 TCP 长连接（夹具服务端
+ *      连接数 0 → 1 可观测）；
+ *   2. **真读帧**：`body.getReader()` 逐 chunk 喂 `SseStreamParser`（与 golden 同一
+ *      解析实现），逐帧断言 `id` 递增、`event` 通道名、`data` JSON 内容；心跳注释帧
+ *      不得被当事件帧；
+ *   3. **真断开**：`AbortController.abort()` 客户端主动断；
+ *   4. **零泄漏**：断开后夹具服务端连接数必须归零（限时轮询）。
  *
- * 该替代与登记同步写入 `T2-10.md`（诚实边界：SSE 通道矩阵在 TS 后端**未验证，
- * 依赖不可得**——V0.3.0 agent 运行时落地后才有可打的对象）。
+ * **诚实边界（不是 skip、不是 mock）**：TS 后端 V0.2.0 的 19 op 里没有 SSE 端点
+ * （V0.3.0 T3-08 才落地 `GET /runs/{id}/events`）。本 case 的第 5 腿保留「后端 SSE
+ * 端点确缺」的**反向证明**（`POST /api/v1/agents/agent_x/run` ⇒ 404 四键失败壳），
+ * 台账口径仍是「SSE 通道矩阵在 TS 后端未验证（依赖 T3-08 不可得）」；夹具腿证明的
+ * 是 SSE 链路机制真实可用，**不得**被读成「SSE 语义已对产品端点验证」。
  */
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { openSseStream, startSseFixture } from "../../lib/sse-longconn.mjs";
 import { assertTsEvidence, startTsBackend } from "./_backend.mjs";
 
-test("case-3-ts-sse：TS 后端无 SSE 端点 ⇒ 以 /healthz 活性 + run 端点确缺（404）替代", { timeout: 120_000 }, async () => {
+/** 夹具要下发的真实帧序列（通道名用契约 9 核心通道的子集）。 */
+const FIXTURE_FRAMES = Object.freeze([
+  { id: 1, event: "agent.started", data: { run_id: "run-fixture-1" } },
+  { id: 2, event: "message.delta", data: { text: "你好，SSE 长连接" } },
+  { id: 3, event: "agent.completed", data: { stop_reason: "end_turn" } },
+]);
+
+test("case-3-ts-sse：真实长连接夹具（真建流/真读帧/真断开/零泄漏）+ TS 后端 SSE 端点确缺（404）", { timeout: 120_000 }, async () => {
+  // ── 夹具腿：真实 SSE 长连接 ────────────────────────────────────────────────
+  const fixture = await startSseFixture({ frames: [...FIXTURE_FRAMES], frameDelayMs: 15 });
+  const controller = new AbortController();
+  try {
+    // 1. 真建流：连接建立前服务端 0 连接；请求发出后必须升到 1（真 TCP 连接）。
+    assert.equal(fixture.connectionCount(), 0, "夹具启动后、建连前必须 0 连接");
+    const streamPromise = openSseStream(fixture.url, {
+      controller,
+      maxFrames: FIXTURE_FRAMES.length,
+      timeoutMs: 15_000,
+    });
+    await fixture.waitForConnections(1, 10_000);
+
+    const stream = await streamPromise;
+    assert.equal(stream.response.status, 200, "SSE 建流必须 200");
+    assert.match(
+      stream.response.headers.get("content-type") ?? "",
+      /text\/event-stream/,
+      "content-type 必须是 text/event-stream（长连接语义）",
+    );
+
+    // 2. 真读帧：帧数、id 序、通道名、data 内容逐帧断言（心跳注释帧不计入）。
+    assert.equal(
+      stream.frames.length,
+      FIXTURE_FRAMES.length,
+      `必须收到恰好 ${FIXTURE_FRAMES.length} 个事件帧，实得 ${stream.frames.length}`,
+    );
+    for (const [index, frame] of stream.frames.entries()) {
+      const expected = FIXTURE_FRAMES[index];
+      assert.equal(frame.type, "event", `第 ${index + 1} 帧必须是事件帧`);
+      assert.equal(frame.id, String(expected.id), `第 ${index + 1} 帧 id 不符`);
+      assert.equal(frame.event, expected.event, `第 ${index + 1} 帧通道不符`);
+      assert.deepEqual(frame.data, expected.data, `第 ${index + 1} 帧 data 不符`);
+    }
+
+    // 3. 真断开：客户端 abort（连接由客户端主动掐断）。
+    stream.abort();
+    controller.abort();
+
+    // 4. 零泄漏：断开后服务端连接数必须归零（限时轮询，等 close 事件落地）。
+    await fixture.waitForConnections(0, 10_000);
+    assert.equal(fixture.connectionCount(), 0, "断开后无泄漏连接");
+  } finally {
+    controller.abort();
+    await fixture.stop();
+  }
+
+  // ── 后端腿：真进程 + SSE 端点确缺的反向证明（诚实边界，显式登记） ──────────
   const backend = await startTsBackend("sse");
   try {
-    // ── 1. /healthz：真端口活性 + 壳契约 + 「体 == 头」 ─────────────────────
-    const health = await fetch(`${backend.baseUrl}/healthz`, { signal: AbortSignal.timeout(10_000) });
-    const requestId = assertTsEvidence(health, backend);
-    assert.equal(health.status, 200, `/healthz 期望 200，实得 ${health.status}`);
-
-    const contentType = health.headers.get("content-type") ?? "";
-    assert.match(contentType, /application\/json/, `healthz 必须是 JSON，实得 ${contentType}`);
-    assert.equal(
-      contentType.includes("text/event-stream"),
-      false,
-      "healthz 不得是 SSE 流（若这里变红，说明有人把探针做成了 event-stream）",
-    );
-
-    const healthBody = await health.json();
-    assert.deepEqual(
-      Object.keys(healthBody).sort(),
-      ["code", "data", "message", "request_id"],
-      `healthz 必须是契约四键成功壳 :: ${JSON.stringify(healthBody).slice(0, 300)}`,
-    );
-    assert.equal(healthBody.code, 0, "成功壳 code 必须 0");
-    assert.equal(healthBody.message, "ok", "成功壳 message 恒 ok");
-    assert.equal(healthBody.data?.status, "ok", "healthz 的 data.status 恒 ok");
-    assert.equal(
-      typeof healthBody.data?.uptime_seconds,
-      "number",
-      "uptime_seconds 是 TS 后端 healthz 特有字段（py /health 无此形态）—— TS 证据之一",
-    );
-    assert.equal(
-      healthBody.request_id,
-      requestId,
-      "体 request_id 必须等于响应头 x-request-id（「体 == 头」）",
-    );
-
-    // ── 2. SSE 端点确缺的反向证明 ──────────────────────────────────────────
     const runEndpoint = await fetch(`${backend.baseUrl}/api/v1/agents/agent_x/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
