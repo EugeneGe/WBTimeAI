@@ -66,6 +66,83 @@ function rawVersionCount(connection, tenantId) {
 }
 
 // ---------------------------------------------------------------------------
+// 手写的期望值（**刻意不引用注册表**）
+//
+// 为什么必须手写：旧版把期望值写成 `serializeBuiltinInputSchema(spec)`，而落库值就是
+// `spec.inputSchema` —— 两边同源于 `BUILTIN_TOOLS`，注册表一改两边一起变，
+// 于是把 `filesystem.action.enum` 的 `"delete"` 改成 `"remove"` 测试照样全绿（假绿）。
+// 这里的字面量是**独立的第二真源**：改注册表不会带着它一起改，判据才有判别力。
+//
+// 键序也是有意的：下面的书写顺序 == 注册表的序列化顺序，故
+// `JSON.stringify(EXPECTED[name])` 就是期望的**落库原始字符串**（逐字节比较的基准）。
+// ---------------------------------------------------------------------------
+
+const EXPECTED_INPUT_SCHEMAS = {
+  filesystem: {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["read", "list", "write", "delete"] },
+      path: { type: "string", minLength: 1 },
+      content: { type: "string" },
+      encoding: { type: "string" },
+    },
+    required: ["action", "path"],
+    additionalProperties: false,
+  },
+  git: {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["clone", "status", "diff", "commit", "branch"] },
+      args: { type: "array", items: { type: "string" } },
+      timeout_ms: { type: "integer", minimum: 1 },
+    },
+    required: ["action"],
+    additionalProperties: false,
+  },
+  http: {
+    type: "object",
+    properties: {
+      url: { type: "string", minLength: 1 },
+      method: { type: "string" },
+      headers: { type: "object" },
+      body: { type: "string" },
+      timeout_ms: { type: "integer", minimum: 1 },
+    },
+    required: ["url"],
+    additionalProperties: false,
+  },
+  shell: {
+    type: "object",
+    // py 真源是 `{"type": ["string", "array"]}`，**没有** minLength —— 手写同形。
+    properties: {
+      command: { type: ["string", "array"] },
+      timeout_ms: { type: "integer", minimum: 1 },
+    },
+    required: ["command"],
+    additionalProperties: false,
+  },
+  code_exec: {
+    type: "object",
+    properties: {
+      code: { type: "string", minLength: 1 },
+      timeout_ms: { type: "integer", minimum: 1 },
+      runtime: { type: "string", enum: ["python", "node", "bash"] },
+    },
+    required: ["code"],
+    additionalProperties: false,
+  },
+};
+
+/** 每个工具的 `required` 集合（手写，独立于注册表）。 */
+const EXPECTED_REQUIRED = {
+  filesystem: ["action", "path"],
+  git: ["action"],
+  http: ["url"],
+  shell: ["command"],
+  code_exec: ["code"],
+};
+
+// ---------------------------------------------------------------------------
 // A · 注册表本身（`input_schema` 的唯一真源）
 // ---------------------------------------------------------------------------
 
@@ -87,6 +164,16 @@ test("A · 注册表：5 条 schema 都是 object + additionalProperties:false�
     );
     assert.ok(Array.isArray(spec.inputSchema.required), `${spec.name}.required 必须是数组`);
     assert.equal(typeof spec.inputSchema.properties, "object", `${spec.name}.properties`);
+  }
+});
+
+test("A · 序列化不重排键序：serializeBuiltinInputSchema 的输出 == 手写字面量的序列化", () => {
+  for (const spec of BUILTIN_TOOLS) {
+    assert.equal(
+      serializeBuiltinInputSchema(spec),
+      JSON.stringify(EXPECTED_INPUT_SCHEMAS[spec.name]),
+      `${spec.name}：序列化结果与手写期望值不逐字节一致（键序被重排也算）`,
+    );
   }
 });
 
@@ -152,7 +239,7 @@ test("B · ensureBuiltinTools 第二次：仍 5 行，且**写次数为 0**（�
   assert.equal(writes, 0, "这条锁的是**写次数**：任何 INSERT/UPDATE 都会让它红");
 });
 
-test("B · 落库的 input_schema 与注册表**逐字节一致**（SQLite 档比原始字符串）", async () => {
+test("B · 落库的 input_schema 与**手写字面量**逐字节一致（期望值不引用注册表）", async () => {
   const { connection, db, scopeA } = seed();
   const tools = new ToolRepo(db, scopeA, DIALECT);
   await tools.ensureBuiltinTools();
@@ -162,11 +249,71 @@ test("B · 落库的 input_schema 与注册表**逐字节一致**（SQLite 档�
   for (const spec of BUILTIN_TOOLS) {
     const row = rows.find((candidate) => candidate.name === spec.name);
     assert.ok(row, `库里缺 ${spec.name}`);
+
+    // ① 深等价：形状 + 每个 enum 的**完整取值集合**（手写期望值）
+    assert.deepEqual(
+      JSON.parse(row.input_schema),
+      EXPECTED_INPUT_SCHEMAS[spec.name],
+      `${spec.name}.input_schema 与手写期望值不同 —— 说明落库前被重排/裁剪/改值过`,
+    );
+
+    // ② 逐字节：手写字面量的序列化结果（键序也是判据的一部分）
     assert.equal(
       row.input_schema,
-      serializeBuiltinInputSchema(spec),
-      `${spec.name}.input_schema 与注册表不逐字节一致 —— 说明落库前被重排/裁剪过`,
+      JSON.stringify(EXPECTED_INPUT_SCHEMAS[spec.name]),
+      `${spec.name}.input_schema 与手写期望值不逐字节一致（键序变了也算）`,
     );
+  }
+});
+
+test("B · 手写判据：每个工具的 required 集合 + 关键 enum 完整取值（改值必须翻红）", async () => {
+  const { connection, db, scopeA } = seed();
+  const tools = new ToolRepo(db, scopeA, DIALECT);
+  await tools.ensureBuiltinTools();
+
+  /** 从**库里**取回某工具的 schema（被测的是落库值，不是注册表对象）。 */
+  const stored = (name) => {
+    const row = rawTools(connection, T_A).find((candidate) => candidate.name === name);
+    assert.ok(row, `库里缺 ${name}`);
+    return JSON.parse(row.input_schema);
+  };
+
+  // ① required 逐工具（手写集合；运行时多一个键或少一个键都会红）
+  for (const [name, required] of Object.entries(EXPECTED_REQUIRED)) {
+    assert.deepEqual(stored(name).required, required, `${name}.required 与手写集合不符`);
+  }
+
+  // ② filesystem.action 的**完整**取值数组（QA 注入点：delete → remove）
+  assert.deepEqual(
+    stored("filesystem").properties.action,
+    { type: "string", enum: ["read", "list", "write", "delete"] },
+    "filesystem.action 的 enum 必须逐字是 read/list/write/delete",
+  );
+
+  // ③ code_exec.runtime 的 3 值 + 顺序（顺序即序列化顺序）
+  assert.deepEqual(
+    stored("code_exec").properties.runtime,
+    { type: "string", enum: ["python", "node", "bash"] },
+    "code_exec.runtime 必须逐字是 python/node/bash",
+  );
+
+  // ④ git.action 的 5 个动作
+  assert.deepEqual(
+    stored("git").properties.action.enum,
+    ["clone", "status", "diff", "commit", "branch"],
+    "git.action 的 enum 必须逐字是 clone/status/diff/commit/branch",
+  );
+
+  // ⑤ shell.command 是双类型（py 真源如此），且没有 minLength
+  assert.deepEqual(
+    stored("shell").properties.command,
+    { type: ["string", "array"] },
+    "shell.command 必须是 {type:[string,array]}（无 minLength）",
+  );
+
+  // ⑥ 五个工具都必须 additionalProperties:false（与 py SPEC 同形）
+  for (const name of Object.keys(EXPECTED_INPUT_SCHEMAS)) {
+    assert.equal(stored(name).additionalProperties, false, `${name}.additionalProperties`);
   }
 });
 
