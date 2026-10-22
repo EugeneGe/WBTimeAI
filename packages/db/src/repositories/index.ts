@@ -163,3 +163,24 @@ export {
   type ToolRow,
   type ToolVersionRow,
 } from "./tool-repo.js";
+
+// ---------------------------------------------------------------------------
+// B2 · 审批族（`approval` 有 tenant_id、无父外键 ⇒ ScopedRepo；独立租户域）
+// ---------------------------------------------------------------------------
+
+export {
+  ApprovalRepo,
+  APPROVAL_STATUSES,
+  APPROVAL_STATUS_APPROVED,
+  APPROVAL_STATUS_EXPIRED,
+  APPROVAL_STATUS_PENDING,
+  APPROVAL_STATUS_REJECTED,
+  APPROVAL_SUBJECT_TYPES,
+  APPROVAL_TERMINAL_STATUSES,
+  APPROVAL_LIST_DEFAULT_LIMIT,
+  APPROVAL_LIST_MAX_LIMIT,
+  isTerminalApprovalStatus,
+  type ApprovalRow,
+  type CreateApprovalInput,
+  type DecideApprovalInput,
+} from "./approval-repo.js";
