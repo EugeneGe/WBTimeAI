@@ -22,7 +22,34 @@ export {
   type TenantScopedPatch,
 } from "./scoped-repo.js";
 export { TaskRepo, type TaskRow } from "./task-repo.js";
-export { AgentRepo, type AgentRow } from "./agent-repo.js";
+export {
+  AgentRepo,
+  AGENT_LIST_DEFAULT_PAGE,
+  AGENT_LIST_DEFAULT_PAGE_SIZE,
+  AGENT_LIST_MAX_PAGE_SIZE,
+  AGENT_STATUSES,
+  AGENT_STATUS_ACTIVE,
+  AGENT_STATUS_ARCHIVED,
+  AGENT_STATUS_DRAFT,
+  AGENT_STATUS_TRANSITIONS,
+  AGENT_TYPES,
+  AGENT_VERSION_STATUSES,
+  AGENT_VERSION_STATUS_DEPRECATED,
+  AGENT_VERSION_STATUS_DRAFT,
+  AGENT_VERSION_STATUS_PUBLISHED,
+  AGENT_TYPE_PRIMARY,
+  canTransitionStatus,
+  isAgentStatus,
+  isAgentType,
+  isAgentVersionStatus,
+  type AgentListOptions,
+  type AgentRow,
+  type AgentVersionListOptions,
+  type AgentVersionRow,
+  type CreateAgentInput,
+  type PublishAgentVersionInput,
+  type UpdateAgentMetadataPatch,
+} from "./agent-repo.js";
 export {
   ConversationRepo,
   CONVERSATION_STATUS_ACTIVE,
