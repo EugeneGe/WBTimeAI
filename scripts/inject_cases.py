@@ -924,8 +924,16 @@ def v031_watermark_local_increment(contracts: Path, repo: Path) -> str:
                 r"\s*\{\s*(?:continue|return)\s*;?\s*\}",
                 " ",
             ),
-            # 两条路线共有的"seq 是不是非负整数"判断式 → 常量 true（守卫失效）。
-            (r"Number\.isInteger\(\s*(?:row|r|item|event)\.seq\s*\)", "true"),
+            # 两条路线共有的"seq 是不是非负整数"判断式 → 失效。
+            # ⚠️ 替换值必须是 `true || false`，**不能是裸 `true`**（§4.6 实测）：
+            #   工程师实现是合取式 `Number.isInteger(row.seq) && (row.seq as number) >= 1`
+            #   （TS 带 as-cast、JS 不带 —— 两边文本因此不同，但这一处调用**两边同形**）。
+            #   若只把它换成 `true`，剩下 `true && row.seq >= 1`，而 `undefined >= 1`
+            #   恒为 false ⇒ 守卫**照常拦下**无 seq 行 ⇒ 改坏是语义空操作 ⇒ FAKE-GREEN
+            #   （R-14 的根因）。`true || false && X` 依优先级 = `true || (false && X)`
+            #   = 恒 true ⇒ **整条合取式失效**，且在 TS/JS 两边都是合法表达式、
+            #   与后面跟什么（cast 与否）无关。
+            (r"Number\.isInteger\(\s*(?:row|r|item|event)\.seq\s*\)", "true || false"),
             # py 原型同形：`row.seq ?? <兜底>` 的正确形态 → 直接连本地水位自增。
             (r"(?:row|r|item|event)\.seq\s*\?\?", "lastSeq + 1 ??"),
         ),
