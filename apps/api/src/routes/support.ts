@@ -26,6 +26,7 @@ import { authError, unauthorized } from "../modules/auth/errors.js";
 import { AgentService } from "../modules/agent/service.js";
 import { CredentialService } from "../modules/credential/service.js";
 import { OrganizationService } from "../modules/organization/service.js";
+import { SkillService } from "../modules/skill/service.js";
 import {
   loadPrincipal,
   type Principal,
@@ -51,6 +52,14 @@ export interface IdentityDeps {
    * `agentRoutes(app, deps)` 的读取面一致）。
    */
   readonly agents: AgentService;
+  /**
+   * Skill 族服务（T3-06 · 7 op + `resolveSkill` 纯查询）。
+   *
+   * 挂载理由与 `agents` 同源：依赖（db / dialect / tenantId）与身份族完全同源，
+   * `buildApp` 的装配入口只有一个。名字沿用 `deps.skills`（复数，与
+   * `skillRoutes(app, deps)` 的读取面一致）。
+   */
+  readonly skills: SkillService;
   /**
    * 未认证 register 的限速器（FIX-04）。
    *

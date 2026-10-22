@@ -344,6 +344,71 @@ export type PublishRequestBody = Static<typeof PublishRequestSchema>;
 export const AgentRunEntryResponseSchema = Type.Object({}, { additionalProperties: true });
 
 // ---------------------------------------------------------------------------
+// Skill 族（T3-06 · 7 op）
+// ---------------------------------------------------------------------------
+
+/** 契约 `SkillResponse`（**11 键**，无 `updated_at`；`current_version` 恒 null —— py 同形）。 */
+export const SkillResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    tenant_id: NullableString,
+    name: Type.String(),
+    display_name: Type.String(),
+    description: NullableString,
+    category: Type.String(),
+    status: Type.String(),
+    current_version_id: NullableString,
+    current_version: NullableString,
+    created_by: Type.String(),
+    created_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type SkillResponseBody = Static<typeof SkillResponseSchema>;
+
+/** 契约 `CreateSkillRequest`（required = `name`，maxLength 64；`display_name` 缺省回落 name —— 服务层 py 口径）。 */
+export const CreateSkillRequestSchema = Type.Object({
+  name: Type.String({ minLength: 1, maxLength: 64 }),
+  display_name: Type.Optional(Type.String({ maxLength: 255, default: "" })),
+  description: Type.Optional(NullableString),
+  category: Type.Optional(Type.String({ maxLength: 100, default: "" })),
+});
+export type CreateSkillRequestBody = Static<typeof CreateSkillRequestSchema>;
+
+/** 契约 `UpdateSkillRequest`（缺省字段不变；**显式 null = 不变** —— py `is not None` 同口径）。 */
+export const UpdateSkillRequestSchema = Type.Object({
+  display_name: Type.Optional(NullableString255),
+  description: Type.Optional(NullableString),
+  category: Type.Optional(Type.Union([Type.Null(), Type.String({ maxLength: 100 })])),
+  status: Type.Optional(NullableString),
+});
+export type UpdateSkillRequestBody = Static<typeof UpdateSkillRequestSchema>;
+
+/** 契约 `SkillVersionResponse`（**8 键**；`manifest` 开放对象 —— 版本清单是自由 JSON）。 */
+export const SkillVersionResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    skill_id: Type.String(),
+    version: Type.String(),
+    instructions: Type.String(),
+    manifest: Type.Object({}, { additionalProperties: true }),
+    status: Type.String(),
+    created_by: Type.String(),
+    created_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type SkillVersionResponseBody = Static<typeof SkillVersionResponseSchema>;
+
+/** 契约 `CreateSkillVersionRequest`（required = `version`；`manifest` 自由对象，py `default_factory=dict`）。 */
+export const CreateSkillVersionRequestSchema = Type.Object({
+  version: Type.String({ minLength: 1, maxLength: 50 }),
+  instructions: Type.Optional(Type.String({ default: "" })),
+  manifest: Type.Optional(Type.Object({}, { additionalProperties: true })),
+});
+export type CreateSkillVersionRequestBody = Static<typeof CreateSkillVersionRequestSchema>;
+
+// ---------------------------------------------------------------------------
 // op → schema 映射（键 = 契约的 operationId，**逐字**）
 // ---------------------------------------------------------------------------
 
@@ -364,7 +429,7 @@ export const EmptyBodySchema = Type.Null();
 /**
  * 全部 op 的字典。键是契约 `operationId`，值与各任务卡 §1/§2 的表逐条对应。
  *
- * **身份 19 op（T2-07）+ Agent 7 op（T3-05）= 26 条** —— 条数由
+ * **身份 19 op（T2-07）+ Agent 7 op（T3-05）+ Skill 7 op（T3-06）= 33 条** —— 条数由
  * `openapi-alignment.test.mjs` 断言（多一条 = 加了契约外端点；少一条 = 漏实现）。
  * `/api/v1/settings/credentials` 的 2 个镜像 op 按 U-3/R-5 **不纳入**；
  * Workspace 任何路由按 R-26 **不纳入**。
@@ -549,7 +614,54 @@ export const OPERATION_SCHEMAS: Readonly<Record<string, OperationSchemas>> = Obj
     successStatus: 200,
     response: Type.Array(AgentVersionResponseSchema),
   },
+
+  // ---- Skill 族（T3-06 · 7 op）--------------------------------------------
+  list_skills_api_v1_skills_get: {
+    method: "GET",
+    path: "/api/v1/skills",
+    successStatus: 200,
+    response: Type.Array(SkillResponseSchema),
+  },
+  create_skill_api_v1_skills_post: {
+    method: "POST",
+    path: "/api/v1/skills",
+    successStatus: 201,
+    body: CreateSkillRequestSchema,
+    response: SkillResponseSchema,
+  },
+  get_skill_api_v1_skills__skill_id__get: {
+    method: "GET",
+    path: "/api/v1/skills/{skill_id}",
+    successStatus: 200,
+    response: SkillResponseSchema,
+  },
+  update_skill_api_v1_skills__skill_id__put: {
+    method: "PUT",
+    path: "/api/v1/skills/{skill_id}",
+    successStatus: 200,
+    body: UpdateSkillRequestSchema,
+    response: SkillResponseSchema,
+  },
+  publish_skill_version_api_v1_skills__skill_id__publish_post: {
+    method: "POST",
+    path: "/api/v1/skills/{skill_id}/publish",
+    successStatus: 200,
+    response: SkillVersionResponseSchema,
+  },
+  list_skill_versions_api_v1_skills__skill_id__versions_get: {
+    method: "GET",
+    path: "/api/v1/skills/{skill_id}/versions",
+    successStatus: 200,
+    response: Type.Array(SkillVersionResponseSchema),
+  },
+  create_skill_version_api_v1_skills__skill_id__versions_post: {
+    method: "POST",
+    path: "/api/v1/skills/{skill_id}/versions",
+    successStatus: 201,
+    body: CreateSkillVersionRequestSchema,
+    response: SkillVersionResponseSchema,
+  },
 });
 
-/** 全部 operationId（顺序：身份 19 op 在前，Agent 7 op 按 §2 W3 卡顺序随后）。 */
+/** 全部 operationId（顺序：身份 19 op 在前，Agent 7 op / Skill 7 op 按 §2 W3 卡顺序随后）。 */
 export const OPERATION_IDS: readonly string[] = Object.freeze(Object.keys(OPERATION_SCHEMAS));

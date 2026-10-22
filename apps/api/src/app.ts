@@ -26,6 +26,7 @@ import { AuthService } from "./modules/auth/service.js";
 import { createRegisterLimiter } from "./modules/auth/register-limiter.js";
 import { CredentialService } from "./modules/credential/service.js";
 import { OrganizationService } from "./modules/organization/service.js";
+import { SkillService } from "./modules/skill/service.js";
 import { createFakeProvider } from "./modules/model/fake-provider.js";
 import { ModelGateway } from "./modules/model/gateway.js";
 import {
@@ -43,6 +44,7 @@ import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
 import { organizationRoutes } from "./routes/organizations.js";
 import { permissionRoutes } from "./routes/permissions.js";
+import { skillRoutes } from "./routes/skills.js";
 import type { IdentityDeps } from "./routes/support.js";
 import { userRoutes } from "./routes/users.js";
 
@@ -203,6 +205,8 @@ export function buildIdentityStack(args: {
     credentials: new CredentialService({ db: args.database, dialect, secretKey }),
     // T3-05：Agent 族 7 op（发布 / 版本 / run 前置校验；执行归 T3-08）。
     agents: new AgentService({ db: args.database, dialect }),
+    // T3-06：Skill 族 7 op（清单解析 / 装载见 modules/skill；执行不在范围）。
+    skills: new SkillService({ db: args.database, dialect }),
     // FIX-04：限速器**在这里**构造 —— 每次 `buildApp()` 一份，随实例存亡。
     // 放在模块作用域会变成跨实例共享的配额桶（测试之间互相污染，见 R-34）。
     registerLimiter: createRegisterLimiter({
@@ -266,6 +270,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     modelRoutes(app, identity);
     // T3-05：Agent 族 7 op（与身份族同一 db / tenant 装配）。
     agentRoutes(app, identity);
+    // T3-06：Skill 族 7 op（与身份族同一 db / tenant 装配）。
+    skillRoutes(app, identity);
   }
 
   // 6) 模型栈（给了 `model` 才装配；缺 key 在上面就抛，不会走到这里）

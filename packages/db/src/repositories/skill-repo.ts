@@ -300,6 +300,29 @@ export class SkillRepo extends ScopedRepo<SkillRow> {
   }
 
   /**
+   * 按版本 **id** 取（T3-06 补：`resolveSkill` 需按 `skill.current_version_id` 指针
+   * 反查版本行；既有 `findVersion` 只收版本号，指针是 id 对不上）。
+   *
+   * @param skillRef 父 skill 引用（必须可见；不可见 ⇒ `ScopeError`，同 {@link findVersion}）。
+   * @param versionId 版本行 id。
+   * @returns 版本行；不存在 / 归属不符（属于别的 skill）⇒ `null`。
+   */
+  async findVersionById(skillRef: ScopedRef, versionId: string): Promise<SkillVersionRow | null> {
+    await this.#assertVisibleSkill(skillRef);
+    const rows = await (this.db
+      .select()
+      .from(this.#versionTable)
+      .where(
+        and(
+          eq(this.#versionColumns.skill_id, skillRef.id),
+          eq(this.#versionColumns.id, versionId),
+        ),
+      )
+      .limit(1));
+    return (rows[0] as SkillVersionRow | undefined) ?? null;
+  }
+
+  /**
    * 只改版本 `status`（**不可变口径的唯一出口**，裁定 ⑤）。
    *
    * 为什么必须限定"只能改 status"：内容列一旦可变，"已发布快照"就不再是快照，
