@@ -390,13 +390,20 @@ export class AgentRepo extends ScopedRepo<AgentRow> {
     return created;
   }
 
-  /** 某 agent 的全部版本（不可变快照；`created_at` 升序 + `id` 兜底 —— py 同升序）。 */
+  /**
+   * 某 agent 的全部版本（不可变快照；**`created_at` 升序** + `id` 兜底）。
+   *
+   * ⚠️ 缺省方向与基类 `findManyWhere` 相反：py `list_by_agent` 是
+   * `created_at.asc()`（version_repository.py 实测）⇒ 这里 `descending === true`
+   * 才降序，缺省**升序**。同秒并列（CURRENT_TIMESTAMP 秒粒度 + 版本 id 是随机
+   * uuid）由 `id` 升序兜底 —— 既有测试若依赖降序会当场红（这层判据是活的）。
+   */
   async listVersions(agentRef: ScopedRef, options: ListOptions = {}): Promise<AgentVersionRow[]> {
     await this.#assertVisibleAgent(agentRef);
     const limit = resolveListLimit(this.tableName, options.limit);
     const orderColumn = this.#versionColumns[options.orderBy ?? "created_at"];
     const primary: SQL[] =
-      orderColumn === undefined ? [] : [options.descending === false ? asc(orderColumn) : desc(orderColumn)];
+      orderColumn === undefined ? [] : [options.descending === true ? desc(orderColumn) : asc(orderColumn)];
     const chain = this.db
       .select()
       .from(this.#versionTable)
