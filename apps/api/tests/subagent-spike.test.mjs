@@ -570,20 +570,20 @@ test("S-2-2 · D2-a：带 run_id 的 15 条通道，跨 run 行不得汇入父�
 });
 
 /**
- * **D2 之外的行级覆盖** —— 帧数据**不带** `run_id` 的 4 条通道。
+ * **D2-b 的载体实现** —— 帧数据**不带** `run_id` 的 4 条通道。
  *
- * ⚠️ **状态登记（2026-10-23，D2 最终裁定）**：D2 定稿取**封闭例外白名单** ——
- *   4 条（`knowledge.indexed` / `memory.written` / `approval.requested` /
- *   `approval.decided`）显式登记、不判红；其余任何帧缺 `run_id` ⇒ 立即红；
- *   新增不带 `run_id` 的通道 ⇒ 立即红（白名单**不随新增扩张**）。
- *   架构先前提的「D2-b 按来源行 `agent_event.run_id` 列判归属」已**降级为
- *   §8.5 的 P2 待定附加判据，不要求写进载体**。
+ * ✅ **状态登记（2026-10-23，team-lead 最终裁定）**：D2-b 由 P2 待定**升级为必做附加判据**，
+ *   架构师已落盘五要素（docs `a066566`，`02-施工/README.md` §8.5）——
+ *   正向（4 条按来源行 `agent_event.run_id` 列断言 == 父）+ **反向不可省**（子 run
+ *   同通道事件不得出现在父流）+ 白名单机器导出 + 落点 T031-05 单元层；
+ *   计数口径照 S3 先例（**不叫 D11、不改「D1–D10 十条」计数**，闭版一并自证）。
+ *   **本条就是 D2-b 的载体实现**，不是"超出定稿的额外覆盖"。
  *
- * 本用例**保留**，理由不是 D2，而是计划 §1④ 的原文：
+ * 保留依据（与裁定同向，计划 §1④ 原文）：
  *   「**父流只含父 run 帧，此为门禁而非实现细节**」+ K4（`yielded_seq` 单全局水位
  *   会让子 run 的 `seq` 污染父流）+ K5b（隔离失守即**静默崩溃**）。
- *   D2 定稿只守帧内容；这 4 条的帧里没有 `run_id`，内容级断言对它们**天然失明**
- *   ⇒ 若行级过滤只对"带 run_id 的通道"生效，D2 定稿照样绿，但子 run 的
+ *   D2 封闭白名单只守帧内容；这 4 条的帧里没有 `run_id`，内容级断言对它们**天然失明**
+ *   ⇒ 若行级过滤只对"带 run_id 的通道"生效，D2 照样绿，但子 run 的
  *   `approval.requested` 已经混进父流了。本用例就是堵这个洞。
  *
  * 做法（帧里看不出归属 ⇒ 用可区分的 payload 指纹分辨帧来自哪一行）：
@@ -593,8 +593,6 @@ test("S-2-2 · D2-a：带 run_id 的 15 条通道，跨 run 行不得汇入父�
  * 落点同 D2-a：必须在 `streamRunFrames` **单元层**（注入 `readAfter` 喂跨 run 行），
  * **不得只在 HTTP 层** —— HTTP 层喂不进跨 run 行（仓储已按 `run_id` 过滤），
  * 在那里断言「去掉归属过滤」这个反例**不会红**。
- *
- * 若 team-lead 裁定不保留，删本用例不影响 D2-a（S-2-2）与 D6（S-2-4）的完整性。
  */
 test("S-2-3 · D2-b：不带 run_id 的 4 条通道，按来源行 agent_event.run_id 判归属（反向）", async () => {
   assert.equal(STREAM_FN.found, true, `前置：streamRunFrames 未就位（${STREAM_FN.tried.join(" | ")}）`);
@@ -768,15 +766,24 @@ test("S-3-3 · 拒绝的观察面：tool_call=failed + agent_event(subagent.reje
       `subagent.rejected 的 payload.reason 必须是 DEPTH_EXCEEDED；实测 ${JSON.stringify(reasons)}`
     );
 
-    // 观察面 ①：父 run 内该次 tool_call.status == "failed"（**非 HTTP**）。
+    // 观察面 ①：父 run 内该次 tool_call.status == "FAILED"（**非 HTTP**）。
+    //
+    // ⚠️ 词表取值必须用**冻结大写** `FAILED`，不能用计划 D1 ① 原文的小写 "failed"：
+    //   `tool_call.status` 的值域是冻结词表 `TOOL_CALL_STATUSES`
+    //   （`packages/domain/src/runtime/tool-call-state.ts`，与 db 侧逐字同源，
+    //   由 `db-domain-constants.test.mjs` P-3 钉死）＝
+    //   `PENDING / RUNNING / SUCCESS / FAILED / DENIED / CANCELLED / UNKNOWN`，
+    //   且 `tool-call-repo.ts:141` 会**拒绝**词表外的值 —— 小写 "failed" 根本写不进库。
+    //   计划 D1 ① 的小写是行文不精确，不是另一套词表（已上报架构，待回写）。
     assert.equal(
       raw
         .prepare(
-          "select count(*) as n from tool_call where run_id = ? and tool_name = 'spawn_agent' and status = 'failed'"
+          "select count(*) as n from tool_call where run_id = ? and tool_name = 'spawn_agent' and status = 'FAILED'"
         )
         .get(chain.runId).n >= 1,
       true,
-      "父 run 内这次 spawn_agent 的 tool_call.status 必须是 failed（D1 ①：内置工具不产生 4xx）"
+      "父 run 内这次 spawn_agent 的 tool_call.status 必须是 FAILED（D1 ①：内置工具不产生 4xx；"
+        + "取值须用冻结词表 TOOL_CALL_STATUSES 的大写 FAILED，小写 'failed' 不是合法值）"
     );
   } finally {
     await fixture.close();
