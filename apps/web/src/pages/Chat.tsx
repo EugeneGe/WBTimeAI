@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { Composer } from "@/components/chat/Composer";
 import { MessageList } from "@/components/chat/MessageList";
@@ -19,6 +19,14 @@ import { useUiStore } from "@/stores/uiStore";
 // （合规明示已迁移至设置弹窗「系统」分区，供 WS-C 复用）；本文件仅移除 Chat 主区的
 // banner **展示**（假定 A-1），**不改**常量名/定义，亦不删除常量来源 `lib/chat.ts`。
 export { SANDBOX_STRENGTH_NOTE } from "@/lib/chat";
+
+/**
+ * 审批提示条自动消失延时（ms）。
+ *
+ * 只对**已决议**的提示生效：通过 / 驳回是一个瞬时事实，留住会让用户以为还要操作；
+ * 而 `pending`（等待审批）必须一直显示 —— 它正是需要人动手的那一步。
+ */
+const APPROVAL_BANNER_DISMISS_MS = 4_000;
 
 /**
  * Chat 页面（W7 / T1-32；V0.4.5 B1 追加波 · WS-B / F-03；B3 · F-09 去重；B4 · F-19.3 / F-20.3）。
@@ -73,6 +81,23 @@ export function Chat() {
   const streaming = useChatStore((state) => state.streaming);
   const error = useChatStore((state) => state.error);
   const setMessages = useChatStore((state) => state.setMessages);
+
+  // AUD-06：审批提示条的数据源（`approval.requested` / `approval.decided` 的投影）。
+  const approval = useChatStore((state) => state.approval);
+  const clearApproval = useChatStore((state) => state.clearApproval);
+
+  // 决议后自动消失（`pending` 不消失 —— 那一步等的是人）。
+  useEffect(() => {
+    if (!approval || approval.status === "pending") {
+      return;
+    }
+    const timer = setTimeout(() => {
+      clearApproval();
+    }, APPROVAL_BANNER_DISMISS_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [approval, clearApproval]);
 
   // F-19.3：认证门控（未登录 → 登录弹窗）。
   const requireAuth = useAuthGateStore((state) => state.requireAuth);
@@ -208,6 +233,36 @@ export function Chat() {
     />
   );
 
+  /**
+   * 审批提示条（AUD-06，**最小形态**：一行文字 + 一个入口链接，无新依赖）。
+   *
+   * 三种文案：等待审批（带工具名 + `/approvals` 入口）/ 已通过 / 已驳回。
+   * 工具名来自帧→状态推导（`approval.requested` 本身不带工具名，见 chatStore）。
+   */
+  const approvalNode =
+    approval === null ? null : (
+      <div
+        data-testid="chat-approval"
+        data-approval-status={approval.status}
+        className="flex flex-none items-center gap-2 border-b border-border bg-muted px-4 py-2 text-sm"
+      >
+        {approval.status === "pending" ? (
+          <>
+            <span>{t("chat.approval.pending", { tool: approval.toolName })}</span>
+            <Link to="/approvals" className="underline underline-offset-2">
+              {t("chat.approval.open")}
+            </Link>
+          </>
+        ) : (
+          <span>
+            {approval.status === "approved"
+              ? t("chat.approval.approved")
+              : t("chat.approval.rejected")}
+          </span>
+        )}
+      </div>
+    );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* 聊天面板满宽：中栏 `section` 独占宽度（去掉 grid，改单列常驻）。 */}
@@ -220,6 +275,9 @@ export function Chat() {
             </Badge>
           ) : null}
         </header>
+
+        {/* AUD-06：审批提示条（两种布局分支共用同一节点）。 */}
+        {approvalNode}
 
         {hasMessages ? (
           // 有消息：消息列表 + 输入台**置底**（F-20.3）。

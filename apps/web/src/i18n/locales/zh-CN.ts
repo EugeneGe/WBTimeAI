@@ -292,6 +292,12 @@ export const zhCN: Record<string, string> = {
   "chat.greeting.chip.2": "检索知识库并总结要点",
   "chat.greeting.chip.3": "把 Q3 的表述改正式一点",
 
+  // -- 审批提示条（AUD-06：聊天链路接上 approval.requested / approval.decided）--
+  "chat.approval.pending": "等待审批：{tool}",
+  "chat.approval.open": "去审批中心",
+  "chat.approval.approved": "审批已通过",
+  "chat.approval.rejected": "审批已驳回",
+
   // -- 输入台（F-14）--
   "composer.placeholder": "输入消息…",
   "composer.send": "发送",

@@ -303,6 +303,12 @@ export const en: Record<string, string> = {
   "chat.greeting.chip.2": "Search the knowledge base and summarize",
   "chat.greeting.chip.3": "Make the Q3 wording more formal",
 
+  // -- Approval banner (AUD-06: consume approval.requested / approval.decided) --
+  "chat.approval.pending": "Awaiting approval: {tool}",
+  "chat.approval.open": "Open approvals",
+  "chat.approval.approved": "Approval granted",
+  "chat.approval.rejected": "Approval rejected",
+
   // -- 输入台（F-14）--
   "composer.placeholder": "Send a message…",
   "composer.send": "Send",

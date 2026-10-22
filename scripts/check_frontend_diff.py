@@ -198,21 +198,64 @@ FDIFF_EXCEPTIONS: Final[tuple[FdiffException, ...]] = (
     ),
     FdiffException(
         path="apps/web/src/i18n/locales/zh-CN.ts",
-        blob="70a4fdbbcfa13890cda9d2d54f4ccaf4103e5184",
-        reason="同步删 studio.evaluation.metric.cost 中文键",
-        source="F-4 / c091bd6, 2026-10-22 用户授权",
+        blob="531ba2077fd526a3534151ddb31d9f477cab22b6",
+        reason=(
+            "F-4：删 studio.evaluation.metric.cost 中文键；"
+            "AUD-06：新增 4 个审批提示键（chat.approval.*），与 en 同步"
+        ),
+        source="F-4 / c091bd6, 2026-10-22 用户授权 + AUD-06 / V0.3.0 全量修, 用户授权",
     ),
     FdiffException(
         path="apps/web/src/i18n/locales/en.ts",
-        blob="f1019668af7c91c63755a7acd6a8412ecd550d8e",
-        reason="同步删 studio.evaluation.metric.cost 英文键",
-        source="F-4 / c091bd6, 2026-10-22 用户授权",
+        blob="a6584ff4affc6edf3d6a0796556f0a442c4d4e99",
+        reason=(
+            "F-4：删 studio.evaluation.metric.cost 英文键；"
+            "AUD-06：新增 4 个审批提示键（chat.approval.*），与 zh-CN 同步"
+        ),
+        source="F-4 / c091bd6, 2026-10-22 用户授权 + AUD-06 / V0.3.0 全量修, 用户授权",
     ),
     FdiffException(
         path="apps/web/src/pages/studio/__tests__/Evaluation.test.tsx",
         blob="1150b13a8f49609ea4c76b4a455753a14463ec51",
         reason="成本断言改为「不渲染成本」/ N-A 语义",
         source="F-4 / c091bd6, 2026-10-22 用户授权",
+    ),
+    # ------------------------------------------------------------------
+    # AUD-06（P2）：聊天链路补上审批闭环 —— 这是**唯一**一处业务代码改动，
+    # 与 DoD#3「前端业务代码 0 改动」正面冲突，故逐文件登记、锁定 blob。
+    # 依据：独立复核审计 AUD-06「前端未消费审批帧 ⇒ 审批闭环断头」，用户裁定
+    # 「全量修 + 重出包」。改动面 = 帧类型 + store 状态 + 3 个消费分支 + 1 条提示条
+    # + 4 个 i18n 键 + 1 条 hook 级单测；**不动**视觉、不加依赖、不动契约。
+    # ------------------------------------------------------------------
+    FdiffException(
+        path="apps/web/src/types/phase1.ts",
+        blob="9203fb3a0560d81995fb169b09c226ac7df91404",
+        reason="AUD-06：SseChannel 补 skill.resolved / approval.requested / approval.decided（契约 19 通道内，非新增帧）+ 审批/技能客户端类型",
+        source="AUD-06 / V0.3.0 全量修, 用户授权",
+    ),
+    FdiffException(
+        path="apps/web/src/stores/chatStore.ts",
+        blob="f6f701ed5183ab63c38e7c663d7bb2d39ac5a1a0",
+        reason="AUD-06：新增 approval 状态（pending/approved/rejected，含工具名反查）与已解析技能列表",
+        source="AUD-06 / V0.3.0 全量修, 用户授权",
+    ),
+    FdiffException(
+        path="apps/web/src/hooks/useChatStream.ts",
+        blob="d241f9b5c836473a2e4a31f81916cb7d62cd0b9c",
+        reason="AUD-06：dispatchEvent 增加 approval.requested / approval.decided / skill.resolved 三个分支",
+        source="AUD-06 / V0.3.0 全量修, 用户授权",
+    ),
+    FdiffException(
+        path="apps/web/src/hooks/__tests__/useChatStream.test.ts",
+        blob="3ce46e9f0aa67779db36b70c7b307f1c53f1ea40",
+        reason="AUD-06 回归：3 条用例喂审批/技能帧，断言 store 状态变化",
+        source="AUD-06 / V0.3.0 全量修, 用户授权",
+    ),
+    FdiffException(
+        path="apps/web/src/pages/Chat.tsx",
+        blob="17b7babb171a1fe574cb5349f29c9cf65bb68853",
+        reason="AUD-06：最小审批提示条（等待审批：<tool> + /approvals 入口；决议后自动消失）",
+        source="AUD-06 / V0.3.0 全量修, 用户授权",
     ),
 )
 

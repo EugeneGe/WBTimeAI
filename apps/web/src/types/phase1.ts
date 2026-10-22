@@ -269,9 +269,19 @@ export type ToolAction = "EXECUTE" | "READ" | "WRITE";
 /** Tool 权限效果字面量（ALLOW / DENY）。 */
 export type ToolEffect = "ALLOW" | "DENY";
 
-// -- SSE（9 通道，设计 §2.9） ------------------------------------------------
+// -- SSE（run 流 12 帧，按契约 19 通道命名）--------------------------------
 
-/** SSE 通道名（9 类）。 */
+/**
+ * SSE 通道名（**run 流实际下发的 12 帧**）。
+ *
+ * AUD-06：本类型原先只有 9 条，缺 `skill.resolved` / `approval.requested` /
+ * `approval.decided` 三条。`parseSseFrame` 用 `isSseChannel` 判"认不认识"，
+ * 于是这 3 条**在解析阶段就被丢掉**，`dispatchEvent` 根本收不到 —— 聊天里
+ * 用户看不到"等待审批"，而后端审批等待 15s 超时即按 DENY 处理（工具**没跑**）。
+ *
+ * 三条都在契约 `contracts/sse/channels.json` 的 19 通道内，且都在后端
+ * `RUN_SSE_CHANNELS` 的 12 帧白名单内 ⇒ **不是新增帧**，只是前端补上消费。
+ */
 export type SseChannel =
   | "agent.started"
   | "agent.thinking"
@@ -281,9 +291,12 @@ export type SseChannel =
   | "mcp.started"
   | "mcp.completed"
   | "agent.completed"
-  | "agent.error";
+  | "agent.error"
+  | "skill.resolved"
+  | "approval.requested"
+  | "approval.decided";
 
-/** 全部 SSE 通道（有序），用于穷举与测试。 */
+/** 全部 SSE 通道（有序：前 9 条为原有主链，后 3 条为 AUD-06 补齐），用于穷举与测试。 */
 export const SSE_CHANNELS: readonly SseChannel[] = [
   "agent.started",
   "agent.thinking",
@@ -294,6 +307,9 @@ export const SSE_CHANNELS: readonly SseChannel[] = [
   "mcp.completed",
   "agent.completed",
   "agent.error",
+  "skill.resolved",
+  "approval.requested",
+  "approval.decided",
 ];
 
 /** 判定字符串是否为合法 SSE 通道。 */
@@ -344,4 +360,33 @@ export interface TimelineEntry {
   durationMs?: number;
   error?: string;
   seq: number | null;
+}
+
+// -- 审批 / 技能（AUD-06：聊天链路补上这 3 帧的客户端状态） -------------------
+
+/** 审批状态（`approval.requested` ⇒ pending；`approval.decided` ⇒ approved / rejected）。 */
+export type ChatApprovalStatus = "pending" | "approved" | "rejected";
+
+/**
+ * 当前 run 的审批态（**客户端态**，不是服务端真相源）。
+ *
+ * `toolName` 是**推导**出来的：`approval.requested` 帧只有 `subject_type` +
+ * `subject_ref`（= tool_call id），没有工具名。工具名从同一份时间线里按
+ * `subject_ref` 反查 `tool.started` 条目（该帧**总是先于**审批帧下发）。
+ * 反查不到就回落 `subject_type`，绝不编一个名字。
+ */
+export interface ChatApprovalState {
+  approvalId: string;
+  toolName: string;
+  status: ChatApprovalStatus;
+  /** 决议人（`approval.decided.decided_by`）。 */
+  decidedBy?: string | null;
+  seq: number | null;
+}
+
+/** 一次 run 里被解析出来的技能（`skill.resolved` 帧）。 */
+export interface ResolvedSkillRef {
+  name: string;
+  skillId: string | null;
+  version: string | null;
 }

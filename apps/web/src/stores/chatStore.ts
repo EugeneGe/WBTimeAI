@@ -1,6 +1,12 @@
 import { create } from "zustand";
 
-import type { ChatMessage, ChatRole, TimelineEntry } from "@/types";
+import type {
+  ChatApprovalState,
+  ChatMessage,
+  ChatRole,
+  ResolvedSkillRef,
+  TimelineEntry,
+} from "@/types";
 
 /**
  * Chat Zustand store（**纯客户端状态**：当前会话 / 流式缓冲 / 时间线 / UI 态，D6）。
@@ -47,6 +53,16 @@ export interface ChatState {
   messages: ChatMessage[];
   /** 事件时间线（`tool.*` / `mcp.*` / `thinking`）。 */
   timeline: TimelineEntry[];
+  /**
+   * 当前审批态（AUD-06：`approval.requested` / `approval.decided` 的客户端投影）。
+   *
+   * 为什么必须有它：后端在跑需要审批的工具时会停在 `WAITING_APPROVAL` 等 15s，
+   * **超时即按 DENY 处理**（工具不执行）。前端原先完全不消费这两帧 ⇒ 用户在聊天里
+   * 只看到"卡住"，然后工具"莫名失败"，没有任何可操作提示。
+   */
+  approval: ChatApprovalState | null;
+  /** 本次 run 已解析的技能（`skill.resolved`；解析不到时不发帧，故只增不减）。 */
+  skills: ResolvedSkillRef[];
   /** 是否正在流式接收。 */
   streaming: boolean;
   /** 最近一次错误（流式中断 / `agent.error`）。 */
@@ -64,6 +80,29 @@ export interface ChatState {
   upsertTimelineEntry: (entry: TimelineEntry) => void;
   completeTimelineEntry: (id: string, patch: Partial<TimelineEntry>) => void;
   setLastEventId: (seq: number | null) => void;
+  /**
+   * 记录一条审批请求（`approval.requested`）。
+   *
+   * @param input `approvalId` / `subjectRef`（= tool_call id）/ `subjectType` / `seq`。
+   *   **工具名不在帧里**，由 `subjectRef` 在时间线上反查（见 {@link ChatApprovalState}）。
+   */
+  setApprovalRequested: (input: {
+    approvalId: string;
+    subjectRef: string | null;
+    subjectType: string | null;
+    seq: number | null;
+  }) => void;
+  /** 记录审批决议（`approval.decided`；`APPROVED` ⇒ approved，其余终态 ⇒ rejected）。 */
+  setApprovalDecided: (input: {
+    approvalId: string | null;
+    status: string | null;
+    decidedBy: string | null;
+    seq: number | null;
+  }) => void;
+  /** 清掉审批提示（决议后由页面延时调用；切会话 / 新 run 时也清）。 */
+  clearApproval: () => void;
+  /** 追加一条已解析技能（同 `skillId` 去重）。 */
+  addResolvedSkill: (skill: ResolvedSkillRef) => void;
   finishRun: () => void;
   failRun: (message: string) => void;
 }
@@ -73,10 +112,59 @@ const INITIAL = {
   activeRunId: null as string | null,
   messages: [] as ChatMessage[],
   timeline: [] as TimelineEntry[],
+  approval: null as ChatApprovalState | null,
+  skills: [] as ResolvedSkillRef[],
   streaming: false,
   error: null as string | null,
   lastEventId: null as number | null,
 };
+
+/**
+ * 审批决议状态的归一化。
+ *
+ * 后端 `approval.decided.status` 写的是审批行状态（大写 `APPROVED` / `REJECTED` …），
+ * 契约样例写的是小写 `approved` —— 两边都见得到，故按**大小写无关**判定：
+ * 只有 `APPROVED` 算通过，其余**已知终态**一律算驳回（`REJECTED` / `DENIED` / `EXPIRED`）。
+ * 未知值回落 `pending`：宁可继续显示"等待审批"，也不谎报"通过了"。
+ */
+function normalizeApprovalStatus(status: string | null): "pending" | "approved" | "rejected" {
+  if (status === null) {
+    return "pending";
+  }
+  const normalized = status.trim().toUpperCase();
+  if (normalized === "APPROVED") {
+    return "approved";
+  }
+  if (
+    normalized === "REJECTED" ||
+    normalized === "DENIED" ||
+    normalized === "EXPIRED" ||
+    // 决议帧里出现 `PENDING` = **等到超时都没人处理**，后端随即按 DENY 处理
+    // （`driver.ts::#askApproval`：`rejected = status !== "APPROVED"`）。
+    // 若把它显示成"仍在等待"，用户会一直等一个永远不会到来的决议。
+    normalized === "PENDING"
+  ) {
+    return "rejected";
+  }
+  return "pending";
+}
+
+/**
+ * 由 `subject_ref`（tool_call id）在时间线上反查工具名。
+ *
+ * 帧里没有工具名（见 {@link ChatApprovalState} 的说明）；`tool.started` 恒先于
+ * `approval.requested` 落库/下发，所以能查到。查不到 ⇒ 回落 `subject_type`，
+ * **不编造**工具名。
+ */
+function toolNameOf(timeline: readonly TimelineEntry[], subjectRef: string | null, subjectType: string | null): string {
+  if (subjectRef !== null) {
+    const entry = timeline.find((item) => item.id === subjectRef);
+    if (entry !== undefined && entry.name !== "") {
+      return entry.name;
+    }
+  }
+  return subjectType ?? "tool";
+}
 
 /** 自增本地 id（用户消息占位 / 兜底）。 */
 let localSeq = 0;
@@ -96,6 +184,8 @@ export const useChatStore = create<ChatState>((set) => ({
       streaming: true,
       error: null,
       timeline: [],
+      approval: null,
+      skills: [],
       activeRunId: null,
       lastEventId: null,
     }),
@@ -144,10 +234,53 @@ export const useChatStore = create<ChatState>((set) => ({
       return { timeline };
     }),
   setLastEventId: (seq) => set({ lastEventId: seq }),
+  setApprovalRequested: (input) =>
+    set((state) => ({
+      approval: {
+        approvalId: input.approvalId,
+        toolName: toolNameOf(state.timeline, input.subjectRef, input.subjectType),
+        status: "pending" as const,
+        seq: input.seq,
+      },
+    })),
+  setApprovalDecided: (input) =>
+    set((state) => {
+      // 决策帧可能先于请求帧到达（续传 / 重连时只补到后半段）⇒ 此时也要建状态，
+      // 否则"已经驳回"这件事在界面上完全不存在。
+      const base: ChatApprovalState = state.approval ?? {
+        approvalId: input.approvalId ?? "unknown",
+        toolName: "tool",
+        status: "pending" as const,
+        seq: input.seq,
+      };
+      // 只有同一条审批的决议才改状态（避免迟到的旧决议覆盖新的审批请求）。
+      if (input.approvalId !== null && base.approvalId !== input.approvalId) {
+        return {};
+      }
+      return {
+        approval: {
+          ...base,
+          status: normalizeApprovalStatus(input.status),
+          decidedBy: input.decidedBy,
+          seq: input.seq ?? base.seq,
+        },
+      };
+    }),
+  clearApproval: () => set({ approval: null }),
+  addResolvedSkill: (skill) =>
+    set((state) => {
+      const exists = state.skills.some(
+        (item) => item.name === skill.name && item.version === skill.version,
+      );
+      return exists ? {} : { skills: [...state.skills, skill] };
+    }),
   finishRun: () =>
     set((state) => ({
       streaming: false,
       activeRunId: null,
+      // run 已终态 ⇒ 还停在 pending 的审批不会再有决议了（后端超时即 DENY），
+      // 继续显示"等待审批"只会误导用户去点一个已经不存在的审批。
+      approval: state.approval !== null && state.approval.status === "pending" ? null : state.approval,
       messages: state.messages.map((message) =>
         message.streaming ? { ...message, streaming: false } : message,
       ),

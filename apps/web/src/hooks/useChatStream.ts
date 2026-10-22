@@ -22,6 +22,9 @@ import type { ChatStreamEvent, RunAgentRequest, TimelineEntry } from "@/types";
  * - **断连重试 + `Last-Event-ID` 续传**：流未终态即中断 → 以已收最大 `seq` 经
  *   `GET /runs/{id}/events`（携带 `Last-Event-ID`）续传，最多 `maxRetries` 次；
  * - 终态（`agent.completed` / `agent.error`）后结束。
+ * - **审批闭环**（AUD-06）：消费 `approval.requested` / `approval.decided` 与
+ *   `skill.resolved` 三帧。缺了它们，后端"等待审批 15s 超时即 DENY"在聊天里完全不可见
+ *   （用户只看到工具莫名失败）。帧→状态的分派见 {@link dispatchEvent}。
  *
  * 服务端真相源（会话 / 消息）仍走 TanStack Query；本 hook 仅维护客户端流式缓冲。
  */
@@ -207,6 +210,46 @@ function dispatchEvent(event: ChatStreamEvent): void {
     }
     case "agent.error": {
       store.failRun(asString(payload.error) ?? "Agent 执行失败");
+      break;
+    }
+    // ---- AUD-06：审批与技能帧（原先 3 条全被丢掉）-------------------------
+    case "skill.resolved": {
+      // 帧结构：{ skill_name, skill_id, version }。解析不到的技能后端**不发帧**
+      // （只落内部行 `skill.unresolved`）⇒ 这里收到的一定是真解析出来的。
+      const name = asString(payload.skill_name);
+      if (name) {
+        store.addResolvedSkill({
+          name,
+          skillId: asString(payload.skill_id),
+          version: asString(payload.version),
+        });
+      }
+      break;
+    }
+    case "approval.requested": {
+      // 帧结构：{ approval_id, subject_type, subject_ref, requested_by }。
+      // ⚠️ **没有工具名**：`subject_ref` 是 tool_call id，工具名要在时间线上反查
+      // （`chatStore.setApprovalRequested` 负责，`tool.started` 恒先于本帧）。
+      const approvalId = asString(payload.approval_id);
+      if (approvalId) {
+        store.setApprovalRequested({
+          approvalId,
+          subjectRef: asString(payload.subject_ref),
+          subjectType: asString(payload.subject_type),
+          seq,
+        });
+      }
+      break;
+    }
+    case "approval.decided": {
+      // 帧结构：{ approval_id, status, decided_by }。`status` 可能是大写 `APPROVED`
+      // （审批行状态）或小写 `approved`（契约样例）—— 归一化在 store 里做。
+      store.setApprovalDecided({
+        approvalId: asString(payload.approval_id),
+        status: asString(payload.status),
+        decidedBy: asString(payload.decided_by),
+        seq,
+      });
       break;
     }
     default:
