@@ -28,6 +28,8 @@ import { createRegisterLimiter } from "./modules/auth/register-limiter.js";
 import { CredentialService } from "./modules/credential/service.js";
 import { ConversationService } from "./modules/conversation/service.js";
 import { ModelProviderService } from "./modules/model/provider-service.js";
+import { RunCoordinator } from "./modules/run/coordinator.js";
+import { RunService } from "./modules/run/run-service.js";
 import { OrganizationService } from "./modules/organization/service.js";
 import { SkillService } from "./modules/skill/service.js";
 import { ToolService } from "./modules/tool/service.js";
@@ -50,6 +52,7 @@ import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
 import { organizationRoutes } from "./routes/organizations.js";
 import { permissionRoutes } from "./routes/permissions.js";
+import { runRoutes } from "./routes/runs.js";
 import { skillRoutes } from "./routes/skills.js";
 import { toolRoutes } from "./routes/tools.js";
 import type { IdentityDeps } from "./routes/support.js";
@@ -222,6 +225,14 @@ export function buildIdentityStack(args: {
     providers: new ModelProviderService({ db: args.database, dialect }),
     // T3-12：工具目录 1 op（`GET /tools` 先幂等物化内置注册表再读回，R3-23 口径）。
     tools: new ToolService({ db: args.database, dialect }),
+    // T3-08：runs 3 op。协调器在此**单实例**：`cancel` 的进程内 abort 信号与 CAS 都归它，
+    // 多一个实例就多一份互相看不见的取消状态。
+    runs: new RunService({
+      db: args.database,
+      dialect,
+      tenantId,
+      coordinator: new RunCoordinator({ db: args.database, dialect, tenantId }),
+    }),
     // FIX-04：限速器**在这里**构造 —— 每次 `buildApp()` 一份，随实例存亡。
     // 放在模块作用域会变成跨实例共享的配额桶（测试之间互相污染，见 R-34）。
     registerLimiter: createRegisterLimiter({
@@ -292,6 +303,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     // T3-12：审批族 4 op + 工具目录 1 op（模型目录 6 op 已在 `modelRoutes` 内补齐）。
     approvalRoutes(app, identity);
     toolRoutes(app, identity);
+    // T3-08：runs 3 op（详情 / 取消 / SSE 事件流；SSE 走 `reply.hijack()` 自管响应）。
+    runRoutes(app, identity);
   }
 
   // 6) 模型栈（给了 `model` 才装配；缺 key 在上面就抛，不会走到这里）

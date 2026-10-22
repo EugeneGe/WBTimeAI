@@ -37,7 +37,7 @@ import { Type, type Static, type TSchema } from "@sinclair/typebox";
 
 // `POST /agents/{id}/run` 的请求体复用 v0019 落地的 `RunRequestSchema`（W0 收尾件，
 // 单一真相源 —— 不二次手抄；字段对齐由 `schemas-run-v0019.test.mjs` 锁定）。
-import { RunRequestSchema } from "./schemas-run.js";
+import { RunRequestSchema, RunResponseSchema } from "./schemas-run.js";
 
 /** `string | null` 的简写（契约里大量 `anyOf: [string, null]`）。 */
 const NullableString = Type.Union([Type.String(), Type.Null()]);
@@ -957,6 +957,32 @@ export const OPERATION_SCHEMAS: Readonly<Record<string, OperationSchemas>> = Obj
     path: "/api/v1/tools",
     successStatus: 200,
     response: Type.Array(ToolResponseSchema),
+  },
+
+  // ---- runs 族（T3-08 · 3 op）----------------------------------------------
+  // ⚠️ 响应 schema **直接引用** `schemas-run.ts` 的 `RunResponseSchema`（v0019 口径，
+  //    比 v0018 多 `stop_reason`）—— 那个文件的头注就是为"W5 落 runs 路由时直接引用"写的。
+  get_run_api_v1_runs__run_id__get: {
+    method: "GET",
+    path: "/api/v1/runs/{run_id}",
+    successStatus: 200,
+    response: RunResponseSchema,
+  },
+  cancel_run_api_v1_runs__run_id__cancel_post: {
+    method: "POST",
+    path: "/api/v1/runs/{run_id}/cancel",
+    // 契约回 200 + 整行（**不是 204**）：取消不删行，只改状态。
+    successStatus: 200,
+    response: RunResponseSchema,
+  },
+  list_run_events_api_v1_runs__run_id__events_get: {
+    method: "GET",
+    path: "/api/v1/runs/{run_id}/events",
+    successStatus: 200,
+    // 契约该 op 的 200 响应体是**空 schema `{}`**（SSE 不是 JSON）⇒ 这里给一个零属性的
+    // 开放对象，只为让"属性名集合相等"这条判据有东西可比；真正的响应体是字节流，
+    // 由 `routes/runs.ts` 的 `reply.raw` 写出，**不经过** Fastify 序列化。
+    response: Type.Object({}, { additionalProperties: true }),
   },
 });
 

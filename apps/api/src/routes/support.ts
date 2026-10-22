@@ -29,6 +29,7 @@ import { ConversationService } from "../modules/conversation/service.js";
 import { CredentialService } from "../modules/credential/service.js";
 import { ModelProviderService } from "../modules/model/provider-service.js";
 import { OrganizationService } from "../modules/organization/service.js";
+import { RunService } from "../modules/run/run-service.js";
 import { SkillService } from "../modules/skill/service.js";
 import { ToolService } from "../modules/tool/service.js";
 import {
@@ -94,6 +95,13 @@ export interface IdentityDeps {
    * 就必须先有行与稳定 id ⇒ 不能只返回内存注册表。
    */
   readonly tools: ToolService;
+  /**
+   * runs 服务（T3-08 · 3 op：详情 / 取消 / SSE 事件流）。
+   *
+   * 与其他族同源装配；`cancel` 与终态判定都经 `RunCoordinator`（CAS 只有一处）。
+   * **本服务不执行 run** —— run 的创建由 `POST /agents/{id}/run` 的入口回执负责。
+   */
+  readonly runs: RunService;
   /**
    * 未认证 register 的限速器（FIX-04）。
    *
