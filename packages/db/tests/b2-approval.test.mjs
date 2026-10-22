@@ -199,8 +199,15 @@ test("D · listPending 分页：limit / offset 生效，两页 id 集合不相�
   const { connection, db, scopeA } = seed();
   const approvals = new ApprovalRepo(db, scopeA, DIALECT);
 
+  // 刻意让「插入序」与「id 升序」相反（c3 → c2 → c1）：否则"没有 id 兜底键"也能碰巧绿
   const ids = [];
-  for (let i = 0; i < 3; i += 1) ids.push((await createApproval(approvals)).id);
+  for (const suffix of [3, 2, 1]) {
+    const row = await createApproval(approvals, {
+      id: `e0000000-0000-4000-8000-00000000000${suffix}`,
+    });
+    ids.push(row.id);
+  }
+  const sortedIds = [...ids].sort();
 
   // 把三条的时间戳显式拉平（CURRENT_TIMESTAMP 是秒粒度，靠运气同秒不可接受）
   connection.raw
@@ -225,11 +232,8 @@ test("D · listPending 分页：limit / offset 生效，两页 id 集合不相�
   // 时间并列 ⇒ 次序必须由 id 兜底决定，且两次调用一致
   const again = await approvals.listPending({ limit: 2 });
   assert.deepEqual(again.map((r) => r.id), page1.map((r) => r.id), "同参数两次调用次序必须一致");
-  assert.deepEqual(
-    page1.map((r) => r.id),
-    [...page1.map((r) => r.id)].sort(),
-    "时间全并列时次序 = id 升序",
-  );
+  assert.deepEqual(page1.map((r) => r.id), sortedIds.slice(0, 2), "时间全并列时第一页 = id 升序前两条");
+  assert.deepEqual(page2.map((r) => r.id), sortedIds.slice(2), "第二页 = id 升序剩下那条");
 });
 
 // ---------------------------------------------------------------------------
