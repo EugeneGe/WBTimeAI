@@ -5,7 +5,7 @@
  * |---|---|---|
  * | 1 | GET `/api/v1/runs/{run_id}` | 200 `RunResponse` |
  * | 2 | POST `/api/v1/runs/{run_id}/cancel` | 200 `RunResponse`（**幂等**） |
- * | 3 | GET `/api/v1/runs/{run_id}/events` | 200 `text/event-stream`（12 帧） |
+ * | 3 | GET `/api/v1/runs/{run_id}/events` | 200 `text/event-stream`（14 帧） |
  *
  * SSE 端点的三个口径
  * ----------------
@@ -13,9 +13,10 @@
  *      查询参数优先于 header（显式参数覆盖隐式续传）。两者都缺省 ⇒ `0`（从头回放）。
  *   ② **gap-aware**：只补"连续的那一段"，遇洞即停（`continualFrom`）。洞不是"跳过"，
  *      因为缺帧的因果链在前端无法渲染。
- *   ③ **本版是"有限订阅"**：轮询到 run 终态就收尾；未终态则最多轮询
- *      {@link RUN_EVENTS_MAX_POLLS} 轮后正常结束（客户端带 `Last-Event-ID` 重连续传）。
- *      **长连接订阅归 V0.3.1** —— 本卡不引入分布式取消总线，也不做帧级心跳线程。
+ *   ③ **长连接订阅**（V0.3.1 · R-4/U5，对 V0.3.0"40 轮 ≈2s 有限订阅"的修正）：
+ *      订阅随 run 生命周期收尾 —— 终态（含终态前后脚的尾帧）后正常结束；取消 /
+ *      客户端断开经 `AbortSignal.any` 立即收尾（AUD-11 保持：断开后一个轮询周期内
+ *      停止轮询）。不再有"轮数用尽"的收尾形态。
  *
  * 端点**不注册**的路径（刻意）：`POST /runs`（契约无此 path —— run 由
  * `POST /agents/{id}/run` 的入口回执创建）、`DELETE /runs/{id}`（契约无）。
@@ -30,15 +31,6 @@ import type { FastifyInstance } from "fastify";
 
 import { streamRunFrames } from "../modules/run/sse-stream.js";
 import { authenticate, contextOf, requiredParam, type IdentityDeps } from "./support.js";
-
-/**
- * 有限订阅的轮询上限（缺省 50ms × 40 = 2s）。
- *
- * 为什么必须有上限：没有上限的订阅会在"run 永不终态"时把 worker 与测试一起挂死。
- * 真正的长连接由 V0.3.1 的订阅总线承担；本版靠 `Last-Event-ID` 重连续传，
- * 语义上不丢帧（洞仍然按 `continualFrom` 处理）。
- */
-export const RUN_EVENTS_MAX_POLLS = 40;
 
 /** 轮询间隔（测试可注小；生产 50ms 足够跟上"一次 run 秒级"的事件密度）。 */
 export const RUN_EVENTS_POLL_MS = 50;
@@ -130,11 +122,13 @@ export function runRoutes(app: FastifyInstance, deps: IdentityDeps): void {
 
         try {
           await streamRunFrames({
+            runId,
             readAfter: (seq, limit) => service.listEventRows(runId, seq, limit),
             isTerminal: () => service.isTerminal(runId),
             afterSeq,
             pollIntervalMs: RUN_EVENTS_POLL_MS,
-            maxPolls: RUN_EVENTS_MAX_POLLS,
+            // 长连接（V0.3.1 · R-4/U5）：不传 `maxPolls` ⇒ 无限订阅，
+            // 由终态 / 取消信号 / 客户端断开三个出口收尾。
             signal: AbortSignal.any([service.signalOf(runId), clientAbort.signal]),
             write: (frame) => {
               // 客户端已断开 ⇒ 不再往死 socket 上写（写了也不会有人收）。

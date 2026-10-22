@@ -19,6 +19,10 @@ import type { DrizzleDatabase, SqlDialect } from "@wbtime/db";
 import { createLogger } from "@wbtime/logging";
 
 import { buildApp, type ModelStackOptions } from "./app.js";
+import {
+  convergeAllInflightRuns,
+  SHUTDOWN_INFLIGHT_TIMEOUT_MS,
+} from "./modules/run/driver.js";
 import { assertKnownProviderKind } from "./modules/model/providers/factory.js";
 import { createShutdownHandler, type ShutdownLogger } from "./shutdown.js";
 
@@ -214,6 +218,29 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
 
   const handler = createShutdownHandler({
     close: async (): Promise<void> => {
+      // T031-05 · 在飞 run 收敛（R-4：进程退出时在飞 run 不以 `RUNNING` 残留，
+      // 不得依赖 lease 超时接管）—— **必须先于 `app.close()`**：
+      //   ① `convergeAllInflightRuns` 对每个在飞 run 调 `RunCoordinator.cancel`，
+      //      走**既有终态条件写 CAS**（AUD-03，`finalizeIfActive`），把 `agent_run`
+      //      行落成 `CANCELLED` —— 收敛不引入第二个终态写入点；
+      //   ② 取消信号同时置位 ⇒ SSE 长连接与后台驱动循环立即收尾，
+      //      `app.close()` 不会被在飞连接挂住；
+      //   ③ 预算取 `SHUTDOWN_INFLIGHT_TIMEOUT_MS` 与（兜底超时 - 2s 余量）的较小者，
+      //      给"关 HTTP + 关连接池"留出窗口（预算耗尽也不残留在飞行 —— 行已 CAS 终态）。
+      const budget = Math.max(
+        0,
+        Math.min(SHUTDOWN_INFLIGHT_TIMEOUT_MS, config.shutdownTimeoutMs - 2_000)
+      );
+      const convergence = await convergeAllInflightRuns({ timeoutMs: budget });
+      log.info(
+        {
+          drivers: convergence.drivers,
+          cancelled: convergence.cancelled,
+          settled: convergence.settled,
+          pending: convergence.pending,
+        },
+        "在飞 run 已收敛（cancel 走终态 CAS + awaitSettled 驱动善后）"
+      );
       await close?.();
     },
     timeoutMs: config.shutdownTimeoutMs,

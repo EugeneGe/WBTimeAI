@@ -105,6 +105,25 @@ import { buildToolSurface, toolTypeOf, type ToolSurface } from "./tool-surface.j
 /** 默认审批轮询间隔（ms）。 */
 export const DEFAULT_APPROVAL_POLL_MS = 40;
 
+/**
+ * 优雅关闭时在飞 run 收敛的时间预算（ms；V0.3.1 · T031-05 · R-4）。
+ *
+ * 为什么是 8s：`main.ts` 的优雅关闭兜底是 `config.shutdownTimeoutMs`（缺省 10s），
+ * 收敛预算必须给"关 HTTP + 关连接池"留出余量 —— 收敛吃满预算会顶到兜底，
+ * 进程以 exit(1) 收场（见 `shutdown.ts` 的 FIX-07）。
+ */
+export const SHUTDOWN_INFLIGHT_TIMEOUT_MS = 8_000;
+
+/**
+ * 进程内**全部活跃** `RunDriver` 登记表（T031-05 · shutdown 收敛的取数面）。
+ *
+ * 为什么需要它：`RunDriver` 实例在 `app.ts::buildIdentityStack` 内部创建，`main.ts`
+ * 拿不到引用（`app.ts` 是 T031-04 的装配热点，本卡禁改）。模块级登记表让
+ * {@link convergeAllInflightRuns} 能在进程退出时找到全部驱动器，而不必改装配面。
+ * 单进程部署只有一个实例；测试里的多实例彼此 `inflightCount` 为 0，遍历是无害空转。
+ */
+const ACTIVE_DRIVERS = new Set<RunDriver>();
+
 /** 默认审批等待上限（ms）。超时 ⇒ 该工具按 `DENIED` 处理（**不执行**）。 */
 export const DEFAULT_APPROVAL_TIMEOUT_MS = 15_000;
 
@@ -383,6 +402,7 @@ export class RunDriver {
 
   constructor(deps: RunDriverDeps) {
     this.#deps = deps;
+    ACTIVE_DRIVERS.add(this);
   }
 
   /** 本实例的租户（与 `RunService` 同源；用于构造仓储 scope）。 */
@@ -533,6 +553,44 @@ export class RunDriver {
     return this.#inflight.size;
   }
 
+  /**
+   * 优雅关闭：把本实例**全部在飞 run** 收敛到终态（T031-05 · R-4）。
+   *
+   * 语义（与 AUD-03 的关系 —— **只借 CAS，不绕开 CAS**）：
+   *   ① 对每个在飞 run 调 {@link RunCoordinator.cancel} —— 它走**既有终态条件写**
+   *      `finalizeIfActive`（`WHERE status IN 活跃态`，CAS），把 `agent_run` 行落成
+   *      `CANCELLED`。run 行从此**不再是 `RUNNING`**，不依赖 lease 超时接管；
+   *   ② 随后 {@link awaitSettled} 等驱动循环感知 abort 信号并走完自己的收尾
+   *      （`#settle` 重读状态发现已终态 ⇒ 不再 finalize，只做 controller/沙箱清理）
+   *      —— 这是"驱动侧善后"，**不是**第二个终态写入点；
+   *   ③ `cancel` 抛错（run 行已删 / 404）⇒ 吞掉继续，终态目标已无从谈起；
+   *      超时未收敛的 run 也**不会**残留在 `RUNNING` —— 它的行在 ① 里已 CAS 落终态。
+   *
+   * @param timeoutMs 全部 run 收敛的总预算（ms）；超时**不抛错**，由返回值报告
+   *   `pending` 数，断言与兜底留给调用方（`runShutdown` 的整体超时仍会兜住）。
+   * @returns `{ cancelled, settled, pending }`：发起取消数 / 驱动已收尾数 / 仍 inflight 数。
+   */
+  async convergeForShutdown(
+    timeoutMs = SHUTDOWN_INFLIGHT_TIMEOUT_MS
+  ): Promise<{ cancelled: number; settled: number; pending: number }> {
+    const runIds = [...this.#inflight.keys()];
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    let settled = 0;
+    for (const runId of runIds) {
+      try {
+        // ① 先落终态（CAS）：SSE 流与驱动循环的 abort 信号同时被置位。
+        await this.#deps.coordinator.cancel(runId);
+      } catch {
+        // run 行已不可见 / 已被别人落终态 ⇒ ② 的等待照常（awaitSettled 对缺行立即返回）。
+      }
+      // ② 等驱动善后（controller / 沙箱 / inflight 表清理）。
+      const remaining = Math.max(0, deadline - Date.now());
+      await this.awaitSettled(runId, remaining);
+      if (!this.#inflight.has(runId)) settled += 1;
+    }
+    return { cancelled: runIds.length, settled, pending: this.#inflight.size };
+  }
+
   // -------------------------------------------------------------------------
   // 后台驱动
   // -------------------------------------------------------------------------
@@ -617,10 +675,21 @@ export class RunDriver {
 
       // ---- 网关装饰器（S4 + `agent.thinking`）------------------------------
       let modelCalls = 0;
+      /**
+       * 本轮 `text_delta` 分片缓冲（V0.3.1 · R-1/U6 · `message.delta` 逐 chunk 化）。
+       *
+       * 为什么在**网关装饰器**缓冲而不是改 AgentLoop：分片在内核 `#callModel` 里被
+       * 聚合成全文后即被丢弃，`appendAssistant` 只拿得到全文；装饰器是分片唯一
+       * "路过且可观测"的层 —— 透传之前记一笔，`appendAssistant` 提交时按缓冲序列
+       * 逐 chunk 发帧。一次 `stream()` = 一个 turn = 一条 assistant 消息，所以每次
+       * stream 开始时重置缓冲（装饰器与提交在同一 run 内严格串行，无交叠）。
+       */
+      let turnTextChunks: string[] = [];
       const gateway: ModelGatewayPort = {
         stream: (request: ModelRequest, callContext: RunCallContext): AsyncIterable<ModelChunk> =>
           (async function* (): AsyncIterable<ModelChunk> {
             modelCalls += 1;
+            turnTextChunks = [];
             await driver.#frame(writer, "agent.thinking", { iteration: modelCalls });
             if (hooks !== null) {
               const verdict = await hooks.stageModelRequest(flattenMessages(request.messages));
@@ -630,7 +699,15 @@ export class RunDriver {
               }
             }
             if (callContext.signal.aborted) return;
-            yield* (driver.#deps.gateway as ModelGatewayPort).stream(request, callContext);
+            // 逐 chunk 透传（原来是 `yield*` 委托）：text_delta 记入缓冲后再交出去，
+            // 顺序与次数都与 provider 喂入严格一致 —— 判据④的确定性计数以此为源。
+            for await (const chunk of (driver.#deps.gateway as ModelGatewayPort).stream(
+              request,
+              callContext
+            )) {
+              if (chunk.type === "text_delta") turnTextChunks.push(chunk.text);
+              yield chunk;
+            }
           })(),
       };
 
@@ -870,14 +947,33 @@ export class RunDriver {
             })),
             runId,
           });
-          // `message.delta`：一条 assistant 消息一帧（内容 = 该消息全文）。
-          // 细粒度分片需要 loop 暴露 chunk 回调（`ModelChunk` 目前只在网关内部可见），
-          // 登记为遗留；对"帧产生 / 不产生"的判据不构成影响。
-          await driver.#frame(writer, "message.delta", {
-            message_id: row.id,
-            role: "assistant",
-            content: effectiveContent,
-          });
+          // `message.delta` **逐 chunk 发帧**（V0.3.1 · R-1/U6；只改发帧次数，
+          // payload 形状与 golden 一个键都不变 —— `run_id/message_id/role/delta`）。
+          //
+          // 分片来源 = 本轮 provider 流的 `text_delta` 序列（网关装饰器缓冲）。
+          // 判据④（G031-5 / U4 确定性计数）：provider 喂 N 个已知 chunk ⇒ 帧数 == N
+          // 且 N 帧 `delta` 拼接 == 全文 —— 由"拼接 == S7 处理后全文"这一致性闸保证。
+          //
+          // 回退（单帧全文）的唯一情形：S7 REDACT/改写或空缓冲使"分片拼接 ≠ 落库全文"
+          // —— 此时按 chunk 发帧会把改写前的原文泄进流里（安全侧不可接受），退回既有
+          // 单帧行为（payload 形状不变；这是安全改写的显式结果，不是"没做 chunk 化"）。
+          const chunks = turnTextChunks;
+          turnTextChunks = [];
+          if (chunks.length > 0 && chunks.join("") === effectiveContent) {
+            for (const chunkText of chunks) {
+              await driver.#frame(writer, "message.delta", {
+                message_id: row.id,
+                role: "assistant",
+                content: chunkText,
+              });
+            }
+          } else {
+            await driver.#frame(writer, "message.delta", {
+              message_id: row.id,
+              role: "assistant",
+              content: effectiveContent,
+            });
+          }
           flags.servedUnits += 1;
         },
         appendToolResult: async ({ callId, toolName, content }) => {
@@ -1141,6 +1237,45 @@ export class RunDriver {
     mkdirSync(dir, { recursive: true });
     return dir;
   }
+}
+
+/** {@link convergeAllInflightRuns} 的结果。 */
+export interface ShutdownConvergenceResult {
+  /** 登记表里的驱动器实例数（单进程部署恒为 1；测试可能多）。 */
+  readonly drivers: number;
+  /** 发起取消（CAS 落终态）的在飞 run 总数。 */
+  readonly cancelled: number;
+  /** 驱动循环已收尾（inflight 表已清）的 run 数。 */
+  readonly settled: number;
+  /** 预算耗尽仍未收尾的驱动侧 run 数（run **行**已全部 CAS 终态，见 `convergeForShutdown`）。 */
+  readonly pending: number;
+}
+
+/**
+ * 进程级在飞 run 收敛（**`main.ts` 优雅关闭的唯一接线点**，T031-05 · R-4）。
+ *
+ * 遍历 {@link ACTIVE_DRIVERS} 里全部驱动器逐个 {@link RunDriver.convergeForShutdown}。
+ * `main.ts` 必须在 `app.close()` **之前**调用它：先掐 HTTP 不会拦住后台驱动循环，
+ * 但会把"感知 abort → 收尾"的窗口挤进 shutdown 兜底超时里；反过来先收敛，
+ * SSE 长连接也会因取消信号置位而立即收尾，`app.close()` 不被在飞连接挂住。
+ *
+ * @param options.timeoutMs 全程预算（缺省 {@link SHUTDOWN_INFLIGHT_TIMEOUT_MS}）。
+ * @returns 见 {@link ShutdownConvergenceResult}。
+ */
+export async function convergeAllInflightRuns(
+  options: { readonly timeoutMs?: number } = {}
+): Promise<ShutdownConvergenceResult> {
+  const timeoutMs = options.timeoutMs ?? SHUTDOWN_INFLIGHT_TIMEOUT_MS;
+  let cancelled = 0;
+  let settled = 0;
+  for (const driver of ACTIVE_DRIVERS) {
+    const outcome = await driver.convergeForShutdown(timeoutMs);
+    cancelled += outcome.cancelled;
+    settled += outcome.settled;
+  }
+  let pending = 0;
+  for (const driver of ACTIVE_DRIVERS) pending += driver.inflightCount;
+  return { drivers: ACTIVE_DRIVERS.size, cancelled, settled, pending };
 }
 
 /**

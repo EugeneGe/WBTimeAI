@@ -24,6 +24,11 @@
  *    由 {@link createShutdownHandler} 的首次调用闸门保证「真正开始关闭」只有一次；
  * 3. **超时后不再等待**：`race` 一结束就清掉定时器，避免它把事件循环继续挂着。
  *
+ * `close` 依赖的**内部顺序**（V0.3.1 · T031-05）：`main.ts` 传入的 close 回调先做
+ * 在飞 run 收敛（`convergeAllInflightRuns` —— 经 `RunCoordinator.cancel` 的终态 CAS，
+ * 不得绕开），再 `app.close()` + 连接池关闭。本模块不感知该顺序，只负责整体兜底：
+ * 收敛 + 关闭合计超过 `timeoutMs` ⇒ `exit(1)`。
+ *
  * `timeoutMs = 0` 的含义：**不设兜底**（只 `await close()`）。它只为测试与
  * "特殊环境里必须等完"的场景存在，生产默认见 `@wbtime/config` 的
  * `shutdownTimeoutMs`（10_000）。

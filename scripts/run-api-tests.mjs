@@ -40,6 +40,52 @@ const API_TESTS_DIR = path.join(REPO_ROOT, "apps", "api", "tests");
 const API_SRC_DIR = path.join(REPO_ROOT, "apps", "api", "src");
 const API_DIST_DIR = path.join(REPO_ROOT, "apps", "api", "dist");
 
+// ---------------------------------------------------------------------------
+// R-8 · 测试 runner 的**显式**并发上限与单文件超时（V0.3.1 · T031-05 承接）。
+//
+// 背景：`node --test` 缺省并发 = CPU 核数，上限不受控 ⇒ 套件一大会触发上游 429 /
+// 本机资源挤兑（V0.3.0 台账 R-8）；且缺省**没有**用例超时 ⇒ 单个挂死的用例能把整条
+// 套件拖到 CI 超时。故两项都以**显式 flag** 传给子进程（不是"依赖缺省值"——那等于
+// 没传，node 升级改缺省就会静默漂移），可用环境变量覆盖：
+//   `WBTIME_TEST_CONCURRENCY`（并发上限，正整数；缺省 4）
+//   `WBTIME_TEST_TIMEOUT_MS` （单测试文件超时 ms，正整数；缺省 120000）
+// 非法值**直接抛错**（fail loud），不静默回落 —— 回落会把"上限没生效"伪装成配置成功。
+// ---------------------------------------------------------------------------
+
+/** 从 env 读正整数（未设置 ⇒ 缺省；非法 ⇒ 抛错，不静默夹取）。 */
+function positiveIntEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`[api-tests] 环境变量 ${name} 必须是正整数，实测 ${JSON.stringify(raw)}`);
+  }
+  return value;
+}
+
+/** R-8 · 并发上限（`--test-concurrency`）。 */
+export const API_TEST_CONCURRENCY = positiveIntEnv("WBTIME_TEST_CONCURRENCY", 4);
+
+/** R-8 · 单测试文件超时（`--test-timeout`，毫秒）。 */
+export const API_TEST_TIMEOUT_MS = positiveIntEnv("WBTIME_TEST_TIMEOUT_MS", 120_000);
+
+/**
+ * 组装子进程 argv（**唯一**组装点 —— self-test 靠它断言 R-8 两项 flag 恒在场）。
+ *
+ * @param {string[]} files 测试文件绝对路径。
+ * @returns {string[]}
+ */
+export function buildTestArgs(files) {
+  return [
+    ...NODE_FLAGS,
+    "--test",
+    "--test-reporter=tap",
+    `--test-concurrency=${API_TEST_CONCURRENCY}`,
+    `--test-timeout=${API_TEST_TIMEOUT_MS}`,
+    ...files,
+  ];
+}
+
 /**
  * 递归枚举目录下的文件（相对路径键 + 绝对路径值，稳定排序）。
  *
@@ -159,12 +205,13 @@ export async function runApiTests(options = {}) {
 
   process.stdout.write(`${prefix} files(${files.length}):\n` + files.map((file) => `  - ${path.relative(REPO_ROOT, file)}\n`).join(""));
 
-  // ② 真跑：固定 TAP reporter + `--experimental-sqlite`（夹具用 node:sqlite）。
-  const child = spawn(
-    process.execPath,
-    [...NODE_FLAGS, "--test", "--test-reporter=tap", ...files],
-    { cwd: REPO_ROOT, env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"] },
-  );
+  // ② 真跑：固定 TAP reporter + `--experimental-sqlite`（夹具用 node:sqlite）
+  //    + R-8 的显式并发上限与单文件超时（`buildTestArgs` 是唯一组装点）。
+  const child = spawn(process.execPath, buildTestArgs(files), {
+    cwd: REPO_ROOT,
+    env: { ...process.env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   let stdout = "";
   child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => {
@@ -217,6 +264,15 @@ async function selfTest() {
   // ① 0 文件必须红。
   const emptyCode = await runApiTests({ files: [] });
   check("0 文件必须 exit 1", emptyCode === 1, `实测 ${emptyCode}`);
+
+  // ①'' R-8：并发上限与超时必须**显式**出现在子进程 argv 里（缺了 = 上限不受控）。
+  const args = buildTestArgs(["x.test.mjs"]);
+  check(
+    "并发上限与超时必须显式传递（R-8）",
+    args.includes(`--test-concurrency=${API_TEST_CONCURRENCY}`) &&
+      args.includes(`--test-timeout=${API_TEST_TIMEOUT_MS}`),
+    `实测 argv 含 concurrency=${args.includes(`--test-concurrency=${API_TEST_CONCURRENCY}`)} timeout=${args.includes(`--test-timeout=${API_TEST_TIMEOUT_MS}`)}`,
+  );
 
   // ①' N-13：dist 缺失必须红 / dist 存在时陈旧清单可解析。
   const freshness = checkDistFreshness();

@@ -128,8 +128,16 @@ export interface StreamRunFramesOptions {
   /** 轮询间隔毫秒（缺省 50；测试可调小）。 */
   readonly pollIntervalMs?: number;
   /**
-   * 最多轮询轮数（缺省 200）。**必须有限**：没有上限的订阅会在"run 永不终态"时
-   * 把测试挂死，也会让一个断开的连接长期占着 worker。
+   * 最多轮询轮数（**缺省无限** —— V0.3.1 · R-4/U5 长连接）。
+   *
+   * V0.3.0 的语义是"缺省 200、端点传 40"的**有限订阅**（≈2s 用尽即收尾，客户端靠
+   * `Last-Event-ID` 重连续传）。V0.3.1 改为**长连接**：缺省无限轮询，订阅随 run
+   * 生命周期收尾（终态）或被 `signal` 中断（取消 / 客户端断开）—— 终态前不再出现
+   * "轮数用尽"的 `exhausted` 收尾（R-4 判据）。
+   *
+   * 显式传有限值仍然允许（测试注入 `maxPolls: 1` 等）；显式有限值用尽 ⇒
+   * `reason: "exhausted"`。**为什么不保留有限缺省**：那等于把有限订阅藏在库层默认值里，
+   * 端点"忘了传"就静默退回旧行为 —— 长连接必须由缺省值本身保证。
    */
   readonly maxPolls?: number;
   /** 外部中断（cancel / 客户端断开）。 */
@@ -175,10 +183,19 @@ function selectStreamableRows(
 }
 
 /**
- * 轮询 + 下发，直到终态 / 中断 / 轮数用尽。
+ * 轮询 + 下发，直到终态 / 中断 /（显式给出的）轮数用尽。
  *
  * 每次轮询都重新 `continualFrom` ⇒ **洞出现时本批只发到洞前**，下一轮从新的
  * `lastSeq` 继续。洞被填上之后自然接续，不需要额外的"重试"状态。
+ *
+ * 订阅时长模型（V0.3.1 · R-4/U5 长连接）：`maxPolls` 缺省无限，循环只由三个出口
+ * 结束 —— ① run 终态（`reason: "terminal"`，终态前后脚的尾帧已带走）；②
+ * `signal` 中断（取消 / 客户端断开，`reason: "aborted"`）；③ 调用方显式给了有限
+ * `maxPolls` 且用尽（`reason: "exhausted"`，仅测试/特殊场景）。
+ *
+ * 预落地复核（2026-10-23 基线，T031-05 不得推倒）：归属过滤与"缺 `seq` 行显式拒绝"
+ * 都在 {@link selectStreamableRows}，且**次序硬约束**（先过滤、后 `continualFrom`）
+ * 在下面的两个调用点保持。
  *
  * @param options 见 {@link StreamRunFramesOptions}。
  * @returns 见 {@link StreamRunFramesResult}。
@@ -188,7 +205,8 @@ export async function streamRunFrames(
 ): Promise<StreamRunFramesResult> {
   const batchLimit = options.batchLimit ?? 500;
   const pollIntervalMs = options.pollIntervalMs ?? 50;
-  const maxPolls = options.maxPolls ?? 200;
+  // 长连接（R-4/U5）：缺省无限轮询；显式有限值（测试注入）仍然生效。
+  const maxPolls = options.maxPolls ?? Number.POSITIVE_INFINITY;
 
   let lastSeq = options.afterSeq;
   let frames = 0;
