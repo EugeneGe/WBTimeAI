@@ -50,6 +50,26 @@ tar tzf wbtime-db-0.3.0.tgz | grep -c '^package/dist/'   # 253
 
 本轮实测：`sha256sum -c SHA256SUMS` ⇒ **10/10 OK，exit 0**；9 个库包内 `version` 全部 `0.3.0`。
 
+### 2.1 安装：**必须 9 个 tgz 一起装，不要单装**
+
+`pnpm pack` 把内部的 `workspace:*` 重写成了**精确版本**（如 `wbtime-db` 依赖 `@wbtime/domain: "0.3.0"`，无 `^`）。因此：
+
+```bash
+# ✅ 正确：一次装整组，npm 会在同一次解析里满足内部依赖
+npm install ./release/v0.3.0/*.tgz
+
+# ❌ 错误：单装一个包
+npm install ./release/v0.3.0/wbtime-db-0.3.0.tgz
+#   → 404 Not Found - GET https://registry.npmjs.org/@wbtime%2fdomain
+#   因为 @wbtime/* 未发布到 registry，只有本目录的 tarball 里才有
+```
+
+本轮实测（临时目录，`npm init -y` 后）：`npm install ./release/v0.3.0/*.tgz` ⇒ **`added 37 packages in 20s`，exit 0**；随后 ESM 导入自证：
+`@wbtime/core` 导出 29 个符号 · `@wbtime/db` 132 个 · `@wbtime/security` 16 个；
+`detectSensitive('key=sk-…')` ⇒ `[{"ruleId":"cred.openai_sk.v1","category":"credential",…}]`（安全包功能真跑，不只是能 import）。
+
+> **另**：9 个包均 `private: true` ⇒ 本分发集是**整组 tarball 分发**形态（方案 A），**不能 `npm publish`**。若将来要上 registry，需独立发包波（去 `private` + 内部依赖改 `^` + 版本编排），见台账 `风险与决策.md` §R-9。
+
 ## 3. 与 V0.3.0 DoD 的对应
 
 | DoD | 在本包中的体现 |
