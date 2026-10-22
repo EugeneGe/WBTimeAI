@@ -883,16 +883,19 @@ CASES: Final[tuple[InjectionCase, ...]] = (
         dod="V0.3.1 D2 · G031-4 S-2",
         target_gate="v031_spike",
         expected_reason=(
-            f"{VICTIM_V031_STREAM} 被去掉 ⇒ spike 的 S-2-2 红"
-            "（传 runId 与不传的下发帧数变得相同 = 形参没被消费）"
+            f"{VICTIM_V031_STREAM} 被去掉 ⇒ spike 的 S-2-2（D2-a）与 S-2-3（D2-b）红"
+            "：跨 run 行汇入父流，父流帧数由 2 变 4"
         ),
         description=(
             "把 `streamRunFrames` 里的 `row.run_id === runId` 换成常量 `true`"
             "（`/ !== runId` 换 `false`），src 与 dist 双写。"
         ),
+        # 令牌取自载体 S-2-2 的断言消息。注意：**不**用「传 runId 与不传必须不同」
+        # 那条 —— 它已按架构裁定 §8.5 移出载体（当前 `StreamRunFramesOptions` 无
+        # `runId` 形参，该断言恒红且红得无意义），改为 T031-05 待办断言。
         must_be_red=(
             "S-2-2",
-            "runId 形参必须被消费",
+            "父 run 只有 2 帧；子 run 的 2 帧必须被归属过滤掉",
         ),
         mutator=v031_stream_no_run_filter,
         checks_integrity=False,

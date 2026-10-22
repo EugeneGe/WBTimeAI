@@ -32,7 +32,11 @@
  *       或被拒时抛 `status === 409` 的 `HttpException`。
  *       **`trigger` 仅标记、不参与放行**（D10）。
  *   - `streamRunFrames({ runId, readAfter, isTerminal, write, … })`
- *     → 只下发归属于 `runId` 的帧。
+ *     → 只下发归属于 `runId` 的帧。**归属判在行级 `agent_event.run_id` 列**，
+ *       不判在帧 payload（架构裁定 §8.5：帧 payload 是投影产物，带不带 `run_id`
+ *       取决于通道定义，把门禁建在那上面等于建在偶然事实上）。
+ *       ⚠️ `runId` 形参**当前不存在**（`StreamRunFramesOptions` 无此字段），
+ *       由 T031-05 增；本载体按《调用契约》先写，T031-05 落地后转绿。
  *   - `SubAgentSpawner`（`apps/api/src/modules/run/subagent-spawner.ts`）具
  *     `spawn` / `spawnChild` / `trySpawn` 之一，单对象入参
  *     `{ db, dialect, tenantId, maxDepth }` / `{ parentRunId, targetAgentId,
@@ -131,13 +135,31 @@ function pickExport(loaded, names) {
   return { found: false, name: null, value: null, tried };
 }
 
-/** 冻结件里**结构上不带** `run_id` 的 4 条通道（19 项实测，见 {@link collectRunIds}）。 */
-const CHANNELS_WITHOUT_RUN_ID = Object.freeze([
-  "knowledge.indexed",
-  "memory.written",
-  "approval.requested",
-  "approval.decided",
-]);
+/** 冻结通道表（`contracts/sse/channels.json`），只读一次。 */
+const CHANNELS_DOCUMENT = JSON.parse(
+  readFileSync(join(ROOT, "contracts", "sse", "channels.json"), "utf8")
+);
+
+/**
+ * **机器导出**的「帧数据不带 `run_id`」的通道集合。
+ *
+ * 为什么不用手写名单（架构裁定 §8.5，2026-10-23）：
+ *   手写名单会与冻结件**漂移**。冻结件新增一条不带 `run_id` 的通道时，手写名单不变
+ *   ⇒ 该通道要么被 D2-a 的「缺键即红」误判成违规，要么（更糟）静默躲过断言。
+ *   改为从冻结件的 `projected_fields` 导出 ⇒ 冻结件一变，集合自动变长，该通道自动
+ *   从 D2-a 的覆盖里**露出**，由 `0-5` 用例把它顶红 ⇒ 强制重新裁定 D2-a/D2-b 划分。
+ *
+ * 为什么取 `projected_fields` 而不是 `payload_keys_in_order`：
+ *   帧 `data` 是**投影产物**。`message.delta` 就是反例 ——
+ *   `payload_keys_in_order` 里有 `content`，而 `projected_fields` 是 `delta`
+ *   （`projection.rule = "content -> delta"`）。判据必须落在**帧里实际有什么**上。
+ *   （本仓这两列对「是否含 `run_id`」的判定**一致**，19 条逐条核过，见台账 §2。）
+ */
+const CHANNELS_WITHOUT_RUN_ID = Object.freeze(
+  CHANNELS_DOCUMENT.channels
+    .filter((channel) => !(channel.projected_fields ?? []).includes("run_id"))
+    .map((channel) => channel.channel)
+);
 
 /** SSE 响应体 / 帧文本数组 → 帧文本数组。 */
 function splitFrames(body) {
@@ -170,16 +192,26 @@ function parseFrame(frame) {
 /**
  * 帧 → `run_id` 集合（**D2 的判定仪器**）。
  *
- * ⚠️ 与 D2 原文的一处**必要**口径修正（已上报，见台账「判据假绿风险」第 1 条）：
- * D2 写「若某帧 `data` 中缺 `run_id` 键，判为立即红（不当作"无关帧"跳过）」，
- * 但 19 条冻结通道里有 **4 条结构上就没有 `run_id`** ——
- * `knowledge.indexed` / `memory.written` / `approval.requested` / `approval.decided`
- * （实测 `contracts/sse/channels.json` 的 `payload_keys_in_order`）。逐字执行会让
- * **任何**包含这 4 条的父流恒红，那是**假红**不是判据。
+ * ⚠️ D2 已被架构**拆分裁定**（2026-10-23，`02-施工/README.md` §8.5），本仪器按定稿执行：
  *
- * 故本仪器取「**显式登记而非静默跳过**」：缺 `run_id` 的帧必须落进 `violations`，
- * 除非其通道**恰在**上面那 4 条白名单里（此时记入 `declared`，白名单本身被钉死）。
- * 新增任何一条不带 `run_id` 的通道 ⇒ 立刻进 `violations` ⇒ 红。
+ *   - **D2-a**（帧数据**带** `run_id` 的 15 条）：「缺键即红」**原样保留** ——
+ *     原 D2 写的「若某帧 `data` 中缺 `run_id`，判为立即红（不当作无关帧跳过）」，
+ *     在这 15 条上是对的，逐字执行。
+ *   - **D2-b**（帧数据**不带** `run_id` 的 4 条：`knowledge.indexed` /
+ *     `memory.written` / `approval.requested` / `approval.decided`）：
+ *     帧 payload 里**根本没有**这个键（实测 `projected_fields` 无 `run_id`，
+ *     且 `projection` 为 `null`，不存在「投影时补上」），逐字执行 D2 会**恒红**。
+ *     这 4 条改按**来源行的 `agent_event.run_id` 列**判归属（见 S-2-3）。
+ *
+ * 裁定的核心依据（原文）：**「把归属判据挂在投影产物上，等于把门禁建在
+ * 「哪些通道恰好带这个字段」这个偶然事实上」** —— 归属的唯一可靠载体是行级
+ * `agent_event.run_id`（`agent_event.run_id` 是**列**，任何通道的行都有）。
+ *
+ * 故本仪器的口径：
+ *   - 缺 `run_id` 且通道 **不在**机器导出的 4 条集合内 ⇒ `violations` ⇒ 红（D2-a）；
+ *   - 缺 `run_id` 且通道 **在**集合内 ⇒ 记入 `declared`，归属**不在此处**判定，
+ *     由 S-2-3 在**行级**判定（D2-b）；
+ *   - 集合本身由冻结件机器导出，冻结件一变就自动变长并被 `0-5` 顶红 ⇒ 强制重新裁定。
  *
  * @param {string[]} frames
  * @returns {{runIds: Set<string>, declared: string[], violations: string[]}}
@@ -361,6 +393,29 @@ test("0-4 · 仪器自证：守卫结果归一化对 undefined 判 unrecognized�
 // §1 · S-1 · origin 豁免不破第二个用户 run 的 409（K3 / D8 / D10）
 // ---------------------------------------------------------------------------
 
+test("0-5 · 仪器自证：无 run_id 通道集合由**冻结件机器导出**（不手写名单）", () => {
+  assert.equal(CHANNELS_DOCUMENT.channels.length, 19, "冻结件必须仍是 19 条通道");
+  assert.deepEqual(
+    [...CHANNELS_WITHOUT_RUN_ID].sort(),
+    ["approval.decided", "approval.requested", "knowledge.indexed", "memory.written"],
+    "集合变化 ⇒ 冻结件新增/减少了不带 run_id 的通道 ⇒ D2-a/D2-b 划分须重新裁定（架构裁定 §8.5）。"
+    + "这条**故意写成硬断言**：让变化以红的形式露头，而不是静默漂移"
+  );
+  // 反向：`projected_fields` 与 `payload_keys_in_order` 对「是否含 run_id」必须一致。
+  // 两列一旦分叉，说明冻结件出现了「payload 有、帧里没有」的通道 —— 那是 D2-a/D2-b
+  // 划分失效的先兆，必须以红的形式露头。
+  const diverged = CHANNELS_DOCUMENT.channels.filter(
+    (channel) =>
+      (channel.projected_fields ?? []).includes("run_id") !==
+      (channel.payload_keys_in_order ?? []).includes("run_id")
+  );
+  assert.deepEqual(
+    diverged.map((channel) => channel.channel),
+    [],
+    "projected_fields 与 payload_keys_in_order 对 run_id 的判定分叉 ⇒ D2-a/D2-b 划分失效"
+  );
+});
+
 test("S-1-1 · 判据载体：origin/trigger 常量与 guardRunCreation 就位", () => {
   assert.equal(
     RUNTIME.found,
@@ -470,7 +525,20 @@ test("S-2-1 · 判据载体：stream_run 就位且接受单对象入参", () => 
   assert.equal(typeof STREAM_FN.value, "function", `streamRunFrames 必须是函数，实测 ${typeof STREAM_FN.value}`);
 });
 
-test("S-2-2 · 跨 run 行喂给 stream_run ⇒ 下发帧 data.run_id 集合 == {父 run_id}（双向）", async () => {
+/**
+ * **D2-a** · 帧数据**带** `run_id` 的 15 条通道（架构裁定 §8.5）。
+ *
+ * 观察面：下发帧的 `data.run_id` 集合 == `{父 run_id}`，**缺键即红**（D2 原文语义保留）。
+ *
+ * ⚠️ 关于「传 `runId` 与不传的输出必须不同」这条**反向**断言：
+ *   它当前**写不出来** —— `StreamRunFramesOptions` 里根本没有 `runId` 形参
+ *   （架构核实：接口只有 `readAfter / isTerminal / afterSeq / batchLimit /
+ *   pollIntervalMs / maxPolls / signal / write`），归属目前靠 `routes/runs.ts:132`
+ *   的闭包**隐式**保证。故这条现在恒红、且红的原因是「接口还没长出来」而非「实现有 bug」
+ *   ⇒ 按裁定**移出载体**，登记为 **T031-05 的待办断言**（`runId` 形参落地后补）。
+ *   详见台账 §5 风险表 R-10。
+ */
+test("S-2-2 · D2-a：带 run_id 的 15 条通道，跨 run 行不得汇入父流（缺键即红）", async () => {
   assert.equal(STREAM_FN.found, true, `前置：streamRunFrames 未就位（${STREAM_FN.tried.join(" | ")}）`);
 
   const PARENT = "pppppppp-0000-4000-8000-0000000000p1";
@@ -482,35 +550,108 @@ test("S-2-2 · 跨 run 行喂给 stream_run ⇒ 下发帧 data.run_id 集合 == 
     { run_id: CHILD, seq: 3, type: "agent.thinking", payload: { run_id: CHILD, iteration: 1 } },
     { run_id: CHILD, seq: 4, type: "agent.thinking", payload: { run_id: CHILD, iteration: 2 } },
   ];
-  const shared = {
+
+  const emitted = [];
+  await STREAM_FN.value({
     readAfter: async () => rows,
     isTerminal: async () => true,
     afterSeq: 0,
     pollIntervalMs: 0,
     maxPolls: 1,
-  };
+    runId: PARENT,
+    write: (frame) => emitted.push(frame.toString()),
+  });
 
-  const scopedFrames = [];
-  await STREAM_FN.value({ ...shared, runId: PARENT, write: (frame) => scopedFrames.push(frame.toString()) });
+  assert.equal(emitted.length, 2, "父 run 只有 2 帧；子 run 的 2 帧必须被归属过滤掉");
 
-  const unscopedFrames = [];
-  await STREAM_FN.value({ ...shared, write: (frame) => unscopedFrames.push(frame.toString()) });
-
-  // 反向断言：传 runId 与不传 runId 的输出**必须不同** —— 相同说明 runId 形参没被消费（假绿）。
-  assert.notEqual(
-    scopedFrames.length,
-    unscopedFrames.length,
-    "runId 形参必须被消费：传与不传的下发帧数不得相同（否则是假绿）"
-  );
-  assert.equal(scopedFrames.length, 2, "父 run 只有 2 帧；子 run 的 2 帧必须被归属过滤掉");
-
-  const collected = collectRunIds(scopedFrames);
-  assert.deepEqual(collected.violations, [], "不应有任何违规帧");
-  assert.deepEqual([...collected.runIds], [PARENT], "父流的 data.run_id 集合必须全等于 {父 run_id}（D2）");
+  const collected = collectRunIds(emitted);
+  assert.deepEqual(collected.violations, [], "不应有任何违规帧（缺 run_id 即红，D2-a）");
+  assert.deepEqual([...collected.runIds], [PARENT], "父流的 data.run_id 集合必须全等于 {父 run_id}（D2-a）");
 });
 
-test("S-2-3 · 19 条冻结通道 golden 帧 sha256 与 channels.json 全等（D6）", () => {
-  const document = JSON.parse(readFileSync(join(ROOT, "contracts", "sse", "channels.json"), "utf8"));
+/**
+ * **D2 之外的行级覆盖** —— 帧数据**不带** `run_id` 的 4 条通道。
+ *
+ * ⚠️ **状态登记（2026-10-23，D2 最终裁定）**：D2 定稿取**封闭例外白名单** ——
+ *   4 条（`knowledge.indexed` / `memory.written` / `approval.requested` /
+ *   `approval.decided`）显式登记、不判红；其余任何帧缺 `run_id` ⇒ 立即红；
+ *   新增不带 `run_id` 的通道 ⇒ 立即红（白名单**不随新增扩张**）。
+ *   架构先前提的「D2-b 按来源行 `agent_event.run_id` 列判归属」已**降级为
+ *   §8.5 的 P2 待定附加判据，不要求写进载体**。
+ *
+ * 本用例**保留**，理由不是 D2，而是计划 §1④ 的原文：
+ *   「**父流只含父 run 帧，此为门禁而非实现细节**」+ K4（`yielded_seq` 单全局水位
+ *   会让子 run 的 `seq` 污染父流）+ K5b（隔离失守即**静默崩溃**）。
+ *   D2 定稿只守帧内容；这 4 条的帧里没有 `run_id`，内容级断言对它们**天然失明**
+ *   ⇒ 若行级过滤只对"带 run_id 的通道"生效，D2 定稿照样绿，但子 run 的
+ *   `approval.requested` 已经混进父流了。本用例就是堵这个洞。
+ *
+ * 做法（帧里看不出归属 ⇒ 用可区分的 payload 指纹分辨帧来自哪一行）：
+ *   - 观察面：同行不同 `run_id` ⇒ 只有父 run 的行能产出帧；
+ *   - **反向**：构造一条**子 run** 的同通道事件 ⇒ 父流不得出现该帧。
+ *
+ * 落点同 D2-a：必须在 `streamRunFrames` **单元层**（注入 `readAfter` 喂跨 run 行），
+ * **不得只在 HTTP 层** —— HTTP 层喂不进跨 run 行（仓储已按 `run_id` 过滤），
+ * 在那里断言「去掉归属过滤」这个反例**不会红**。
+ *
+ * 若 team-lead 裁定不保留，删本用例不影响 D2-a（S-2-2）与 D6（S-2-4）的完整性。
+ */
+test("S-2-3 · D2-b：不带 run_id 的 4 条通道，按来源行 agent_event.run_id 判归属（反向）", async () => {
+  assert.equal(STREAM_FN.found, true, `前置：streamRunFrames 未就位（${STREAM_FN.tried.join(" | ")}）`);
+
+  const PARENT = "pppppppp-0000-4000-8000-0000000000p1";
+  const CHILD = "cccccccc-0000-4000-8000-0000000000c1";
+  // `approval.requested` 是 4 条之一：`projected_fields` 无 run_id，`projection` 为 null。
+  assert.ok(
+    CHANNELS_WITHOUT_RUN_ID.includes("approval.requested"),
+    "approval.requested 必须仍是「帧数据不带 run_id」的通道；否则 D2-a/D2-b 划分须重新裁定"
+  );
+
+  const rows = [
+    {
+      run_id: PARENT,
+      seq: 1,
+      type: "approval.requested",
+      payload: { approval_id: "parent-approval", subject_type: "tool", subject_ref: "x", requested_by: "u" },
+    },
+    {
+      run_id: CHILD,
+      seq: 2,
+      type: "approval.requested",
+      payload: { approval_id: "child-approval", subject_type: "tool", subject_ref: "y", requested_by: "u" },
+    },
+  ];
+
+  const emitted = [];
+  await STREAM_FN.value({
+    readAfter: async () => rows,
+    isTerminal: async () => true,
+    afterSeq: 0,
+    pollIntervalMs: 0,
+    maxPolls: 1,
+    runId: PARENT,
+    write: (frame) => emitted.push(frame.toString()),
+  });
+
+  // 帧里没有 run_id ⇒ 用 payload 指纹分辨帧来自哪一行。
+  const approvalIds = emitted.map((frame) => parseFrame(frame).data?.approval_id);
+  assert.deepEqual(
+    approvalIds,
+    ["parent-approval"],
+    "D2-b：帧不带 run_id 时，归属由**来源行的 agent_event.run_id 列**决定；"
+      + "子 run 的同通道事件不得汇入父流"
+  );
+
+  // 反向断言：子 run 那行**不得**产出任何帧（只测"父的在"会被"全都下发"蒙混）。
+  assert.equal(
+    approvalIds.includes("child-approval"),
+    false,
+    "D2-b 反向：子 run 的 approval.requested 必须被行级过滤掉"
+  );
+});
+
+test("S-2-4 · 19 条冻结通道 golden 帧 sha256 与 channels.json 全等（D6）", () => {
+  const document = CHANNELS_DOCUMENT;
   assert.equal(document.channels.length, 19, "冻结件必须仍是 19 条通道");
   assert.equal(document.meta.count, 19);
   assert.equal(document.meta.golden_file_count, 19);
