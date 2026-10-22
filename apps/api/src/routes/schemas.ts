@@ -375,12 +375,17 @@ export const CreateSkillRequestSchema = Type.Object({
 });
 export type CreateSkillRequestBody = Static<typeof CreateSkillRequestSchema>;
 
-/** 契约 `UpdateSkillRequest`（缺省字段不变；**显式 null = 不变** —— py `is not None` 同口径）。 */
+/**
+ * 契约 `UpdateSkillRequest`（缺省字段不变；**显式 null = 不变** —— py `is not None` 同口径）。
+ *
+ * 可空键全部用 **Null 在前** 的联合（见文件头注的 Ajv 强转说明）：若写成
+ * `[String, Null]`，显式 `null` 会被静默改成 `""`，"不变"就变成了"清空"。
+ */
 export const UpdateSkillRequestSchema = Type.Object({
-  display_name: Type.Optional(NullableString255),
-  description: Type.Optional(NullableString),
+  display_name: Type.Optional(Type.Union([Type.Null(), Type.String({ maxLength: 255 })])),
+  description: Type.Optional(Type.Union([Type.Null(), Type.String()])),
   category: Type.Optional(Type.Union([Type.Null(), Type.String({ maxLength: 100 })])),
-  status: Type.Optional(NullableString),
+  status: Type.Optional(Type.Union([Type.Null(), Type.String()])),
 });
 export type UpdateSkillRequestBody = Static<typeof UpdateSkillRequestSchema>;
 
