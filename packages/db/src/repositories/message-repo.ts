@@ -111,7 +111,7 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
    * 本会话内某次 run 产生的消息（`run_id` 可空，故也可能为空集）。
    *
    * ⚠️ 父谓词由基类自动 and 上 —— 本方法的取数范围**被它锁在本会话**（**前提是谓词在**：
-   * 反例探针见本文末 B-4 实测 —— 摘掉它，同一调用立刻从 0 行变 3 行、全是别租户的消息）。
+   * 反例探针见下方 `listByRun` 的 B-4 实测 —— 摘掉它，同一调用立刻从 0 行变 3 行、全是别租户的消息）。
    * 这是"按 run 查消息"唯一允许的形态（见文件头注第 3 条）。
    *
    * @throws {ScopeError} **仅当** `runRef` 由**别租户的 scope** 铸造
