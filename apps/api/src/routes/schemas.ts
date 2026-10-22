@@ -1,12 +1,22 @@
 /**
- * T2-07 · 19 个 op 的 **TypeBox schema**（唯一手写处，逐条对齐 `contracts/openapi.v1.frozen.json`）。
+ * T2-07 · 身份 19 op 的 TypeBox schema（T3-05 / T3-06 / T3-07 逐族扩充到 **38 op**）；
+ * 唯一手写处，逐条对齐 `contracts/openapi.v1.frozen.json`。
  *
  * 为什么集中在一个文件
  * ------------------
  * `packages/contracts` 里**没有** OpenAPI 的 TS 生成物（只有 `domain-refs` +
- * `extension-points`），所以这 19 个 schema 只能手写 —— 这天然是"第二真相源"。
+ * `extension-points`），所以这些 schema 只能手写 —— 这天然是"第二真相源"。
  * 集中摆放让 `apps/api/tests/openapi-alignment.test.mjs` 可以**逐条**比对
  * （operationId / 请求体 required 集合 / 响应属性名集合），漂移立刻红。
+ *
+ * 🔴 可空键的 `Null` 次序**以真管线实测为准**
+ * --------------------------------------------
+ * 「`Null` 排在 `String` 前面」这条防护的**依据不是**裸 Ajv 的行为 —— T3-06 §9.4 #11
+ * 的独立 probe 实测：裸 `new Ajv({ coerceTypes: true }).compile()` 下两种次序的行为
+ * 与 Fastify 真管线**方向相反**（`anyOf` / `union` 的分支选择路径不同）。所以：
+ * 任何"我把次序调一下试试"的结论都必须在**真 Fastify 管线**（`buildApp()` +
+ * `app.inject()`，如 `routes-skills.test.mjs` B 组）里复验，裸 Ajv 不算证据。
+ * 本文件的次序结论全部来自真管线实测，见 {@link NullableString255} 上方注释。
  *
  * 两处**刻意**与契约字面不同（都已登记在 T2-07 施工记录）
  * ---------------------------------------------------
@@ -40,6 +50,10 @@ const NullableString = Type.Union([Type.String(), Type.Null()]);
  * `{"display_name": null}`（想清空）会被**静默改成空串**——语义从"清空"变成"设为空字符串"，
  * 而且前端只能通过"读回来不是 null"才发现。实测踩到过（T2-07 PUT /users/me）。
  * 把 `Null` 放前面，Ajv 先用 `type: null` 分支匹配成功，就不会走到强制转换。
+ *
+ * ⚠️ 上句的"实测"指**真 Fastify 管线**（`buildApp` + `app.inject`）。T3-06 §9.4 #11
+ * 用同样的两次对照 probe 证明：裸 `new Ajv({coerceTypes:true})` 下两序行为与管线
+ * **相反** ⇒ 次序结论一律以真管线为准，不复跑裸 Ajv（复跑命令见文件头注）。
  */
 const NullableString255 = Type.Union([Type.Null(), Type.String({ maxLength: 255 })]);
 const NullableString36 = Type.Union([Type.Null(), Type.String({ maxLength: 36 })]);
@@ -414,6 +428,76 @@ export const CreateSkillVersionRequestSchema = Type.Object({
 export type CreateSkillVersionRequestBody = Static<typeof CreateSkillVersionRequestSchema>;
 
 // ---------------------------------------------------------------------------
+// Conversation 族（T3-07 · 5 op）
+// ---------------------------------------------------------------------------
+
+/**
+ * 契约 `ConversationResponse`（**9 键**）。
+ *
+ * ⚠️ `workspace_id` / `agent_id` / `user_id` / `title` / `status` 在契约里是
+ * `type: string` + `default`（**不是** `anyOf: [string, null]`）—— 只有 `tenant_id`
+ * 与两个时间戳可空。视图层因此对列值为 null 的字符串键回落 `""`（`py` 的
+ * `_to_conversation_response` 用 `str(getattr(..., ""))` 同形），不许发 null。
+ */
+export const ConversationResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    tenant_id: NullableString,
+    workspace_id: Type.String(),
+    agent_id: Type.String(),
+    user_id: Type.String(),
+    title: Type.String(),
+    status: Type.String(),
+    created_at: NullableString,
+    updated_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type ConversationResponseBody = Static<typeof ConversationResponseSchema>;
+
+/**
+ * 契约 `ConversationMessageResponse`（**8 键**）。
+ *
+ * `content_parts` 契约是 `type: array` / `items: {}`（**非可空**）⇒ 列值为 null 时
+ * 视图回落 `[]`（py `list(... or [])` 同口径）；`token_count` 是 `integer | null`
+ * （"未统计"与"统计为 0"必须可分）。
+ */
+export const ConversationMessageResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    conversation_id: Type.String(),
+    run_id: NullableString,
+    role: Type.String(),
+    content: Type.String(),
+    content_parts: Type.Array(Type.Unknown()),
+    token_count: Type.Union([Type.Integer(), Type.Null()]),
+    created_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type ConversationMessageResponseBody = Static<typeof ConversationMessageResponseSchema>;
+
+/**
+ * 契约 `CreateConversationRequest`（required = `agent_id`）。
+ *
+ * `workspace_id` 契约给了 `default: ""` 且**不在** `required` 里 ⇒ schema 必须放行缺失，
+ * 由服务层挡成 422（py `create_conversation` 的唯一守卫点）；在 schema 层加 minLength
+ * 会把错误 `data` 形状改成 `{errors:[...]}`，与 py 的 `{field:workspace_id}` 不一致。
+ */
+export const CreateConversationRequestSchema = Type.Object({
+  agent_id: Type.String({ minLength: 1 }),
+  title: Type.Optional(Type.String({ maxLength: 255, default: "" })),
+  workspace_id: Type.Optional(Type.String({ default: "" })),
+});
+export type CreateConversationRequestBody = Static<typeof CreateConversationRequestSchema>;
+
+/** 契约 `UpdateConversationRequest`（required = `title`，`minLength: 1` / `maxLength: 255`）。 */
+export const UpdateConversationRequestSchema = Type.Object({
+  title: Type.String({ minLength: 1, maxLength: 255 }),
+});
+export type UpdateConversationRequestBody = Static<typeof UpdateConversationRequestSchema>;
+
+// ---------------------------------------------------------------------------
 // op → schema 映射（键 = 契约的 operationId，**逐字**）
 // ---------------------------------------------------------------------------
 
@@ -434,9 +518,9 @@ export const EmptyBodySchema = Type.Null();
 /**
  * 全部 op 的字典。键是契约 `operationId`，值与各任务卡 §1/§2 的表逐条对应。
  *
- * **身份 19 op（T2-07）+ Agent 7 op（T3-05）+ Skill 7 op（T3-06）= 33 条** —— 条数由
- * `openapi-alignment.test.mjs` 断言（多一条 = 加了契约外端点；少一条 = 漏实现）。
- * `/api/v1/settings/credentials` 的 2 个镜像 op 按 U-3/R-5 **不纳入**；
+ * **身份 19 op（T2-07）+ Agent 7 op（T3-05）+ Skill 7 op（T3-06）+ Conversation 5 op（T3-07）
+ * = 38 条** —— 条数由 `openapi-alignment.test.mjs` 断言（多一条 = 加了契约外端点；
+ * 少一条 = 漏实现）。`/api/v1/settings/credentials` 的 2 个镜像 op 按 U-3/R-5 **不纳入**；
  * Workspace 任何路由按 R-26 **不纳入**。
  */
 export const OPERATION_SCHEMAS: Readonly<Record<string, OperationSchemas>> = Object.freeze({
@@ -666,7 +750,44 @@ export const OPERATION_SCHEMAS: Readonly<Record<string, OperationSchemas>> = Obj
     body: CreateSkillVersionRequestSchema,
     response: SkillVersionResponseSchema,
   },
+
+  // ---- Conversation 族（T3-07 · 5 op）--------------------------------------
+  // ⚠️ 两条列表 op 的契约 `parameters` 都是空数组（实测）⇒ 这里也**不许**出现
+  //    page / page_size / limit / offset（`routes-invariants` 的守恒断言比 (method,path)，
+  //    分页参数属契约外扩展，`routes-conversations.test.mjs` 的 E 组另有正面断言）。
+  list_conversations_api_v1_conversations_get: {
+    method: "GET",
+    path: "/api/v1/conversations",
+    successStatus: 200,
+    response: Type.Array(ConversationResponseSchema),
+  },
+  create_conversation_api_v1_conversations_post: {
+    method: "POST",
+    path: "/api/v1/conversations",
+    successStatus: 201,
+    body: CreateConversationRequestSchema,
+    response: ConversationResponseSchema,
+  },
+  get_conversation_api_v1_conversations__conversation_id__get: {
+    method: "GET",
+    path: "/api/v1/conversations/{conversation_id}",
+    successStatus: 200,
+    response: ConversationResponseSchema,
+  },
+  update_conversation_api_v1_conversations__conversation_id__put: {
+    method: "PUT",
+    path: "/api/v1/conversations/{conversation_id}",
+    successStatus: 200,
+    body: UpdateConversationRequestSchema,
+    response: ConversationResponseSchema,
+  },
+  list_messages_api_v1_conversations__conversation_id__messages_get: {
+    method: "GET",
+    path: "/api/v1/conversations/{conversation_id}/messages",
+    successStatus: 200,
+    response: Type.Array(ConversationMessageResponseSchema),
+  },
 });
 
-/** 全部 operationId（顺序：身份 19 op 在前，Agent 7 op / Skill 7 op 按 §2 W3 卡顺序随后）。 */
+/** 全部 operationId（顺序：身份 19 op，Agent 7 / Skill 7（§2 W3 卡），Conversation 5（W4 卡））。 */
 export const OPERATION_IDS: readonly string[] = Object.freeze(Object.keys(OPERATION_SCHEMAS));

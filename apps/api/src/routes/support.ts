@@ -24,6 +24,7 @@ import type { FastifyRequest } from "fastify";
 import { AuthService, type AuthUser } from "../modules/auth/service.js";
 import { authError, unauthorized } from "../modules/auth/errors.js";
 import { AgentService } from "../modules/agent/service.js";
+import { ConversationService } from "../modules/conversation/service.js";
 import { CredentialService } from "../modules/credential/service.js";
 import { OrganizationService } from "../modules/organization/service.js";
 import { SkillService } from "../modules/skill/service.js";
@@ -60,6 +61,14 @@ export interface IdentityDeps {
    * `skillRoutes(app, deps)` 的读取面一致）。
    */
   readonly skills: SkillService;
+  /**
+   * Conversation 族服务（T3-07 · 5 op + 消息写入的服务层入口）。
+   *
+   * 挂载理由与 `agents` / `skills` 同源：依赖（db / dialect / tenantId）与身份族完全同源，
+   * `buildApp` 的装配入口只有一个。名字沿用 `deps.conversations`（复数，与
+   * `conversationRoutes(app, deps)` 的读取面一致）。
+   */
+  readonly conversations: ConversationService;
   /**
    * 未认证 register 的限速器（FIX-04）。
    *
