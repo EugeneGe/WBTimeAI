@@ -94,7 +94,19 @@ __all__ = [
 TAG: Final[str] = "inject"
 
 #: Directories that must never be copied into a clone.
-_CLONE_IGNORE: Final[tuple[str, ...]] = ("__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache")
+#:
+#: ``node_modules`` is on the list because of the V0.3.1 spike gate: pnpm lays
+#: ``apps/api/node_modules`` out as a forest of **symlinks** into the workspace
+#: root store, and :func:`shutil.copytree` follows them by default — which would
+#: inline half the workspace into the clone and leave ``@wbtime/db`` unresolvable.
+#: :func:`prepare_v031_clone` links the two ``node_modules`` directories instead.
+_CLONE_IGNORE: Final[tuple[str, ...]] = (
+    "__pycache__",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    "node_modules",
+)
 
 #: Files that must never be copied into a clone.
 _CLONE_IGNORE_GLOBS: Final[tuple[str, ...]] = ("*.pyc", "*.pyo", "*.tmp", "*.bak")
@@ -119,9 +131,11 @@ class GateSpec:
 
     Attributes:
         key: Registry key used by :mod:`inject_cases`.
-        script: Script path relative to the clone's repository root.
+        script: Script path relative to the clone's repository root.  Empty for
+            interpreter-driven gates whose ``build_argv`` already names the
+            target (see :attr:`interpreter`).
         build_argv: ``(contracts, legacy_root) -> argument list`` (without the
-            interpreter and the script path).
+            interpreter and, for Python gates, without the script path).
         label: Human label for the evidence lines.
         red_codes: Exit codes that mean "this gate evaluated the input and said
             red".  **Not** always ``1``: design §3.3 gives ``verify_semantics``
@@ -130,6 +144,18 @@ class GateSpec:
             as "not evaluable", so the table is explicit instead of guessed.
         unevaluable_codes: Exit codes that mean "this gate never judged the
             input" (usage error, unreadable artifacts, failed self-test).
+        interpreter: ``"python"`` (default) or ``"node"``.  Node gates bypass the
+            ``-B`` bytecode flag and resolve the binary from ``PATH``.
+        clone_dirs: Repository-relative directories copied into the clone.
+            The five contract gates only need ``contracts`` + ``scripts``; the
+            V0.3.1 spike gate additionally needs ``apps/api`` (the implementation
+            under test) and ``output`` (the DDL the API test harness reads).
+        prepare: ``(clone_root, source_repo) -> None`` hook run right after the
+            clone, before the control run.  Used to wire ``node_modules`` into
+            the clone without copying 383 MiB of pnpm store.
+        reseals: Whether the contract ledger chain must be re-pinned after the
+            tamper.  ``False`` for gates that judge source code rather than
+            ``contracts/`` artifacts.
     """
 
     key: str
@@ -138,6 +164,10 @@ class GateSpec:
     label: str
     red_codes: tuple[int, ...]
     unevaluable_codes: tuple[int, ...]
+    interpreter: str = "python"
+    clone_dirs: tuple[str, ...] = ("contracts", "scripts")
+    prepare: Callable[[Path, Path], None] | None = None
+    reseals: bool = True
 
 
 def _argv_contracts_only(contracts: Path, legacy: Path) -> list[str]:
@@ -206,6 +236,62 @@ def _argv_oracle(contracts: Path, legacy: Path) -> list[str]:
     ]
 
 
+def _argv_v031_spike(contracts: Path, legacy: Path) -> list[str]:
+    """Arguments for the V0.3.1 spike carrier (a **Node** gate).
+
+    ``--experimental-sqlite`` is mandatory: the project cannot install
+    ``better-sqlite3``, so ``apps/api`` tests use ``node:sqlite``.  The path is
+    repository-relative because the gate runs with ``cwd=<clone root>`` — exactly
+    the G031-4 · S2 command from the construction chain,只是跑在克隆里.
+
+    Args:
+        contracts: Contracts directory (unused — the carrier reads it itself).
+        legacy: Legacy root (unused).
+
+    Returns:
+        The argument list, **including** the script path (this gate has no
+        separate ``script`` field).
+    """
+    del contracts, legacy
+    return ["--experimental-sqlite", "--test", inject_cases.V031_CARRIER]
+
+
+def prepare_v031_clone(clone: Path, source_repo: Path) -> None:
+    """Wire ``node_modules`` into a clone without copying the pnpm store.
+
+    ``apps/api`` tests import built output (``../dist/...``) and workspace
+    packages (``@wbtime/db`` …).  Both are reachable through the *real* trees,
+    which the case only ever **reads**.  Copying the 383 MiB store per case is
+    not an option, so the two ``node_modules`` directories are linked instead.
+
+    On Windows this needs a directory junction/symlink; on POSIX a plain symlink.
+    Both are created with the target being an **absolute** path so a relative
+    re-interpretation inside the clone cannot silently point somewhere else.
+
+    Args:
+        clone: Clone repository root.
+        source_repo: Real repository root (read-only source).
+
+    Raises:
+        CaseError: A link cannot be created.
+    """
+    for relative in ("node_modules", "apps/api/node_modules"):
+        source = source_repo / Path(*relative.split("/"))
+        link = clone / Path(*relative.split("/"))
+        if not source.is_dir():
+            raise CaseError(f"prepare: missing source directory {source.as_posix()}")
+        if link.exists() or link.is_symlink():
+            continue
+        link.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            link.symlink_to(source, target_is_directory=True)
+        except OSError as error:
+            raise CaseError(
+                f"prepare: cannot link {link.as_posix()} -> {source.as_posix()}: {error}. "
+                "On Windows this needs Developer Mode or a junction-capable account."
+            ) from error
+
+
 def _argv_run_check(contracts: Path, legacy: Path) -> list[str]:
     """Arguments for the integrity gate ``run.py check``.
 
@@ -261,6 +347,21 @@ GATES: Final[dict[str, GateSpec]] = {
         label="integrity: sha256 + dual ledger",
         red_codes=(1,),
         unevaluable_codes=(2,),
+    ),
+    "v031_spike": GateSpec(
+        key="v031_spike",
+        script="",
+        build_argv=_argv_v031_spike,
+        label="V0.3.1 spike carrier (node --test)",
+        # `node --test` exits 1 when at least one assertion failed.  Anything
+        # else (module load crash, bad flag, missing runner) means the gate never
+        # judged the input and must never be read as a refutation.
+        red_codes=(1,),
+        unevaluable_codes=(2, 9),
+        interpreter="node",
+        clone_dirs=("contracts", "scripts", "apps/api", "output"),
+        prepare=prepare_v031_clone,
+        reseals=False,
     ),
 }
 
@@ -385,8 +486,13 @@ def gate_argv(gate: GateSpec, repo: Path, contracts: Path, legacy: Path) -> list
         legacy: Read-only legacy repository root (real tree, never cloned).
 
     Returns:
-        ``[python, -B, <script>, *args]``.
+        ``[python, -B, <script>, *args]`` for interpreter ``"python"``, or
+        ``[node, *args]`` for interpreter ``"node"`` (where ``args`` already
+        contains the script path — see :meth:`GateSpec.build_argv`).
     """
+    if gate.interpreter == "node":
+        executable = shutil.which("node") or "node"
+        return [executable, *gate.build_argv(contracts, legacy)]
     return [
         sys.executable,
         "-B",
@@ -438,28 +544,34 @@ def _ignore_factory() -> Callable[[str, list[str]], set[str]]:
     return _ignore
 
 
-def clone_repo(source_repo: Path, destination: Path) -> None:
-    """Clone ``contracts/`` and ``scripts/`` into a fresh scratch repository.
+def clone_repo(source_repo: Path, destination: Path, directories: Sequence[str] = ("contracts", "scripts")) -> None:
+    """Clone the given repository-relative trees into a fresh scratch repository.
 
-    Both trees are needed: ``contracts/`` because that is what the gates judge,
-    ``scripts/`` because ``run.py check`` depends on code constants that live
-    there (§11.1) and because the gates themselves must run *from the clone* so a
-    gate mutation (meta gate probes) cannot escape the scratch directory.
+    ``contracts/`` and ``scripts/`` are the baseline pair: ``contracts/`` because
+    that is what the contract gates judge, ``scripts/`` because ``run.py check``
+    depends on code constants that live there (§11.1) and because the gates
+    themselves must run *from the clone* so a gate mutation cannot escape the
+    scratch directory.
+
+    The V0.3.1 spike gate adds ``apps/api`` (the implementation it tampers with)
+    and ``output`` (``output/ddl.sqlite.sql``, read by the API test harness).
+    ``node_modules`` is never copied — :func:`prepare_v031_clone` links it.
 
     Args:
         source_repo: Real repository root (read-only source).
         destination: Scratch repository root to create.
+        directories: Repository-relative directories to copy.
 
     Raises:
         CaseError: A required source directory is missing, or the copy failed.
     """
     ignore = _ignore_factory()
     destination.mkdir(parents=True, exist_ok=True)
-    for relative in ("contracts", "scripts"):
-        source = source_repo / relative
+    for relative in directories:
+        source = source_repo / Path(*relative.split("/"))
         if not source.is_dir():
             raise CaseError(f"missing source directory: {source.as_posix()}")
-        target = destination / relative
+        target = destination / Path(*relative.split("/"))
         try:
             shutil.copytree(source, target, ignore=ignore, dirs_exist_ok=True)
         except OSError as error:
@@ -794,7 +906,26 @@ def run_case(
     contracts = clone / "contracts"
 
     try:
-        clone_repo(repo_root, clone)
+        try:
+            clone_repo(repo_root, clone, GATES[gate_key].clone_dirs)
+            if GATES[gate_key].prepare is not None:
+                GATES[gate_key].prepare(clone, repo_root)
+        except CaseError as error:
+            return InjectionResult(
+                case_id=case.case_id,
+                target_gate=gate_key,
+                gate_exit=-1,
+                red=False,
+                matched=(),
+                missing=tuple(case.must_be_red),
+                control_exit=-1,
+                integrity_exit=-1,
+                verdict="UNEVALUABLE",
+                exit_code=_gate_io.EXIT_CASE_UNEVALUABLE,
+                note=f"clone/prepare failed: {error}",
+                scratch=scratch.as_posix(),
+                seconds=time.monotonic() - started,
+            )
         if verbose:
             _gate_io.log(TAG, f"  clone: {clone.as_posix()}")
 
@@ -816,6 +947,20 @@ def run_case(
                 note=(
                     "control run is already red on the untouched clone: "
                     f"exit={control.exit_code} :: {control.tail(4)}"
+                    + (
+                        # The spike carrier is red *by design* until the V0.3.1
+                        # implementation lands.  Without this marker the note
+                        # would read like a broken case rather than like the
+                        # "implementation missing" state it actually is — and
+                        # "unevaluable because red" must never be confused with
+                        # "unevaluable because the case is mis-wired".
+                        f" | {inject_cases.MARKER_IMPL_NOT_LANDED}: 判据载体当前处在"
+                        "「生产实现未落地」的预期红证状态（红证见 "
+                        "docs/V1.0/V0.3.1-子Agent委派M1/03-台账/spike-red-evidence-2026-10-23.md）；"
+                        "待实现落地、控制组转绿后本用例方可判 —— 12 不是绿"
+                        if GATES[gate_key].interpreter == "node"
+                        else ""
+                    )
                 ),
                 output_tail=control.tail(12),
                 scratch=scratch.as_posix(),
@@ -843,25 +988,32 @@ def run_case(
             )
 
         # Step 2 — re-pin the whole ledger chain (design §5-T04 要点 ①).
-        try:
-            resealed = reseal(contracts, clone)
-        except CaseError as error:
-            return InjectionResult(
-                case_id=case.case_id,
-                target_gate=gate_key,
-                gate_exit=-1,
-                red=False,
-                matched=(),
-                missing=tuple(case.must_be_red),
-                control_exit=control.exit_code,
-                integrity_exit=-1,
-                mutation=mutation,
-                verdict="UNEVALUABLE",
-                exit_code=_gate_io.EXIT_CASE_UNEVALUABLE,
-                note=f"re-pin failed: {error}",
-                scratch=scratch.as_posix(),
-                seconds=time.monotonic() - started,
-            )
+        #
+        # Skipped for gates that judge *source code* instead of `contracts/`
+        # artifacts: there is no ledger to re-pin, and rewriting the clone's
+        # contract digests would be noise in the evidence line.
+        if GATES[gate_key].reseals:
+            try:
+                resealed = reseal(contracts, clone)
+            except CaseError as error:
+                return InjectionResult(
+                    case_id=case.case_id,
+                    target_gate=gate_key,
+                    gate_exit=-1,
+                    red=False,
+                    matched=(),
+                    missing=tuple(case.must_be_red),
+                    control_exit=control.exit_code,
+                    integrity_exit=-1,
+                    mutation=mutation,
+                    verdict="UNEVALUABLE",
+                    exit_code=_gate_io.EXIT_CASE_UNEVALUABLE,
+                    note=f"re-pin failed: {error}",
+                    scratch=scratch.as_posix(),
+                    seconds=time.monotonic() - started,
+                )
+        else:
+            resealed = 0
 
         # Step 3 — the target gate.
         target = run_gate(gate_key, clone, contracts, legacy_root, timeout_s)
@@ -1079,7 +1231,11 @@ def _self_test() -> int:
 
     # Registry sanity: an empty or mis-wired registry must not look like success.
     ids = [case.case_id for case in cases]
-    record("registry-has-5-cases", len(cases), 5, f"ids={ids}")
+    # The registry grew from 5 contract cases to 5 + 3 V031 spike cases.  A count
+    # change alone is not a regression, but an *unexplained* one is: the probe
+    # pins the exact size so an accidental case loss cannot hide behind "more
+    # cases were added anyway".
+    record("registry-has-8-cases", len(cases), 8, f"ids={ids}")
     record("registry-ids-unique", len(set(ids)) == len(ids), True)
     record(
         "registry-targets-known-gates",
@@ -1141,6 +1297,18 @@ def _build_parser() -> argparse.ArgumentParser:
     selection.add_argument("--case", metavar="ID", action="append", default=None, help="case id (repeatable)")
     selection.add_argument("--all", action="store_true", help="run every registered case")
     selection.add_argument("--list", action="store_true", help="list the registry and exit")
+    parser.add_argument(
+        "--exclude-case",
+        metavar="ID",
+        action="append",
+        default=None,
+        help=(
+            "drop a case from the selection (repeatable).  ONLY for the transitional "
+            "window in which a suite's production implementation has not landed yet: "
+            "excluded cases are re-listed as EXCLUDED in the summary so an exclusion "
+            "can never silently hide a red.  Prefer fixing the implementation."
+        ),
+    )
     parser.add_argument("--keep", action="store_true", help="keep the per-case scratch clones")
     parser.add_argument("--json", action="store_true", help="print a JSON report")
     parser.add_argument("--self-test", action="store_true", help="unit-test the decision table (exit 9 on failure)")
@@ -1230,6 +1398,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         _gate_io.log(TAG, "ERROR: choose --all, --case ID, --list or --self-test")
         return _gate_io.EXIT_USAGE
+
+    excluded = list(arguments.exclude_case or [])
+    if excluded:
+        unknown = [name for name in excluded if name not in inject_cases.CASE_BY_ID]
+        if unknown:
+            _gate_io.log(TAG, f"ERROR: unknown --exclude-case id(s) {unknown}; try --list")
+            return _gate_io.EXIT_USAGE
+        before = len(selected)
+        selected = [case for case in selected if case.case_id not in excluded]
+        for name in excluded:
+            _gate_io.log(TAG, f"EXCLUDED (transitional opt-out, not a pass): {name}")
+        _gate_io.log(TAG, f"selection: {before} -> {len(selected)} case(s) after exclusions")
 
     if not selected:  # pragma: no cover - argparse makes this unreachable
         _gate_io.log(TAG, "INVALID: empty case selection (K-11)")

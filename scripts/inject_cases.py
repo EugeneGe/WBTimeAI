@@ -57,6 +57,13 @@ __all__ = [
     "VICTIM_SSE_CHANNEL",
     "TOOLKIT_CONTRACT_MANIFEST",
     "TOOLKIT_DDL_PARITY",
+    "GATE_KEYS",
+    "V031_CARRIER",
+    "VICTIM_V031_EXEMPTION",
+    "VICTIM_V031_STREAM",
+    "VICTIM_V031_DEPTH",
+    "MARKER_IMPL_NOT_LANDED",
+    "MARKER_DIST_STALE",
 ]
 
 #: Artifact paths relative to ``contracts/``.
@@ -78,6 +85,29 @@ VICTIM_HNSW: Final[str] = "ix_memory_vector_hnsw"
 VICTIM_OPENAPI_PATH: Final[str] = "/api/v1/agents/{agent_id}/publish"
 VICTIM_SSE_CHANNEL: Final[str] = "agent.thinking"
 
+# --- V0.3.1 · G031-4 spike（V031 用例集）-------------------------------------
+#
+# 与前 5 条**性质不同**：那 5 条改的是 `contracts/` 里的冻结件，本 3 条改的是
+# `apps/api/src/**` 的**生产实现**。故：
+#   * 目标门是 `v031_spike`（`node --test` 跑 `apps/api/tests/subagent-spike.test.mjs`），
+#     不是任何 Python 契约门；
+#   * 判据载体由 QA 落盘（P1-3：执行者 ≠ 判定者），本文件只负责"把它改坏"；
+#   * 生产实现**尚未落地** ⇒ 三个改坏点都不存在 ⇒ 三条一律 MutationError ⇒
+#     `UNEVALUABLE` / exit **12**，并带 `V031_IMPL_NOT_LANDED` 标记。**12 不是绿**，
+#     与"注入了但门没红"（`FAKE-GREEN` / 10）严格区分。
+
+#: spike 判据载体（相对仓库根）。由 QA 落盘，实现者不得自建自评。
+V031_CARRIER: Final[str] = "apps/api/tests/subagent-spike.test.mjs"
+
+#: 三个改坏点（钉在名字上，不写"第一个匹配的"）。
+VICTIM_V031_EXEMPTION: Final[str] = "guardRunCreation 的 origin 豁免判据"
+VICTIM_V031_STREAM: Final[str] = "streamRunFrames 的 run_id 归属过滤"
+VICTIM_V031_DEPTH: Final[str] = "子 run 深度守卫"
+
+#: 两个"不可判"标记。带它们的 exit 12 必须与"用例写坏了"的 exit 12 可区分。
+MARKER_IMPL_NOT_LANDED: Final[str] = "V031_IMPL_NOT_LANDED"
+MARKER_DIST_STALE: Final[str] = "V031_DIST_STALE"
+
 #: Gate keys understood by :mod:`inject_counterexample`.  Declared here so the
 #: registry fails loudly on a typo instead of silently skipping a case.
 GATE_KEYS: Final[tuple[str, ...]] = (
@@ -86,6 +116,7 @@ GATE_KEYS: Final[tuple[str, ...]] = (
     "compare_openapi_legacy",
     "oracle_recompute",
     "run_check",
+    "v031_spike",
 )
 
 
@@ -574,6 +605,190 @@ def sse_channel_dropped(contracts: Path, repo: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
+# V031 · G031-4 spike 的三个改坏点
+#
+# 为什么必须**同时**改 `src` 与 `dist`
+# -----------------------------------
+#   spike 测试 `import "../dist/..."`（与仓内所有 api 测试一致），而 `dist/` 是
+#   `tsc -b` 的产物、被 gitignore。在克隆里跑 `tsc -b` 会顺着 `apps/api/tsconfig.json`
+#   的 `references` 把 `packages/*/dist` 重新编译进**真树** —— 那是污染他人工作区，
+#   本脚本禁止。故改坏点**双写**：`src` 是契约件（记录"改的是什么语义"），`dist`
+#   是测试真正 import 的件（让改坏生效）。
+#
+#   由此派生一条强约束：**两处必须命中同一个锚点，且各恰好一次**。
+#   `src` 命中而 `dist` 不命中 ⇒ `dist` 落后于 `src` ⇒ 报 `V031_DIST_STALE`
+#   （exit 12，不是假绿）—— 先 `pnpm -C apps/api build` 再跑注入。
+# ---------------------------------------------------------------------------
+
+
+def _v031_patch(
+    repo: Path,
+    src_candidates: tuple[str, ...],
+    alternatives: tuple[tuple[str, object], ...],
+    *,
+    label: str,
+) -> str:
+    """在克隆里把一段实现改坏（`src` 与 `dist` 双写，同锚点各一次）。
+
+    Args:
+        repo: 克隆仓库根。
+        src_candidates: `src` 侧候选文件（相对仓库根，按顺序取第一个存在的）。
+        alternatives: `(pattern, replacement)` 候选，按顺序取第一个"两侧各命中一次"的。
+            `replacement` 可以是字符串，也可以是 `re.Match -> str` 回调。
+        label: 人类描述（写进证据行）。
+
+    Returns:
+        一行"改了什么"。
+
+    Raises:
+        MutationError: 实现未落地 / dist 落后 / 锚点命中次数不为 1。
+    """
+    existing = [name for name in src_candidates if (repo / Path(*name.split("/"))).is_file()]
+    if not existing:
+        raise MutationError(
+            f"{MARKER_IMPL_NOT_LANDED}: {label} —— {' / '.join(src_candidates)} 均不存在。"
+            " 生产实现尚未落地，本用例今日**不可判**（exit 12，与「注入了但门没红」的 10 严格区分）"
+        )
+    src_name = existing[0]
+    dist_name = src_name.replace("apps/api/src/", "apps/api/dist/").removesuffix(".ts") + ".js"
+    src = repo / Path(*src_name.split("/"))
+    dist = repo / Path(*dist_name.split("/"))
+    if not dist.is_file():
+        raise MutationError(
+            f"{MARKER_DIST_STALE}: {dist_name} 不存在 —— 请先 `pnpm -C apps/api build` 再跑注入"
+        )
+
+    src_text = src.read_text(encoding="utf-8-sig")
+    dist_text = dist.read_text(encoding="utf-8-sig")
+
+    last_miss = ""
+    for pattern, replacement in alternatives:
+        src_hits = list(re.finditer(pattern, src_text))
+        dist_hits = list(re.finditer(pattern, dist_text))
+        if not src_hits:
+            last_miss = f"src 未命中 {pattern!r}"
+            continue
+        if not dist_hits:
+            last_miss = f"dist 未命中同一锚点 {pattern!r}（dist 落后于 src？）"
+            continue
+
+        # 为什么是"全部替换 + 两侧次数相等"，而不是前 5 条用例的"恰好一次"
+        # ------------------------------------------------------------
+        #   契约件里的对象可以钉死到唯一一个（`ix_memory_vector_hnsw` 只有一个），
+        #   实现里的判据**不能**：例如 `run_id` 归属过滤在 `streamRunFrames` 里
+        #   天然出现两处（主轮询 + 终态前的尾读），写"恰好一次"会让用例在实现
+        #   落地后**永远** UNEVALUABLE —— 那是把判据写成了不可判。
+        #   故改为：两侧命中次数**必须相等**（不等 ⇒ dist 落后于 src），且 ≥ 1，
+        #   然后**全部**替换（只改一处等于"过滤了一半"，反而是个含糊的注入）。
+        if len(src_hits) != len(dist_hits):
+            raise MutationError(
+                f"{MARKER_DIST_STALE}: {label} —— 锚点 {pattern!r} 命中 src={len(src_hits)} 次、"
+                f"dist={len(dist_hits)} 次，两侧不等 ⇒ dist 落后于 src，请先 `pnpm -C apps/api build`"
+            )
+
+        def _sub(match: "re.Match[str]") -> str:
+            return replacement(match) if callable(replacement) else str(replacement)
+
+        src.write_text(re.sub(pattern, _sub, src_text), encoding="utf-8")
+        dist.write_text(re.sub(pattern, _sub, dist_text), encoding="utf-8")
+        return f"{label}: {src_name} ×{len(src_hits)} + {dist_name} ×{len(dist_hits)}（锚点 {pattern!r}）"
+
+    raise MutationError(
+        f"{MARKER_IMPL_NOT_LANDED}: {label} —— 在 {src_name} / {dist_name} 里均未命中任何候选锚点"
+        f"（最后一条：{last_miss}）。实现未按《调用契约》落地 ⇒ 本用例今日不可判（exit 12）"
+    )
+
+
+def v031_exemption_bare_trigger(contracts: Path, repo: Path) -> str:
+    """改坏点 ①：把 `origin` 豁免写成裸 `trigger == "subagent"`（D10 反例① / K7①）。
+
+    正确实现：`origin === RUN_ORIGIN_SUBAGENT`（`origin` 是应用层形参，客户端碰不到）。
+    改坏后：只看 `trigger` —— 客户端可通过自由 `str` 字段伪造"子 run"身份绕过并发闸。
+    ⇒ `apps/api/tests/subagent-spike.test.mjs` 的 **S-1-4** 必红。
+
+    Args:
+        contracts: 未使用（本族改的是实现，不是契约件）。
+        repo: 克隆仓库根。
+
+    Returns:
+        一行"改了什么"。
+    """
+    del contracts
+    return _v031_patch(
+        repo,
+        (
+            "apps/api/src/modules/run/run-service.ts",
+            "apps/api/src/modules/run/coordinator.ts",
+        ),
+        (
+            (r"origin\s*===\s*(?:RUN_ORIGIN_SUBAGENT|[\"']SUBAGENT[\"'])", 'trigger === "subagent"'),
+            (r"origin\s*(?:===|==)\s*(?:RUN_ORIGIN_SUBAGENT|[\"']SUBAGENT[\"'])", 'trigger == "subagent"'),
+        ),
+        label=f"① {VICTIM_V031_EXEMPTION}：origin 判据 → 裸 trigger 判据",
+    )
+
+
+def v031_stream_no_run_filter(contracts: Path, repo: Path) -> str:
+    """改坏点 ②：去掉 `stream_run` 的 `run_id` 归属过滤（D2 反例 / K4）。
+
+    去掉后子 run 的帧会汇入父流 ⇒ 前端会在子 run 的 `agent.completed` 上提前终止父流，
+    并把 `activeRunId` 改写成子 run id —— 静默崩溃（K5b）。
+    ⇒ **S-2-2** 必红（其反向断言"传 `runId` 与不传必须不同"直接抓住"形参没被消费"）。
+
+    Args:
+        contracts: 未使用。
+        repo: 克隆仓库根。
+
+    Returns:
+        一行"改了什么"。
+    """
+    del contracts
+
+    def _always_true(match: "re.Match[str]") -> str:
+        return "true" if "===" in match.group(0) else "false"
+
+    return _v031_patch(
+        repo,
+        ("apps/api/src/modules/run/sse-stream.ts",),
+        (
+            (r"(?:row|r|event)\.run_id\s*(?:!==|===)\s*runId", _always_true),
+            (r"(?:row|r|event)\.run_id\s*(?:!=|==)\s*runId", _always_true),
+        ),
+        label=f"② {VICTIM_V031_STREAM}：归属比较 → 常量 true/false",
+    )
+
+
+def v031_depth_lt_3(contracts: Path, repo: Path) -> str:
+    """改坏点 ③：把深度守卫从 `depth < maxDepth` 改成 `depth < 3`（D1 反例）。
+
+    `max_subagent_depth` 缺省 1（单层委派）。改成硬编码 3 后，子 run 内再派生**不再被拒**
+    ⇒ 委派树可无限下钻，D1 的 ④（`agent_run` 中 `trigger=='subagent'` 行数 == 0）失守。
+    ⇒ **S-3-2** 必红。
+
+    Args:
+        contracts: 未使用。
+        repo: 克隆仓库根。
+
+    Returns:
+        一行"改了什么"。
+    """
+    del contracts
+    return _v031_patch(
+        repo,
+        (
+            "apps/api/src/modules/run/subagent-guard.ts",
+            "apps/api/src/modules/run/subagent-spawner.ts",
+        ),
+        (
+            (r"depth\s*<\s*maxDepth", "depth < 3"),
+            (r"depth\s*>=\s*maxDepth", "depth >= 3"),
+            (r"depth\s*<\s*max_subagent_depth", "depth < 3"),
+        ),
+        label=f"③ {VICTIM_V031_DEPTH}：depth < maxDepth → depth < 3",
+    )
+
+
+# ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
 
@@ -643,6 +858,64 @@ CASES: Final[tuple[InjectionCase, ...]] = (
         must_be_red=("C10", "C11"),
         mutator=sse_channel_dropped,
     ),
+    # --- V0.3.1 · G031-4 spike（V031 用例集）--------------------------------
+    InjectionCase(
+        case_id="v031-exemption-bare-trigger",
+        dod="V0.3.1 D10 · G031-4 S-1",
+        target_gate="v031_spike",
+        expected_reason=(
+            f"{VICTIM_V031_EXEMPTION} 写成了裸 trigger 判据 ⇒ spike 的 S-1-4 红"
+            "（origin 非 SUBAGENT 却拿到豁免 = 可被客户端注入）"
+        ),
+        description=(
+            "把 `guardRunCreation` 的 `origin === RUN_ORIGIN_SUBAGENT` 换成 "
+            '`trigger === "subagent"`（src 与 dist 双写）。'
+        ),
+        must_be_red=(
+            "S-1-4",
+            "豁免判据若写成裸 trigger=='subagent'",
+        ),
+        mutator=v031_exemption_bare_trigger,
+        checks_integrity=False,
+    ),
+    InjectionCase(
+        case_id="v031-stream-no-run-filter",
+        dod="V0.3.1 D2 · G031-4 S-2",
+        target_gate="v031_spike",
+        expected_reason=(
+            f"{VICTIM_V031_STREAM} 被去掉 ⇒ spike 的 S-2-2 红"
+            "（传 runId 与不传的下发帧数变得相同 = 形参没被消费）"
+        ),
+        description=(
+            "把 `streamRunFrames` 里的 `row.run_id === runId` 换成常量 `true`"
+            "（`/ !== runId` 换 `false`），src 与 dist 双写。"
+        ),
+        must_be_red=(
+            "S-2-2",
+            "runId 形参必须被消费",
+        ),
+        mutator=v031_stream_no_run_filter,
+        checks_integrity=False,
+    ),
+    InjectionCase(
+        case_id="v031-depth-lt-3",
+        dod="V0.3.1 D1 · G031-4 S-3",
+        target_gate="v031_spike",
+        expected_reason=(
+            f"{VICTIM_V031_DEPTH} 改成 depth < 3 ⇒ spike 的 S-3-2 红"
+            "（max_subagent_depth=1 时子 run 内再派生不再被拒）"
+        ),
+        description=(
+            "把 `subagent-guard.ts`（或 `subagent-spawner.ts`）里的 `depth < maxDepth` "
+            "换成 `depth < 3`，src 与 dist 双写。"
+        ),
+        must_be_red=(
+            "S-3-2",
+            "max_subagent_depth=1 时子 run 内再派生必须被拒",
+        ),
+        mutator=v031_depth_lt_3,
+        checks_integrity=False,
+    ),
 )
 
 
@@ -684,4 +957,7 @@ def victims() -> dict[str, str]:
         "hnsw": VICTIM_HNSW,
         "openapi_path": VICTIM_OPENAPI_PATH,
         "sse_channel": VICTIM_SSE_CHANNEL,
+        "v031_exemption": VICTIM_V031_EXEMPTION,
+        "v031_stream": VICTIM_V031_STREAM,
+        "v031_depth": VICTIM_V031_DEPTH,
     }
