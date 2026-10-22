@@ -30,6 +30,37 @@ function shellOf(): { readonly file: string; readonly flag: string } {
     : { file: "/bin/sh", flag: "-c" };
 }
 
+/** 缺省超时（毫秒）。`shell` 与 `code_exec` 同值，理由见 `code-exec.ts` 的同名常量。 */
+export const DEFAULT_SHELL_TIMEOUT_MS = 30_000;
+
+/**
+ * 读 `timeout_ms`（模型给的值不一定是数字）：`undefined`（未传）/ 正整数 / `"invalid"`。
+ *
+ * 与 `builtin/code-exec.ts` 的同名私有函数**逐字同源**：两个工具的超时口径必须一致，
+ * 否则「同一个 `timeout_ms` 在 shell 与 code_exec 上表现不同」会成为第二个缺陷。
+ */
+function readTimeoutMs(value: unknown): number | undefined | "invalid" {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "invalid";
+  return value;
+}
+
+/**
+ * 有效超时 = `min(请求值, 上下文上限)`（与 `code-exec.ts::capTimeoutMs` 逐字同源）。
+ *
+ * @param requested 模型请求值（已校验；`undefined` = 未传）。
+ * @param ceiling 执行器算好的上限（`ToolContext.timeoutMs`）。
+ * @param fallback 两个来源都缺省时的工具默认值。
+ */
+function capTimeoutMs(
+  requested: number | undefined,
+  ceiling: number | undefined,
+  fallback: number
+): number {
+  const candidate = requested ?? ceiling ?? fallback;
+  return ceiling === undefined ? candidate : Math.min(candidate, ceiling);
+}
+
 export const shellTool: BuiltinTool = {
   name: "shell",
   requiresSandbox: true,
@@ -80,11 +111,23 @@ export const shellTool: BuiltinTool = {
           })()
         : command.map(String);
 
+    // 超时（AUD-04）：**模型只能收紧，不能放宽**。
+    // 首版这里有两个 `timeoutMs` 键（展开顺序让 `context.timeoutMs` 覆盖请求值），
+    // 既不是「min」也没有上界校验：请求值 `"abc"` 会被原样当数字传给沙箱，
+    // `0` / `-1` 的语义取决于沙箱实现。现在：先校验，再取 `min(请求值, 上限)`。
+    const requestedTimeout = readTimeoutMs(args.timeout_ms);
+    if (requestedTimeout === "invalid") {
+      return {
+        ok: false,
+        error: `timeout_ms 必须是正的有限数（实测 ${JSON.stringify(args.timeout_ms)}）`,
+        errorCode: "VALIDATION_ERROR",
+        durationMs: Date.now() - startedAt,
+      };
+    }
+    const timeoutMs = capTimeoutMs(requestedTimeout, context.timeoutMs, DEFAULT_SHELL_TIMEOUT_MS);
+
     // 闸 3：唯一执行出口
-    const result = await context.sandbox.exec(context.session, argv, {
-      ...(typeof args.timeout_ms === "number" ? { timeoutMs: args.timeout_ms } : {}),
-      ...(context.timeoutMs === undefined ? {} : { timeoutMs: context.timeoutMs }),
-    });
+    const result = await context.sandbox.exec(context.session, argv, { timeoutMs });
 
     if (result.timedOut) {
       return {

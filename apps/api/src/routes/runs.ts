@@ -113,21 +113,54 @@ export function runRoutes(app: FastifyInstance, deps: IdentityDeps): void {
       });
 
       try {
-        await streamRunFrames({
-          readAfter: (seq, limit) => service.listEventRows(runId, seq, limit),
-          isTerminal: () => service.isTerminal(runId),
-          afterSeq,
-          pollIntervalMs: RUN_EVENTS_POLL_MS,
-          maxPolls: RUN_EVENTS_MAX_POLLS,
-          signal: service.signalOf(runId),
-          write: (frame) => {
-            reply.raw.write(frame);
-          },
-        });
+        // **客户端断开**也要能收尾（AUD-11）。
+        //
+        // 原先只把 `service.signalOf(runId)` 传给流：那个 signal 只在**取消**时置位，
+        // 浏览器关标签页 / 断网时它永远不动 ⇒ handler 继续空轮询到 2s 上限，
+        // 期间占着一个 worker 与一条死连接的句柄（轮询一直读库）。
+        //
+        // 这里另建一个**本地** controller，监听 `request.raw` 的 `close`（客户端断开 /
+        // 响应被销毁），用 `AbortSignal.any` 把两个来源合一：任一置位即收尾。
+        // 监听器在 `finally` 里移除 —— 否则长连接反复进入会把 emitter 撑大（MaxListeners）。
+        const clientAbort = new AbortController();
+        const onClientClose = (): void => {
+          clientAbort.abort();
+        };
+        request.raw.on("close", onClientClose);
+
+        try {
+          await streamRunFrames({
+            readAfter: (seq, limit) => service.listEventRows(runId, seq, limit),
+            isTerminal: () => service.isTerminal(runId),
+            afterSeq,
+            pollIntervalMs: RUN_EVENTS_POLL_MS,
+            maxPolls: RUN_EVENTS_MAX_POLLS,
+            signal: AbortSignal.any([service.signalOf(runId), clientAbort.signal]),
+            write: (frame) => {
+              // 客户端已断开 ⇒ 不再往死 socket 上写（写了也不会有人收）。
+              if (clientAbort.signal.aborted) return;
+              try {
+                reply.raw.write(frame);
+              } catch {
+                // 写失败（EPIPE / 已 destroy）**不得让 handler 崩**：客户端断开是正常
+                // 事件，不是服务端故障。按断开处理，让循环走 `aborted` 收尾。
+                clientAbort.abort();
+              }
+            },
+          });
+        } finally {
+          request.raw.off("close", onClientClose);
+        }
       } finally {
-        reply.raw.end();
-        // 收尾后清掉进程内取消信号，避免 Map 长期持有已完成的 run。
-        service.forget(runId);
+        try {
+          reply.raw.end();
+        } catch {
+          // 同上：socket 已被对端关掉，`end()` 抛错不影响任何业务事实。
+        }
+        // 收尾后清掉进程内取消信号 —— **只在 run 已终态时**（AUD-02）：
+        // 在飞 run 的 controller 必须留着，否则 `cancel` 会作用在新 controller 上，
+        // 而 driver 持有的旧 signal 永不置位 ⇒ 取消失效。
+        await service.forgetIfTerminal(runId);
       }
 
       return reply;

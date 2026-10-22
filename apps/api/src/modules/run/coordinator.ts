@@ -26,6 +26,11 @@
  *   SSE 流（验收 ⑥）。它不跨进程：别的 worker 取消本进程的流，只能靠"下一轮轮询发现
  *   run 已终态"来收尾。**单进程部署下这条是精确的**；多 worker 时它是"最多晚一个轮询
  *   间隔"，已在施工记录登记（不在本卡解决 —— 那需要分布式取消总线）。
+ *
+ *   ⚠️ **controller 生命周期 = run 生命周期**（AUD-02）：一个 run 从创建到终态**只有
+ *   一个** controller。任何"订阅结束就清掉"的写法都会让后续 `cancel()` 作用在新
+ *   controller 上，而 `RunDriver` 持有的旧 signal 永不置位 ⇒ 取消失效。故订阅侧只能调
+ *   {@link RunCoordinator.forgetIfTerminal}（非终态不丢弃）。
  */
 
 import { ERROR_CODES } from "@wbtime/core";
@@ -129,26 +134,34 @@ export class RunCoordinator {
   }
 
   /**
-   * 终态落库。
+   * 终态落库（**条件写**：只有活跃态才写得进去）。
+   *
+   * 语义（AUD-03）：
+   *   - CAS 命中 ⇒ 写入并返回新行；
+   *   - 未命中且**行存在**（已被别的路径落了终态）⇒ **幂等返回现状行、不抛 404**
+   *     —— 收尾方晚到时不该报"不存在"，那会让"run 到底怎么了"变得不可判；
+   *   - 未命中且**行不存在** ⇒ 404（确实没有可收敛的对象）。
    *
    * @throws {HttpException} 404（run 不可见）。
    */
   async finish(runId: string, patch: FinalizeRunPatch): Promise<AgentRunRow> {
-    const updated = await this.#runs().finalize(this.#ref(runId), {
+    const outcome = await this.#runs().finalizeIfActive(this.#ref(runId), {
       ...patch,
       completedAt: patch.completedAt ?? this.#now(),
     });
-    if (updated === null) {
-      throw authError(ERROR_CODES.NOT_FOUND, "Run 不存在", { run_id: runId });
-    }
-    return updated;
+    if (outcome.row !== null) return outcome.row;
+    throw authError(ERROR_CODES.NOT_FOUND, "Run 不存在", { run_id: runId });
   }
 
   /**
    * 取消（**幂等**：已终态 ⇒ 原样返回）。
    *
-   * 顺序：先置进程内取消信号（尽快打断 SSE 流），再 CAS 落库。
+   * 顺序：先置进程内取消信号（尽快打断 SSE 流），再落库。
    * 反过来会让"落库成功但流还在写"的窗口更长。
+   *
+   * **一次写**（AUD-03）：CAS 与终态字段在**同一条** `UPDATE` 里
+   * （`WHERE status IN 活跃态` + 全字段），所以不存在"status 已是 CANCELLED、
+   * `success` 还是 null"的中间态，也不存在"CAS 之后第二次 finalize 把别的东西覆写"。
    *
    * @throws {HttpException} 404（run 不可见）。
    */
@@ -157,42 +170,20 @@ export class RunCoordinator {
     // —— 只取不 abort 等于什么都没做（本行首版就漏了，被 `runs-cancel.test.mjs` B-2 抓住）。
     this.#signal(runId).abort();
 
-    const existing = await this.get(runId);
-    if (existing === null) {
-      throw authError(ERROR_CODES.NOT_FOUND, "Run 不存在", { run_id: runId });
-    }
-    if (isTerminalRunStatus(existing.status as never)) {
-      // 幂等：已经停了，就原样返回（**不是** 409）。
-      return existing;
-    }
-
     const now = this.#now();
-    const leased = await this.#runs().tryAcquireLease(this.#ref(runId), {
-      from: [...ACTIVE_RUN_STATUSES],
-      to: "CANCELLED",
-      at: now,
-    });
-    if (leased === null) {
-      // 与上面的终态检查之间被别的请求改掉了 ⇒ 重读一次，仍是"幂等返回"。
-      const reread = await this.get(runId);
-      if (reread === null) {
-        throw authError(ERROR_CODES.NOT_FOUND, "Run 不存在", { run_id: runId });
-      }
-      return reread;
-    }
-
-    // 补齐终态字段。⚠️ 与上面的 CAS 是两次写：窗口期内读到的行 status 已是 CANCELLED、
-    // `success` 仍为 null。契约 `success` 可空 ⇒ 该中间态合法（不是脏数据）。
-    // 做成单条 update 需要给仓储加 `cancelIfActive`（CAS + 全字段），属 db 层改动；
-    // 本卡不动仓储，登记为可选择优化。
-    const finalized = await this.#runs().finalize(this.#ref(runId), {
+    const outcome = await this.#runs().finalizeIfActive(this.#ref(runId), {
       status: "CANCELLED",
       stopReason: "cancelled",
       success: false,
       errorType: CANCELLED_ERROR_TYPE,
       completedAt: now,
     });
-    return finalized ?? leased;
+    if (outcome.row !== null) {
+      // 命中 ⇒ 本次落库；未命中 ⇒ 已被别的路径推向终态 —— 两种都是"它停了"，
+      // 取消的语义是"确保它停下来"，故一致返回现状行（**不是** 409 / 404）。
+      return outcome.row;
+    }
+    throw authError(ERROR_CODES.NOT_FOUND, "Run 不存在", { run_id: runId });
   }
 
   /** run 是否已终态（`MISSING` ⇒ 视作终态：没有可写的事件目标）。 */
@@ -212,9 +203,35 @@ export class RunCoordinator {
     return this.#signal(runId).signal;
   }
 
-  /** 清掉取消信号（run 收尾后调用，避免 Map 长期持有）。 */
+  /**
+   * 清掉取消信号（**无条件**；仅限"调用方确知 run 已收尾"的场景）。
+   *
+   * ⚠️ **controller 的生命周期 = run 的生命周期，不是订阅的生命周期**（AUD-02）。
+   *
+   *   订阅（`GET /runs/{id}/events`）是**短命**的：本版是有限轮询（40 轮 × 50ms ≈ 2s），
+   *   必然走到 `finally`。若在那里无条件 `forget`，而 run 还在跑（长工具 / 长模型调用），
+   *   下一次 `cancel()` 会**新建**一个 controller 并 abort 新的那个 —— 而
+   *   `RunDriver` 在 run 启动时已经 `signalOf(runId)` 拿到了**旧** controller 的 signal
+   *   （`driver.ts` 的 `RunCallContext.signal`）。旧 signal 永不置位 ⇒ 循环开头与
+   *   工具执行前的 `signal.aborted` 检查全部失效 ⇒ **取消对在飞 run 无效**。
+   *
+   *   所以订阅收尾一律用 {@link RunCoordinator.forgetIfTerminal}：非终态不丢弃，
+   *   让"同一 run 只有一份 controller"这条不变式在订阅反复收尾时依然成立。
+   */
   forget(runId: string): void {
     this.#aborts.delete(runId);
+  }
+
+  /**
+   * **仅在 run 已终态时**丢弃 controller（订阅收尾的正确入口，见 {@link RunCoordinator.forget}）。
+   *
+   * @returns 是否真的丢弃了（`false` = run 仍在飞，controller 必须留着）。
+   */
+  async forgetIfTerminal(runId: string): Promise<boolean> {
+    // `isTerminal` 把"行不存在"也算终态（没有可写的目标 ⇒ 没有保留 controller 的理由）。
+    if (!(await this.isTerminal(runId))) return false;
+    this.forget(runId);
+    return true;
   }
 
   #signal(runId: string): AbortController {

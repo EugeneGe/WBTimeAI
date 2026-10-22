@@ -114,6 +114,21 @@ export const DEFAULT_MAX_CONTEXT_CHARS = 12_000;
 /** 默认保留的尾部消息数。 */
 export const DEFAULT_KEEP_RECENT = 8;
 
+/**
+ * 上下文消息窗口 = **最近 N 条**（AUD-01）。
+ *
+ * 为什么是"最近"而不是"最早"：`MessageRepo.list({limit})` 的排序是
+ * `(created_at asc, id asc) + LIMIT` ⇒ 它取的是**最旧**的 N 条。长会话超过 N 之后，
+ * 模型看到的是"开头那一段"，而**本次 run 刚写入的用户消息在最末尾、完全看不见**，
+ * 且链路上不报任何错（静默截断）。故改走 `MessageRepo.listTail`（尾部窗口，
+ * 降序取 N 条再反转成升序）。
+ *
+ * 200 这个数字的含义：**窗口 = 最近 200 条**（不是"库里最多只留 200 条"，也不是分页大小）。
+ * 取回条数达到 200 ⇒ 本次上下文**已被窗口截断**，由 `context.built` 内部行的
+ * `truncated_by_list` 如实上报。
+ */
+export const CONTEXT_MESSAGE_WINDOW = 200;
+
 /** `runtime_config.skills` 的元素形态（`string` 或 `{name, version?}`）。 */
 type SkillRefConfig = string | { readonly name?: unknown; readonly version?: unknown };
 
@@ -810,7 +825,9 @@ export class RunDriver {
         model: typeof input.modelConfig.model === "string" ? input.modelConfig.model : "default",
         tools: surface.specs,
         loadMessages: async () => {
-          const rows = await messagesRepo.list({ limit: 200 });
+          // **尾部窗口**（AUD-01）：取最近 200 条，升序返回 —— 不能用 `list({limit})`，
+          // 那取到的是**最旧** 200 条（长会话 ⇒ 模型看不见最新消息，静默截断）。
+          const rows = await messagesRepo.listTail({ limit: CONTEXT_MESSAGE_WINDOW });
           // 系统提示词是**版本快照**的一部分（`agent_version.system_prompt`），不在
           // `message` 表里 —— 这里以一条合成行前置进上下文（id 固定，便于回放时识别）。
           // 空串 ⇒ 不加：一条空的 system 消息只会让模型看到噪声。
@@ -873,6 +890,14 @@ export class RunDriver {
         },
         maxContextChars: DEFAULT_MAX_CONTEXT_CHARS,
         keepRecent: DEFAULT_KEEP_RECENT,
+        // 让内核把"窗口上限 + 是否被截断"写进 `context.built` 内部行
+        // （`list_limit` / `truncated_by_list`），否则"上下文被窗口截断"不可见（AUD-01）。
+        // `syntheticRows` = 前置的那条合成 system 行（有 system_prompt 时才是 1）——
+        // 它不是仓储行，不该算进窗口条数（否则 199 条历史会被误报成"已截断"）。
+        contextWindow: {
+          limit: CONTEXT_MESSAGE_WINDOW,
+          syntheticRows: input.systemPrompt.trim() === "" ? 0 : 1,
+        },
       });
 
       outcome = await loop.run(context);
@@ -903,10 +928,15 @@ export class RunDriver {
   }
 
   /**
-   * 收敛终态（**先发终态帧、再落库**；已终态 ⇒ 什么都不做）。
+   * 收敛终态（**先发终态帧、再条件落库**；已终态 ⇒ 什么都不做）。
    *
    * 顺序不可换：`RunEventWriter` 在 run 终态后拒写，若先 `finalize` 再发帧，
    * 终态帧永远发不出去（前端就会"看到 run 结束了却没收尾"）。
+   *
+   * 并发口径（AUD-03）：落库走 `RunCoordinator.finish` 的**条件写**
+   * （`WHERE status IN 活跃态`）。若此刻 `cancel` 已把 run 推向 `CANCELLED`，
+   * CAS **一行都不会改**，`finish` 幂等返回现状行 ⇒ 终态由**先到者**决定，
+   * 本方法**不再写库**（那正是"取消复活"的成因）。
    */
   async #settle(args: {
     runId: string;
@@ -923,7 +953,7 @@ export class RunDriver {
     // 取消可能已经把 run 推到终态：**不再 finalize**（否则就是"取消后复活"）。
     const current = await coordinator.get(runId);
     if (current !== null && isTerminalRunStatus(current.status as never)) {
-      coordinator.forget(runId);
+      await coordinator.forgetIfTerminal(runId);
       return;
     }
 
@@ -956,7 +986,8 @@ export class RunDriver {
     } catch {
       // run 行在此期间被删 / 不可见 ⇒ 无可收敛对象；事件已发，不伪装成功。
     }
-    coordinator.forget(runId);
+    // 终态已定（本次落的或先到者落的）⇒ 可以安全丢弃 controller。
+    await coordinator.forgetIfTerminal(runId);
   }
 
   // -------------------------------------------------------------------------
@@ -1118,13 +1149,13 @@ export class RunDriver {
  * @param outcome 内核终局（`null` = 内核没跑起来，属执行异常）。
  * @param failureDetail 失败详情（异常路径给）。
  * @param failureType `error_type`（异常路径给）。
- * @param flags run 级标志（审批驳回优先）。
+ * @param flags run 级标志（审批驳回优先；`safetyBlockedStage` 进 error 前缀）。
  */
 export function terminalOf(
   outcome: Awaited<ReturnType<AgentLoop["run"]>> | null,
   failureDetail: string | null,
   failureType: string | null,
-  flags: Pick<RunFlags, "approvalRejected">
+  flags: Pick<RunFlags, "approvalRejected" | "safetyBlockedStage">
 ): {
   status: "SUCCEEDED" | "FAILED" | "CANCELLED";
   stopReason: StopReason;
@@ -1137,7 +1168,7 @@ export function terminalOf(
       status: "CANCELLED",
       stopReason: "approval_rejected",
       errorType: failureType ?? "APPROVAL_REJECTED",
-      error: failureDetail ?? "工具调用未获审批",
+      error: anchorSafetyStage(flags.safetyBlockedStage, failureDetail ?? "工具调用未获审批"),
     };
   }
   if (outcome === null) {
@@ -1145,7 +1176,7 @@ export function terminalOf(
       status: "FAILED",
       stopReason: "tool_failed",
       errorType: failureType ?? "RUN_EXECUTION_ERROR",
-      error: failureDetail ?? "run 执行异常",
+      error: anchorSafetyStage(flags.safetyBlockedStage, failureDetail ?? "run 执行异常"),
     };
   }
   if (outcome.status === "SUCCEEDED") {
@@ -1163,6 +1194,27 @@ export function terminalOf(
     status: "FAILED",
     stopReason: outcome.stopReason ?? "tool_failed",
     errorType: failureType ?? "RUN_EXECUTION_ERROR",
-    error: failureDetail ?? outcome.detail,
+    error: anchorSafetyStage(flags.safetyBlockedStage, failureDetail ?? outcome.detail),
   };
+}
+
+/**
+ * 安全拦截的阶段戳（`AUD-10`：`flags.safetyBlockedStage` 原先**5 写 0 读**）。
+ *
+ * 为什么消费而不是删字段：`error_type` 的取值域是冻结的（R3-04 的 11 值里**没有**
+ * 安全码），所以"哪个挂点拦的"只能落在 `error` 文本里。丢掉它 ⇒ 事后只能看到
+ * `SAFETY_DENIED`，分不清是 S2 上下文、S4 模型请求、S5 工具入参、S6 工具结果
+ * 还是 S7 输出拦的 —— 排障与申诉都要重放一次 run。
+ *
+ * 只在 `failureDetail` **尚未**带阶段信息时加前缀（`SafetyBlockedError.message` 本身
+ * 已是 `安全拦截（<stage>）：…`，再套一层就成复读）。终态为成功时不加（见调用点）。
+ *
+ * @param stage 安全拦截的挂点名（`null` = 本 run 没被安全闸拦过）。
+ * @param message 原错误文本。
+ * @returns 带 `[安全拦截@<stage>]` 前缀的错误文本（无需前缀时原样返回）。
+ */
+function anchorSafetyStage(stage: string | null, message: string): string {
+  if (stage === null) return message;
+  if (message.includes(stage)) return message;
+  return `[安全拦截@${stage}] ${message}`;
 }

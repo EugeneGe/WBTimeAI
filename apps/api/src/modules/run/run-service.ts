@@ -134,6 +134,19 @@ export class RunService {
     return this.#coordinator.signalOf(runId);
   }
 
+  /**
+   * **仅在 run 已终态时**清掉进程内信号（订阅收尾的正确入口，AUD-02）。
+   *
+   * 为什么不能无条件 `forget`：本版订阅是有限轮询（≈2s 必到 `finally`），而 run 可能
+   * 还在跑。无条件丢弃会让后续 `cancel` 作用在**新建**的 controller 上，`RunDriver`
+   * 持有的旧 signal 永不置位 ⇒ 取消失效。详见 `RunCoordinator.forget` 的注释。
+   *
+   * @returns 是否真的丢弃了（`false` = run 仍在飞）。
+   */
+  forgetIfTerminal(runId: string): Promise<boolean> {
+    return this.#coordinator.forgetIfTerminal(runId);
+  }
+
   /** run 收尾后清掉进程内信号。 */
   forget(runId: string): void {
     this.#coordinator.forget(runId);

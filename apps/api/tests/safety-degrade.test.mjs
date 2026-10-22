@@ -70,6 +70,10 @@ test("A-2 · **enabled=false 双断言**：非底线放行 + **底线项仍 DENY
     assert.equal(baseline.decision, "REDACT", "底线项关闭态下仍判定（凭据 ⇒ REDACT）");
     assert.ok(baseline.hits.length >= 1, "底线命中必须在关闭态下仍被检出");
 
+    // --- AUD-07：判定对象与审计必须同一口径 --------------------------------
+    assert.equal(nonBaseline.degraded, true, "显式关闭 ⇒ verdict.degraded 必须是 true（AUD-07）");
+    assert.equal(baseline.degraded, true, "同上（底线项仍在关闭态下判定，仍是降级）");
+
     // 审计：disabled=true + degraded=true（R3-14 ②）
     const repo = new AuditLogRepo(fixture.connection.db, "sqlite");
     const rows = await repo.listByResourceId(TENANT_ID, "input");
@@ -79,6 +83,53 @@ test("A-2 · **enabled=false 双断言**：非底线放行 + **底线项仍 DENY
     for (const item of disabledRows) {
       assert.equal(item.degraded, true, "显式关闭 ⇒ 降级审计（R3-14 ②）");
     }
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("A-4 · AUD-07：**显式关闭** ⇒ `verdict.degraded === true` **且**审计行 `degraded === true`", async () => {
+  const fixture = await makeApp({ username: "saf-dg-a4" });
+  try {
+    const { gate, flags } = makeGateWithFlag(fixture);
+    await flags.upsert(SAFETY_LOCAL_RULES_FLAG, false);
+
+    const verdict = await gate.evaluate({
+      stage: "output",
+      content: NON_BASELINE_CONTENT,
+      requestId: "req-dg4",
+    });
+
+    // 判定对象侧（修复前这里是恒 false —— 与审计写 `flag.disabled` 不一致）。
+    assert.equal(verdict.disabled, true, "disabled 反映开关状态");
+    assert.equal(
+      verdict.degraded,
+      true,
+      "AUD-07：显式关闭规则集是**显式降级**，判定对象必须承认（不能只在审计里承认）"
+    );
+
+    // 审计侧：同一次判定的那一行必须与判定对象同口径。
+    const repo = new AuditLogRepo(fixture.connection.db, "sqlite");
+    const rows = await repo.listByResourceId(TENANT_ID, "output");
+    assert.ok(rows.length >= 1, "每个 stage 都必须落审计行（不沉默原则）");
+    const metadata = rows.map((row) =>
+      typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata
+    );
+    const row = metadata[metadata.length - 1];
+    assert.equal(row.disabled, true);
+    assert.equal(row.degraded, true, "审计行的 degraded 必须与 verdict.degraded 相同");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("A-5 · 对照：开关**未被关闭** ⇒ degraded=false（不许恒 true）", async () => {
+  const fixture = await makeApp({ username: "saf-dg-a5" });
+  try {
+    const { gate } = makeGateWithFlag(fixture);
+    const verdict = await gate.evaluate({ stage: "input", content: NON_BASELINE_CONTENT, requestId: "req-dg5" });
+    assert.equal(verdict.disabled, false);
+    assert.equal(verdict.degraded, false, "规则正常生效不是降级（R3 对齐注：未配置 ≠ 降级）");
   } finally {
     await fixture.close();
   }

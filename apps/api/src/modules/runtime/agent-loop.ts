@@ -93,6 +93,32 @@ export interface AgentLoopDeps {
   readonly maxContextChars: number;
   /** 压缩时至少保留的尾部消息数。 */
   readonly keepRecent: number;
+  /**
+   * `loadMessages` 的取数窗口（`AUD-01`）。
+   *
+   * 内核**不**自己取数（取数由调用方注入），所以"这次上下文有没有被窗口截断"只有
+   * 调用方知道。把它显式传进来，才能把 `list_limit` / `truncated_by_list` 如实写进
+   * `context.built` 内部行 —— 否则"长会话静默丢消息"在事件流里永远看不见。
+   *
+   * 缺省 `undefined` ⇒ 内部行报 `list_limit: null` / `truncated_by_list: false`
+   * （**不臆造一个数字**：没有窗口就没有 limit）。
+   */
+  readonly contextWindow?: ContextWindowInfo;
+}
+
+/**
+ * 取数窗口的描述（{@link AgentLoopDeps.contextWindow}）。
+ *
+ * 为什么还要 `syntheticRows`：调用方常把**非仓储行**前置进上下文（例如
+ * `RunDriver` 把版本的 `system_prompt` 合成一条 system 行）。那条行不受窗口约束，
+ * 若把它算进条数，则"库里有 199 条 + 1 条合成"会被误报成"已截断"（假警报与漏报
+ * 一样坏：告警一旦不可信就会被忽略）。
+ */
+export interface ContextWindowInfo {
+  /** 窗口上限（**只对仓储行生效**）。 */
+  readonly limit: number;
+  /** `loadMessages` 前置的合成行数（缺省 0）。 */
+  readonly syntheticRows?: number;
 }
 
 /** 循环终局。 */
@@ -179,6 +205,13 @@ export class AgentLoop {
         maxChars: this.#deps.maxContextChars,
         keepRecent: this.#deps.keepRecent,
       });
+      // `AUD-01`：窗口与截断必须可审计（否则"长会话静默丢消息"在事件流里看不见）。
+      // `truncated_by_list` 的判据是"**仓储行**取回条数达到窗口上限"（`>=` 而非 `>`）：
+      // 恰好取满 N 条同样意味着更早的消息没读到 —— 模型**确实**看不到它们。
+      const window = this.#deps.contextWindow;
+      const listLimit = window?.limit ?? null;
+      const repositoryRows = rows.length - (window?.syntheticRows ?? 0);
+      const truncatedByList = listLimit !== null && repositoryRows >= listLimit;
       await events.appendInternal("context.built", {
         run_id: context.runId,
         turn,
@@ -189,6 +222,8 @@ export class AgentLoop {
         compacted: built.compaction.applied,
         oversize: built.compaction.oversize,
         reason: built.compaction.reason,
+        list_limit: listLimit,
+        truncated_by_list: truncatedByList,
       });
 
       // ---- 步 3 · Call model ---------------------------------------------

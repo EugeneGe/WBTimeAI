@@ -129,8 +129,22 @@ export function createCodeExecTool(interpreters: CodeExecInterpreters = defaultI
       }
 
       const argv = buildArgv(runtime, code, interpreters);
-      const timeoutMs =
-        typeof args.timeout_ms === "number" ? args.timeout_ms : DEFAULT_CODE_EXEC_TIMEOUT_MS;
+
+      // 超时（AUD-04）：**模型只能收紧，不能放宽**。
+      //   ① `timeout_ms` 非有限数或 `<= 0` ⇒ `VALIDATION_ERROR`（**不静默回落默认值**：
+      //      静默回落会让"我传了 0 想立刻超时"与"我没传"变成同一个行为，且掩盖调用方 bug）；
+      //   ② 有效值 = `min(请求值, context.timeoutMs)`；请求值缺省即 `context.timeoutMs`
+      //      （执行器算好的「run 剩余时间 ∩ 执行器默认值」）。
+      const requestedTimeout = readTimeoutMs(args.timeout_ms);
+      if (requestedTimeout === "invalid") {
+        return {
+          ok: false,
+          error: `timeout_ms 必须是正的有限数（实测 ${JSON.stringify(args.timeout_ms)}）`,
+          errorCode: "VALIDATION_ERROR",
+          durationMs: Date.now() - startedAt,
+        };
+      }
+      const timeoutMs = capTimeoutMs(requestedTimeout, context.timeoutMs, DEFAULT_CODE_EXEC_TIMEOUT_MS);
 
       // 闸 3：唯一执行出口
       const result = await context.sandbox.exec(context.session, argv, { timeoutMs, cwd: context.session.workdir });
@@ -186,6 +200,33 @@ function buildArgv(
     case "bash":
       return [interpreters.bash, "-c", code];
   }
+}
+
+/**
+ * 读 `timeout_ms`（契约 `integer`，但模型可能给 `"abc"` / `0` / `-1` / `1e400`）。
+ *
+ * @returns `undefined`（未传 ⇒ 用上下文给的上限）/ 数字（已校验为正的有限数）/ `"invalid"`。
+ */
+function readTimeoutMs(value: unknown): number | undefined | "invalid" {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "invalid";
+  return value;
+}
+
+/**
+ * 有效超时 = `min(请求值, 上下文上限)`（`shell` 同源，见 `builtin/shell.ts` 的同名函数）。
+ *
+ * 两个来源都可能缺省：请求值缺省 ⇒ 用上下文上限；上下文上限缺省（单测 / 非 run 侧调用）
+ * ⇒ 回落工具默认值。**先取候选值，再用上限收紧** —— 顺序反了（先 min 再回落）会让
+ * "上限缺省"退化成 `Infinity`，模型于是又能传一年的超时。
+ */
+export function capTimeoutMs(
+  requested: number | undefined,
+  ceiling: number | undefined,
+  fallback: number
+): number {
+  const candidate = requested ?? ceiling ?? fallback;
+  return ceiling === undefined ? candidate : Math.min(candidate, ceiling);
 }
 
 /** 缺省实例（装配期直接用；测试用 `createCodeExecTool` 注入解释器）。 */

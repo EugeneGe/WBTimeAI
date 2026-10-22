@@ -253,6 +253,41 @@ test("B-2 · 静态：续读链**不得** import 任何执行器（反例 ② �
   }
 });
 
+test("B-2b · 静态（AUD-11）：SSE handler 必须同时看**取消**与**客户端断开**两个信号，且收尾只在终态丢 controller", () => {
+  // 为什么是静态面：`app.inject()` 里没有真实 socket，"客户端中途断开"复现不出来
+  // （那条路径只能在真 listen 的集成测试里造，本仓不引入端口绑定）。可机械断言的
+  // 是**接线形态**，而 AUD-11 / AUD-02 的缺陷恰恰是接线写错：
+  //   · 只传 `service.signalOf(runId)` ⇒ 客户端断开后空轮询到 2s 上限；
+  //   · `finally` 里无条件 `service.forget(runId)` ⇒ 在飞 run 的 controller 被丢弃。
+  const source = readFileSync(join(ROOT, "apps/api/src/routes/runs.ts"), "utf8");
+
+  assert.match(
+    source,
+    /AbortSignal\.any\(\s*\[[^\]]*signalOf\(runId\)[^\]]*clientAbort\.signal[^\]]*\]/,
+    "必须用 AbortSignal.any([service.signalOf(runId), clientAbort.signal]) —— 两个来源任一置位都要收尾"
+  );
+  assert.match(
+    source,
+    /request\.raw\.on\(\s*"close"/,
+    "必须监听 request.raw 的 close（浏览器关标签页 / 断网时 signalOf 不会动）"
+  );
+  assert.match(
+    source,
+    /request\.raw\.off\(\s*"close"/,
+    "监听器必须在收尾时移除（否则长连接反复进入会把 emitter 撑大）"
+  );
+  assert.match(
+    source,
+    /forgetIfTerminal\(/,
+    "收尾必须用 forgetIfTerminal（AUD-02）：非终态丢弃 controller ⇒ 取消失效"
+  );
+  assert.equal(
+    /service\.forget\(/.test(source),
+    false,
+    "路由层不得再出现无条件 forget（那是 AUD-02 的成因）"
+  );
+});
+
 test("B-3 · 不可见 run 的事件流 ⇒ 404 JSON 壳（不是空流）", async () => {
   const fixture = await makeApp({ username: "sse-b3" });
   try {

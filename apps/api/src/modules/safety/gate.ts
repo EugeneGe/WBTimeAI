@@ -145,14 +145,14 @@ export class SafetyGate {
     }
 
     // ---- 3. 折算（命中 → 决策）-------------------------------------------
+    // 注意：本地规则**抛错**的路径已在上面 `catch` 里 `return` 了，所以这里 `hits`
+    // 恒为已求得的结果 —— 早先这里还有一个 `if (localFailed)` 分支（AUD-09：不可达死码），
+    // 已删除；行为不变。
     let decision: "ALLOW" | "DENY" | "REDACT";
     let detail: string;
     let redactedContent: string | undefined;
 
-    if (localFailed) {
-      decision = "DENY";
-      detail = "本地规则故障";
-    } else if (hits.length === 0) {
+    if (hits.length === 0) {
       decision = "ALLOW";
       detail = "本地规则未命中";
       // 「语义未配置」的显式分支（R3 对齐注：不标 degraded）
@@ -194,7 +194,11 @@ export class SafetyGate {
     return {
       decision,
       hits,
-      degraded: false,
+      // AUD-07：判定对象与审计必须**同一口径**。这里原先是恒 `false`，而上面的审计写
+      // `degraded: flag.disabled` ⇒ 「显式关闭规则集」在库里是降级、在返回值里不是。
+      // 调用方（`SafetyHooks` / run 终态）据此判断"这次判定是否可信"，
+      // 两个口径不一致等于把降级**藏了一半**。
+      degraded: flag.disabled,
       disabled: flag.disabled,
       detail,
       ...(redactedContent === undefined ? {} : { redactedContent }),

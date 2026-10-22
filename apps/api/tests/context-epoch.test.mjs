@@ -138,6 +138,115 @@ test("B-4 · 压到底仍超限 ⇒ `oversize=true` 且**不再继续丢**（交
 });
 
 // ---------------------------------------------------------------------------
+// E 组 · 配对块（AUD-05：tool_call ↔ tool_result 不得被压缩切开）
+// ---------------------------------------------------------------------------
+
+/**
+ * 造一条 `assistant(tool_call)` 行。
+ *
+ * `content_parts` 的形状与 `RunDriver.appendAssistant` 落库的完全一致
+ * （`{type:"tool_call", id, name, input}`）—— 判据必须建立在**真实落库形态**上。
+ */
+function assistantToolCallRow(id, content, callId = "call-1") {
+  return {
+    ...messageRow(id, "assistant", content),
+    content_parts: [{ type: "tool_call", id: callId, name: "shell", input: {} }],
+  };
+}
+
+/** 造一条 `tool` 结果行（`{type:"tool_result", callId, toolName}`）。 */
+function toolResultRow(id, content, callId = "call-1") {
+  return {
+    ...messageRow(id, "tool", content),
+    content_parts: [{ type: "tool_result", callId, toolName: "shell" }],
+  };
+}
+
+test("E-1 · 丢弃边界落在 assistant(tool_call) 与它的 tool 结果之间 ⇒ **二者同进同出**", () => {
+  // 尾部保留区从 index 3 开始（keepRecent=3 ⇒ 保留 t1 / u2 / a2）。
+  // 若按**行**丢：index 2 的 assistant 位于保留区之前 ⇒ 会被单独丢掉，
+  // 而它的 tool 结果在保留区里 ⇒ 产生**孤立的 tool 消息**（真实 Provider 400）。
+  const rows = [
+    messageRow("s1", "system", "你是助手"), // 4
+    messageRow("u1", "user", "第一条很长的用户消息"), // 10
+    assistantToolCallRow("a1", "我来查一下"), // 5
+    toolResultRow("t1", "查询结果"), // 4
+    messageRow("u2", "user", "最近一条用户"), // 6
+    messageRow("a2", "assistant", "最近一条助手"), // 6
+  ];
+  // 必留集 = system(4) + a1(5) + t1(4) + u2(6) + a2(6) = 25 ⇒ 预算 20 时只需丢 u1（10）。
+  const outcome = compactMessages(rows, { maxChars: 20, keepRecent: 3 });
+
+  const keptIds = outcome.kept.map((row) => row.id);
+  const droppedIds = outcome.dropped.map((row) => row.id);
+
+  assert.deepEqual(droppedIds, ["u1"], "只该丢掉最早的那条普通用户消息");
+  assert.ok(keptIds.includes("a1"), "assistant(tool_call) 必须留下");
+  assert.ok(keptIds.includes("t1"), "它的 tool 结果也必须留下");
+  assert.equal(
+    keptIds.includes("a1") === keptIds.includes("t1"),
+    true,
+    "配对块必须同进同出（拆开就是孤儿 tool 消息 ⇒ Provider 400）"
+  );
+});
+
+test("E-2 · 整块进入可丢区 ⇒ **整块丢**（不会留下孤立 assistant(tool_call)）", () => {
+  // 两个块都在保留区之前：普通 user（u1）+ 配对块（a2,t2）。
+  const rows = [
+    messageRow("s1", "system", "你是助手"),
+    messageRow("u1", "user", "很早的一条用户消息"),
+    assistantToolCallRow("a2", "我查一下", "call-2"),
+    toolResultRow("t2", "查询结果", "call-2"),
+    messageRow("u2", "user", "最近一条用户"),
+    messageRow("a3", "assistant", "最近一条助手"),
+  ];
+  // keepRecent=2 ⇒ 保留 u2 / a3；预算极紧 ⇒ 把可丢的两块都丢掉。
+  const outcome = compactMessages(rows, { maxChars: 1, keepRecent: 2 });
+
+  const keptIds = outcome.kept.map((row) => row.id);
+  const droppedIds = outcome.dropped.map((row) => row.id);
+
+  assert.ok(droppedIds.includes("a2") && droppedIds.includes("t2"), "配对块整体被丢");
+  assert.equal(keptIds.includes("a2"), keptIds.includes("t2"), "不得只丢其中一半");
+  assert.ok(keptIds.includes("s1"), "system 永不丢");
+  assert.ok(keptIds.includes("u2") && keptIds.includes("a3"), "尾部保留区优先");
+
+  // 孤儿检查（本文件最重要的一条）：kept 里出现 role="tool" 时，
+  // 与它 `callId` 对应的 assistant(tool_call) 块头也必须在 kept 里。
+  const orphanTools = outcome.kept.filter((row) => row.role === "tool");
+  for (const orphan of orphanTools) {
+    const callId = (orphan.content_parts ?? []).find((part) => part.type === "tool_result")?.callId;
+    const heads = outcome.kept.filter((row) =>
+      (row.content_parts ?? []).some((part) => part.type === "tool_call" && part.id === callId)
+    );
+    assert.ok(
+      heads.length > 0,
+      `kept 里出现了孤儿 tool 结果 ${orphan.id}（callId=${callId}）—— 真实 Provider 会 400`
+    );
+  }
+});
+
+test("E-3 · **块粒度会牺牲预算**（正确性优先）：宁可超预算，也不切开配对块", () => {
+  // keepRecent=2 ⇒ 尾部 = [t1, u2]（**边界正好切在配对块中间**）。
+  // 配对块 = [a1, t1]，与保留区有交集 ⇒ 整块留下 ⇒ 头部可丢的只剩 s1（system，不可丢）。
+  const rows = [
+    messageRow("s1", "system", "你是助手"),
+    assistantToolCallRow("a1", "x".repeat(100)),
+    toolResultRow("t1", "y".repeat(100)),
+    messageRow("u2", "user", "最近一条用户"),
+  ];
+  const outcome = compactMessages(rows, { maxChars: 150, keepRecent: 2 });
+
+  // 逐行丢会砍掉 a1（100 字符 ⇒ 剩 ~115，落回 150 以内）；块粒度做不到这件事，
+  // 于是**超预算**——这是刻意的取舍：切坏配对不是"多用点 token"，而是直接不可用。
+  assert.equal(outcome.dropped.length, 0, "没有可整块丢的东西（配对块被保留区钉住）");
+  assert.equal(outcome.oversize, true, "必须如实上报超预算（交由 tokens 预算收尾）");
+  assert.ok(outcome.kept.some((row) => row.id === "a1"), "块头保留");
+  assert.ok(outcome.kept.some((row) => row.id === "t1"), "块尾同样保留（不切开）");
+  assert.match(outcome.reason, /still-oversize/);
+});
+
+// ---------------------------------------------------------------------------
 // C 组 · 缓存观测（验收 ⑤）
 // ---------------------------------------------------------------------------
 

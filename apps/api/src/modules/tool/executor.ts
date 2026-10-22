@@ -109,6 +109,33 @@ export class ToolExecutor implements ToolExecutorPort {
       return { status: "CANCELLED", error: "取消信号", durationMs: now() - startedAt };
     }
 
+    // **有效超时**（AUD-04）：工具超时原本完全由模型给的 `timeout_ms` 决定
+    // （`code_exec` / `shell` 直传沙箱，无上界），于是 `timeout_ms: 86400000` 能把一个
+    // 「秒级」的 run 钉住一天；而 `RunCallContext.deadlineMs`（run 的绝对截止时刻）
+    // 全仓**零消费** —— 声明得很清楚，却没有任何一处用它。
+    //
+    // 这里做两件事：
+    //   ① `deadlineMs` 已过 ⇒ **不进工具**，直接 `FAILED` + `TOOL_TIMEOUT`
+    //      （进入工具再判等于明知超预算还去跑）；
+    //   ② 有效超时 = `min(执行器默认/显式配置, run 剩余时间)`，再经 `ToolContext.timeoutMs`
+    //      下发。工具侧一律 `min(请求值, context.timeoutMs)` —— 模型只能**收紧**，
+    //      不能放宽（cap 在可信侧计算）。
+    const deadlineNow = now();
+    const remainingMs = context.deadlineMs - deadlineNow;
+    if (remainingMs <= 0) {
+      return {
+        status: "FAILED",
+        error:
+          `TOOL_TIMEOUT：run 的截止时刻已过（剩余 ${remainingMs}ms），` +
+          `工具 ${tool.name} 未执行`,
+        durationMs: deadlineNow - startedAt,
+      };
+    }
+    const effectiveTimeoutMs = Math.min(
+      this.#deps.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS,
+      remainingMs
+    );
+
     // 段 3 的前置条件：需沙箱的工具必须先有沙箱。
     // 为什么在**执行器**判而不是让每个工具自判：5 个工具里 3 个需要沙箱，
     // 各自判会让"忘了判"成为一次真实的宿主直执行；集中一处则不可能漏。
@@ -121,7 +148,7 @@ export class ToolExecutor implements ToolExecutorPort {
       };
     }
 
-    const toolContext = await this.#toolContext(context);
+    const toolContext = await this.#toolContext(context, effectiveTimeoutMs);
     if (toolContext === undefined) {
       return {
         status: "FAILED",
@@ -194,15 +221,22 @@ export class ToolExecutor implements ToolExecutorPort {
     return permissions.includes(`tool:${toolName}`) || permissions.includes("*");
   }
 
-  /** 按 run 建 / 取工具上下文。需沙箱但未装配 ⇒ `undefined`。 */
-  async #toolContext(context: RunCallContext): Promise<ToolContext | undefined> {
+  /**
+   * 按 run 建 / 取工具上下文。需沙箱但未装配 ⇒ `undefined`。
+   *
+   * `timeoutMs` 是**执行器算好的有效超时**（见 `execute` 的段 3）：它恒有值，
+   * 且恒 ≤ `RunCallContext.deadlineMs` 的剩余时间 ⇒ 工具侧 `min(请求值, 它)` 即可，
+   * 不需要（也不应该）自己去看 `deadlineMs`（那是 run 级概念，工具不该知道 run 的结构）。
+   */
+  async #toolContext(context: RunCallContext, timeoutMs: number): Promise<ToolContext | undefined> {
     const base: ToolContext = {
       workspaceRoot: this.#deps.workspaceRoot,
       ...(this.#deps.allowedPaths === undefined ? {} : { allowedPaths: this.#deps.allowedPaths }),
       ...(this.#deps.egressAllowlist === undefined
         ? {}
         : { egressAllowlist: this.#deps.egressAllowlist }),
-      ...(this.#deps.timeoutMs === undefined ? {} : { timeoutMs: this.#deps.timeoutMs }),
+      // 恒下发：没有它，工具只能信任模型给的 `timeout_ms`（AUD-04 的缺陷形态）。
+      timeoutMs,
     };
 
     if (this.#deps.sandbox === undefined) {

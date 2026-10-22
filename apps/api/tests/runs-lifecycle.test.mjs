@@ -267,6 +267,124 @@ test("C-3 · 非终态 run 可以正常写事件，且 seq 从 1 递增", async 
 });
 
 // ---------------------------------------------------------------------------
+// E 组 · 并发收敛（AUD-03：中断言"取消不复活"）
+// ---------------------------------------------------------------------------
+
+test("E-1 · cancel 先到、finish 晚到 ⇒ 终态仍是 CANCELLED（**取消不复活**）", async () => {
+  const fixture = await makeApp({ username: "run-e1" });
+  try {
+    const { runId } = await seedChain(fixture, { status: "RUNNING" });
+    const coordinator = new RunCoordinator({
+      db: fixture.connection.db,
+      dialect: "sqlite",
+      tenantId: TENANT_ID,
+    });
+
+    await coordinator.cancel(runId);
+    // 晚到的成功收敛（`#settle` 的形态）：条件写不命中活跃态 ⇒ 一行都不改。
+    const settled = await coordinator.finish(runId, {
+      status: "SUCCEEDED",
+      stopReason: "model_finish",
+      success: true,
+      durationMs: 12,
+    });
+
+    assert.equal(settled.status, "CANCELLED", "晚到的 SUCCEEDED 不得覆写 CANCELLED");
+    assert.equal(settled.stop_reason, "cancelled");
+    assert.equal(settled.success, false);
+    assert.equal(settled.error_type, "CANCELLED");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("E-2 · finish 对已终态 run ⇒ **幂等返回现状行**（不抛 404）；run 不存在 ⇒ 404", async () => {
+  const fixture = await makeApp({ username: "run-e2" });
+  try {
+    const { runId } = await seedChain(fixture, { status: "RUNNING" });
+    const coordinator = new RunCoordinator({
+      db: fixture.connection.db,
+      dialect: "sqlite",
+      tenantId: TENANT_ID,
+    });
+
+    await coordinator.finish(runId, {
+      status: "SUCCEEDED",
+      stopReason: "model_finish",
+      success: true,
+    });
+    const again = await coordinator.finish(runId, {
+      status: "FAILED",
+      stopReason: "tool_failed",
+      success: false,
+      error: "晚到的失败",
+    });
+    assert.equal(again.status, "SUCCEEDED", "终态行不得被二次写");
+    assert.equal(again.error, null, "晚到的 error 不得写进成功态（终态行不带异族字段）");
+
+    // 行不存在才 404 —— 「已终态」与「不存在」不得混成同一个结果。
+    await assert.rejects(
+      () =>
+        coordinator.finish("f0000000-0000-4000-8000-0000000000de", {
+          status: "SUCCEEDED",
+          stopReason: "model_finish",
+        }),
+      (error) => {
+        assert.equal(error.statusCode, 404);
+        return true;
+      }
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("E-3 · 并发 cancel + finish ⇒ 终值行**自洽**（不留 success=null 的半写）", async () => {
+  const fixture = await makeApp({ username: "run-e3" });
+  try {
+    const { runId } = await seedChain(fixture, { status: "RUNNING" });
+    const build = () =>
+      new RunCoordinator({ db: fixture.connection.db, dialect: "sqlite", tenantId: TENANT_ID });
+
+    // 两条路径并发（SQLite 驱动把它们串行化，但判据是"后到者不覆写"，与 PG 同语义）。
+    const [cancelled, finished] = await Promise.all([
+      build().cancel(runId),
+      build().finish(runId, {
+        status: "SUCCEEDED",
+        stopReason: "model_finish",
+        success: true,
+      }),
+    ]);
+
+    const row = fixture.raw
+      .prepare("select status, stop_reason, success, error_type from agent_run where id = ?")
+      .get(runId);
+
+    // 终值必须等于**其中一方**的写入（不是两者的混合）。
+    assert.ok(
+      row.status === "CANCELLED" || row.status === "SUCCEEDED",
+      `终态必须是 CANCELLED 或 SUCCEEDED，实测 ${row.status}`
+    );
+    if (row.status === "CANCELLED") {
+      assert.equal(row.stop_reason, "cancelled");
+      assert.equal(row.success, 0);
+      assert.equal(row.error_type, "CANCELLED");
+      assert.equal(cancelled.status, "CANCELLED");
+    } else {
+      assert.equal(row.stop_reason, "model_finish");
+      assert.equal(row.success, 1);
+      assert.equal(row.error_type, null);
+      assert.equal(finished.status, "SUCCEEDED");
+    }
+    // 反例形态：CAS 之后二次 finalize 会留下 `status=CANCELLED` 但 `success=null`
+    // 的中间行 —— 一次写之后这一格不可能出现。
+    assert.notEqual(row.success, null, "终态行不得留 success=null（那是两次写的中间态）");
+  } finally {
+    await fixture.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // D 组 · 认证
 // ---------------------------------------------------------------------------
 

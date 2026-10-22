@@ -82,6 +82,22 @@ export interface CreateClientOptions {
   readonly resolver?: HostResolver;
   /** 连接超时（毫秒，缺省 10s）。 */
   readonly connectTimeoutMs?: number;
+  /**
+   * transport 构造注入缝（**测试专用**，与 `resolver` 同一形态的先例）。
+   *
+   * 为什么需要它（AUD-14）：`http` 档的用例原本连 `https://93.184.216.34/mcp`
+   * （example.com 的 IP 字面）来证明"过闸之后**连接失败**"，于是**整个单测依赖外网**：
+   * 没有网络的环境里它红得莫名其妙，有网络时又慢又不可复现。
+   *
+   * ⚠️ 把地址改成 `127.0.0.1` 是**不可行**的替代方案：`checkEgress` 的 `DENY_RANGES`
+   * 含 `127.0.0.0/8`，回环地址会被出网闸直接拒掉 ⇒ 用例退化成"被闸拒绝"，
+   * 恰好把要证的那件事（**过闸之后**才失败）证反。
+   *
+   * 所以注入点在 **transport**：出网闸照旧真跑（这才是被测语义），只把"真去连一个
+   * socket"换成"返回一个立刻失败的假 transport"。类型用 `unknown` 是为了不让测试
+   * 依赖 SDK 的 transport 抽象（它只是被原样交给 `client.connect()`）。
+   */
+  readonly transportFactory?: (url: URL) => unknown;
 }
 
 /** 缺省连接超时。 */
@@ -175,8 +191,19 @@ async function createHttpClient(
     throw error;
   }
 
-  const transport = new StreamableHTTPClientTransport(new URL(endpoint));
-  return connectClient(new Client({ name: "wbtime-ai", version: "0.3.0" }, { capabilities: {} }), transport, options);
+  const target = new URL(endpoint);
+  // 测试注入缝优先（`transportFactory` 只在单测里出现；生产路径恒走 SDK 的
+  // `StreamableHTTPClientTransport`）。注意出网闸在**上面**已经执行过 —— 注入的只是
+  // "怎么连"，不是"能不能连"。
+  const transport =
+    options.transportFactory !== undefined
+      ? options.transportFactory(target)
+      : new StreamableHTTPClientTransport(target);
+  return connectClient(
+    new Client({ name: "wbtime-ai", version: "0.3.0" }, { capabilities: {} }),
+    transport as Parameters<Client["connect"]>[0],
+    options
+  );
 }
 
 /** 连上并包成 `McpClientLike`（连接超时用 `Promise.race`）。 */

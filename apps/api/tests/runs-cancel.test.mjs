@@ -181,10 +181,73 @@ test("B-2 · 取消置进程内 abort 信号（`signalOf(runId).aborted === true
   }
 });
 
+test("B-3 · **在飞 run 的 controller 不因订阅收尾被丢弃** ⇒ 之后 cancel 仍能置位旧 signal（AUD-02）", async () => {
+  const fixture = await makeApp({ username: "can-b3" });
+  try {
+    const { runId } = await seedChain(fixture, { status: "RUNNING" });
+    const coordinator = new RunCoordinator({
+      db: fixture.connection.db,
+      dialect: "sqlite",
+      tenantId: TENANT_ID,
+    });
+
+    // `RunDriver` 在 run 启动时就是这么拿 signal 的（`RunCallContext.signal`）——
+    // 它拿到的引用会活到 run 收尾，**不会**重新获取。
+    const driverHeldSignal = coordinator.signalOf(runId);
+
+    // 订阅收尾（`GET /runs/{id}/events` 的 finally）：run 还没终态 ⇒ 不得丢弃。
+    const forgotten = await coordinator.forgetIfTerminal(runId);
+    assert.equal(forgotten, false, "非终态不得丢弃 controller（controller 生命周期 = run 生命周期）");
+
+    // 客户端取消（POST /runs/{id}/cancel）。
+    await coordinator.cancel(runId);
+
+    // 关键断言：driver 手里那个**旧** signal 必须被置位 —— 否则循环与工具前的
+    // `signal.aborted` 检查全部失效（AUD-02 的缺陷形态）。
+    assert.equal(
+      driverHeldSignal.aborted,
+      true,
+      "取消必须打断 driver 持有的那个 signal（不是本次新建的另一个）"
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("B-4 · 对照：无条件 forget 会丢掉在飞 run 的 signal（这就是 AUD-02 的成因）", async () => {
+  const fixture = await makeApp({ username: "can-b4" });
+  try {
+    const { runId } = await seedChain(fixture, { status: "RUNNING" });
+    const coordinator = new RunCoordinator({
+      db: fixture.connection.db,
+      dialect: "sqlite",
+      tenantId: TENANT_ID,
+    });
+
+    const driverHeldSignal = coordinator.signalOf(runId);
+    // 旧路由的写法：订阅收尾无条件 `forget`。
+    coordinator.forget(runId);
+
+    await coordinator.cancel(runId);
+
+    assert.equal(
+      driverHeldSignal.aborted,
+      false,
+      "旧写法下 driver 持有的 signal 永不置位 —— 这条断言把缺陷形态钉住，" +
+        "防止有人把订阅收尾改回无条件 forget"
+    );
+
+    // 对照：run 的**库态**其实已经是 CANCELLED（取消"看起来生效了"，
+    // 但在飞循环仍在跑）—— 这正是"不可判定"的危害。
+    assert.equal(await coordinator.isTerminal(runId), true, "库态已取消");
+  } finally {
+    await fixture.close();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // C 组 · 认证
 // ---------------------------------------------------------------------------
-
 test("C-1 · 无令牌 cancel ⇒ 401（且不落任何状态变更）", async () => {
   const fixture = await makeApp({ username: "can-c1" });
   try {

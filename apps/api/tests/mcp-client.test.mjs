@@ -180,20 +180,57 @@ test("C-2 · http transport 解析到内网 ⇒ PERMISSION_DENIED（SSRF 复用�
   );
 });
 
-test("C-3 · http transport 白名单 + 公网 IP 字面 ⇒ 过闸后连接失败（不是被闸拒绝）", async () => {
+test("C-3 · http transport 白名单 + 公网 IP 字面 ⇒ 过闸后连接失败（**零 socket 外连**）", async () => {
+  // AUD-14：本用例原先真去连 `https://93.184.216.34/mcp`（example.com 的 IP 字面），
+  // 于是**整条单测依赖外网**：断网环境红得莫名其妙，有网时慢且不可复现。
+  //
+  // ⚠️ 换成 `127.0.0.1` 不可行 —— `checkEgress` 的 `DENY_RANGES` 含 `127.0.0.0/8`，
+  // 回环地址会被出网闸直接拒掉，用例就退化成"被闸拒绝"，恰好把要证的事
+  // （**过闸之后**才失败）证反。
+  //
+  // 所以用 `transportFactory` 注入一个"`start()` 立即抛 ECONNREFUSED"的假 transport：
+  // 出网闸**照旧真跑**（这才是被测语义），只把"真开 socket"替换掉。
+  // 副作用：本用例耗时 < 200ms（无网络往返），可作为"零外连"的佐证。
+  const startedAt = Date.now();
+  let factoryCalls = 0;
+
+  const fakeTransport = (url) => {
+    factoryCalls += 1;
+    assert.equal(url.hostname, "93.184.216.34", "注入的 factory 必须收到被闸放行的那个 URL");
+    return {
+      async start() {
+        const error = new Error("connect ECONNREFUSED 93.184.216.34:443");
+        error.code = "ECONNREFUSED";
+        throw error;
+      },
+      async close() {},
+      async send() {
+        throw new Error("假 transport 不该被 send（连接都没建立）");
+      },
+    };
+  };
+
   await assert.rejects(
     () =>
       discoverTools(
         { name: "remote", transport: "http", endpoint: "https://93.184.216.34/mcp" },
-        { egressAllowlist: ["93.184.216.34"], connectTimeoutMs: 2_000 }
+        { egressAllowlist: ["93.184.216.34"], connectTimeoutMs: 2_000, transportFactory: fakeTransport }
       ),
     (error) => {
-      // 过了出网闸，但真实连接（指向一个没有 MCP server 的地址）会失败：
+      // 过了出网闸，但（假）连接失败：
       // 失败码必须是 INTERNAL_ERROR（连接问题），**不能是** PERMISSION_DENIED。
       assert.ok(error instanceof McpTransportError);
       assert.equal(error.code, "INTERNAL_ERROR");
       return true;
     }
+  );
+
+  // ② 注入缝确实被用到（否则这条用例可能只是"闸拒绝了"的另一种形态）。
+  assert.equal(factoryCalls, 1, "transportFactory 必须被调用恰好一次");
+  // ③ 零 socket 外连的佐证：没有任何网络往返。
+  assert.ok(
+    Date.now() - startedAt < 200,
+    `本用例应远快于一次真实连接（实测 ${Date.now() - startedAt}ms）`
   );
 });
 
