@@ -1,11 +1,11 @@
 /**
  * T2-07 · **OpenAPI 对齐测试**（本任务最关键的一条）。
  *
- * 背景：`packages/contracts` 没有 OpenAPI 的 TS 生成物，19 个 op 的 TypeBox schema
+ * 背景：`packages/contracts` 没有 OpenAPI 的 TS 生成物，26 个 op（身份 19 + Agent 7）的 TypeBox schema
  * 只能手写 ⇒ **天然是第二真相源**。没有这条测试，"手写 schema"等于裸奔：改契约（或改
  * schema）时不会有任何东西红，直到联调时前端才崩。
  *
- * 三组断言（每条都对 19 个 op 逐一执行）：
+ * 三组断言（每条都对全部 op 逐一执行）：
  *  1. **存在性 + operationId 逐字相同**：契约 path+method 的 `operationId` 必须在我的
  *     schema 字典里**原样**存在；反向也成立（我的字典里不许有契约外的 op）。
  *  2. **请求体必填集合相等**：契约 `requestBody` 的 `required` 集合 == 我 schema 里
@@ -13,7 +13,7 @@
  *  3. **响应属性名集合相等**：契约成功响应的属性名（数组响应取 `items`）== 我 schema 的
  *     属性名集合。**多一个键**会污染壳，**少一个键**会让前端拿到 undefined。
  *
- * 另外断言"恰好 19 个" —— 多一条说明加了契约外端点，少一条说明漏实现。
+ * 另外断言"恰好 26 个"（T3-05 起：身份 19 + Agent 7）—— 多一条说明加了契约外端点，少一条说明漏实现。
  */
 
 import assert from "node:assert/strict";
@@ -26,7 +26,7 @@ import { ROOT } from "./routes-harness.mjs";
 
 const SPEC = JSON.parse(readFileSync(join(ROOT, "contracts", "openapi.v1.frozen.json"), "utf8"));
 
-/** 契约里 19 个 op 的 `[method, path, operationId]` 三元组（直接从契约读，不抄表）。 */
+/** 契约里全部 op 的 `[method, path, operationId]` 三元组（直接从契约读，不抄表）。 */
 function contractOperations() {
   const wanted = new Set(OPERATION_IDS);
   const found = [];
@@ -60,10 +60,10 @@ function schemaRequired(schema) {
   return [...(schema?.required ?? [])].sort();
 }
 
-test("恰好 19 个 op（不多不少），且每个 operationId 都能在契约里找到", () => {
-  assert.equal(OPERATION_IDS.length, 19, "本版只做 19 op（§1 表）");
+test("恰好 26 个 op（不多不少），且每个 operationId 都能在契约里找到", () => {
+  assert.equal(OPERATION_IDS.length, 26, "本版做 26 op（身份 19 + Agent 7）");
   const contract = contractOperations();
-  assert.equal(contract.length, 19, `契约里应能对上 19 个 op，实测 ${contract.length}`);
+  assert.equal(contract.length, 26, `契约里应能对上 26 个 op，实测 ${contract.length}`);
 
   const contractIds = new Set(contract.map((item) => item.operationId));
   for (const id of OPERATION_IDS) {
@@ -148,8 +148,8 @@ test("成功响应属性名集合与契约逐条相等（数组响应取 items�
   }
 });
 
-test("19 op 的 operationId 与本任务交付的清单逐字相同（防「顺手改名」）", () => {
-  // 清单来源：01-身份与授权.md §1（19 行）；这里只做"字符串层面没被改过"的守卫。
+test("26 op 的 operationId 与本任务交付的清单逐字相同（防「顺手改名」）", () => {
+  // 清单来源：01-身份与授权.md §1（19 行）+ T3-05 任务卡（7 行）；只做"字符串层面没被改过"的守卫。
   const expected = [
     "register_api_v1_auth_register_post",
     "login_api_v1_auth_login_post",
@@ -170,6 +170,14 @@ test("19 op 的 operationId 与本任务交付的清单逐字相同（防「顺�
     "delete_credential_api_v1_models_credentials__credential_id__delete",
     "bind_credential_api_v1_models_providers__provider_id__credential_post",
     "unbind_credential_api_v1_models_providers__provider_id__credential_delete",
+    // ---- Agent 族（T3-05 · 7 op）----
+    "list_agents_api_v1_agents_get",
+    "create_agent_api_v1_agents_post",
+    "get_agent_api_v1_agents__agent_id__get",
+    "update_agent_api_v1_agents__agent_id__put",
+    "publish_agent_api_v1_agents__agent_id__publish_post",
+    "run_agent_api_v1_agents__agent_id__run_post",
+    "list_versions_api_v1_agents__agent_id__versions_get",
   ];
   assert.deepEqual([...OPERATION_IDS].sort(), [...expected].sort());
 });
