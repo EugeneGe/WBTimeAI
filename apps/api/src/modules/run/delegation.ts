@@ -33,6 +33,7 @@ import {
 import {
   DEPTH_EXCEEDED_REASON,
   MAX_SUBAGENT_DEPTH,
+  RUN_ORIGIN_SUBAGENT,
   RUN_TRIGGER_SUBAGENT,
   pickBudgetStopReason,
   type ModelGatewayPort,
@@ -42,7 +43,7 @@ import { AgentVersioningService } from "../agent/versioning.js";
 import { SafetyGate, type SafetyVerdict } from "../safety/gate.js";
 import { evaluateDelegation } from "../safety/stages/delegation.js";
 import type { SandboxProvider } from "../sandbox/types.js";
-import { RunCoordinator } from "./coordinator.js";
+import { guardRunCreation, RunCoordinator } from "./coordinator.js";
 import { RunDriver } from "./driver.js";
 import { isDepthAllowed } from "./subagent-guard.js";
 import { discoverChildRunIds, finalizeChildCancelled } from "./subagent-cancel.js";
@@ -506,7 +507,43 @@ export async function delegateSpawn(input: DelegateSpawnInput): Promise<Delegate
     return { accepted: false, reason: DEPTH_EXCEEDED_REASON, stage: DELEGATION_STAGE };
   }
 
-  // ---- 3a. A-c · 有网关 ⇒ 用 RunDriver 真驱动子 run（子 run 行由 driver 建）------
+  // ---- 3a. 并发闸（D8/D10）—— **前置**，且全程**只此一次** ----------------------
+  //
+  // 主理人 2026-10-23 裁定 (v)：把判闸从 `spawner.delegate`（建行之后）**前移**到
+  // 两条建行路径**共同的上游**。为什么必须在这里：
+  //   - A-c 路径的子 run 行由 `RunDriver.start` 建（下一步 3b），若判闸留在
+  //     `spawner.delegate` 里，就等于「先建行再判闸」= 后置 ⇒ 高并发下拦不住 ⇒
+  //     **安全语义变化**；
+  //   - 无网关路径的建行仍在 `spawner.delegate` 内，判闸在这里同样先于它；
+  //   - 两条路径**互斥**（有网关走 3b 的 driver、无网关走 3c 的 spawner），
+  //     判闸只有这一次 ⇒ D8③「子 run 场景调用次数恒 1」不破；
+  //   - 拒绝 ⇒ 直接返回，**两条路径都不会走到建行** ⇒ 子 run 行数恒 0（S3-2/D1③）。
+  const guard = await guardRunCreation({
+    db: input.db,
+    dialect,
+    tenantId: input.tenantId,
+    conversationId: input.conversationId,
+    origin: RUN_ORIGIN_SUBAGENT,
+    trigger: RUN_TRIGGER_SUBAGENT,
+  });
+  if (!guard.allowed) {
+    // 防御位（施工记录裁定 4）：origin=SUBAGENT 恒豁免下当前不可达；可达条件 =
+    // T031-04 接线后 origin 误传。保留，不算死代码。
+    const rejectReason: SpawnRejectReason = "CONCURRENCY_LIMIT";
+    await spawner.rejectDelegation(
+      {
+        parentRunId: input.parentRunId,
+        targetAgentId: input.targetAgentId,
+        task: effectiveTask,
+        depth,
+        maxDepth,
+      },
+      { stage: DELEGATION_STAGE, reason: rejectReason }
+    );
+    return { accepted: false, reason: rejectReason, stage: DELEGATION_STAGE };
+  }
+
+  // ---- 3b. A-c · 有网关 ⇒ 用 RunDriver 真驱动子 run（子 run 行由 driver 建）------
   const childStart = await startChildRun(input, effectiveTask, gate, dialect);
   if (input.gateway !== undefined && !childStart.started) {
     // 给了网关却没驱动起来 ⇒ **不得**退回"只建行不执行"（那是静默降级）⇒ 拒绝并落
@@ -525,7 +562,8 @@ export async function delegateSpawn(input: DelegateSpawnInput): Promise<Delegate
     return { accepted: false, reason: childStart.reason, stage: DELEGATION_STAGE };
   }
 
-  // ---- 3b. 并发闸 + 建 run（无网关时）+ 双源写行（origin = SUBAGENT 豁免）-------
+  // ---- 3c. 建 run（无网关时）+ 双源写行 ---------------------------------------
+  // `concurrencyGuard: "skip"`：并发闸已在 3a 前置判过一次，此处不得再判（D8③ 恒 1）。
   const outcome = await spawner.delegate({
     parentRunId: input.parentRunId,
     targetAgentId: input.targetAgentId,
@@ -538,6 +576,7 @@ export async function delegateSpawn(input: DelegateSpawnInput): Promise<Delegate
     budget: toBudgetRecord(input.budget),
     policyVersion: input.parentPolicyVersion,
     rejectionStage: DELEGATION_STAGE,
+    concurrencyGuard: "skip",
   });
   if (!outcome.accepted) {
     return {

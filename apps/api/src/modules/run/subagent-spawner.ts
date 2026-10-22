@@ -313,6 +313,14 @@ export class SubAgentSpawner {
      * 双源写行与观察面）。缺省 ⇒ 本方法自己建（无网关 / 未装配执行链的形态）。
      */
     readonly childRunId?: string;
+    /**
+     * 并发闸（D8/D10）是否**本方法**判。
+     *
+     * 主理人 2026-10-23 裁定 (v)：并发闸**前移**到 `delegation.ts::delegateSpawn`
+     * （两条建行路径的共同上游）⇒ 本方法默认 `"skip"`（不重复判，D8③「恒 1」）。
+     * 缺省 `"enforce"` 只留给**直接调用本方法**的场景兜底 —— 那样仍受闸，不会裸奔。
+     */
+    readonly concurrencyGuard?: "enforce" | "skip";
   }): Promise<
     | { readonly accepted: true; readonly childRunId: string; readonly policyVersion: string }
     | { readonly accepted: false; readonly reason: string; readonly stage?: string }
@@ -345,23 +353,27 @@ export class SubAgentSpawner {
       return { accepted: false, reason: "PARENT_NOT_VISIBLE" };
     }
 
-    const guard = await guardRunCreation({
-      db: this.#db,
-      dialect: this.#dialect,
-      tenantId: this.#scope.tenantId,
-      conversationId: input.conversationId,
-      origin: RUN_ORIGIN_SUBAGENT,
-      trigger: RUN_TRIGGER_SUBAGENT,
-    });
-    if (!guard.allowed) {
-      // 防御位（裁定 4）：可达条件 = T031-04 接线后 origin 误传。
-      await this.#reject(args, {
-        depth: input.depth,
-        maxDepth: input.maxDepth,
-        reason: "CONCURRENCY_LIMIT",
-        stage: input.rejectionStage,
+    // 并发闸（裁定 (v)）：`delegateSpawn` 已在更上游前置判过 ⇒ 此处 **skip**，
+    // 保证一次派生恰好 1 次判闸（D8③）。直接调用本方法且未显式 skip ⇒ 仍判（兜底）。
+    if ((input.concurrencyGuard ?? "enforce") === "enforce") {
+      const guard = await guardRunCreation({
+        db: this.#db,
+        dialect: this.#dialect,
+        tenantId: this.#scope.tenantId,
+        conversationId: input.conversationId,
+        origin: RUN_ORIGIN_SUBAGENT,
+        trigger: RUN_TRIGGER_SUBAGENT,
       });
-      return { accepted: false, reason: "CONCURRENCY_LIMIT", stage: input.rejectionStage };
+      if (!guard.allowed) {
+        // 防御位（裁定 4）：可达条件 = T031-04 接线后 origin 误传。
+        await this.#reject(args, {
+          depth: input.depth,
+          maxDepth: input.maxDepth,
+          reason: "CONCURRENCY_LIMIT",
+          stage: input.rejectionStage,
+        });
+        return { accepted: false, reason: "CONCURRENCY_LIMIT", stage: input.rejectionStage };
+      }
     }
 
     const policyVersion = input.policyVersion ?? SAFETY_POLICY_VERSION;
