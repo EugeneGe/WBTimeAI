@@ -11,8 +11,12 @@ v0019 登记时，`contracts/contract-manifest.json` 被**全量重排**（+3315
 
 六条断言（逐条可断言，任一不满足 ⇒ 红）
 --------------------------------------
-A1 `objects` **恰好 48**（字面量；v0020 起要改这里，必须有人解释为什么）。
-A2 相对基线**新增恰好 7 条**，且每条 path 都含 `v0019`（v0019 五产物 + README + 副本台账）。
+A1 `objects` **恰好 53**（字面量；v0019 登记 48 + V0.3.1 契约增量 5，R-15 回钉 reseal
+   2026-10-23；**再推进本数字必须有人解释为什么** —— 哪个版本的哪次登记、对应判据号）。
+A2 相对基线**新增恰好 12 条**：7 条 path 含 `v0019`（v0019 五产物 + README + 副本台账），
+   5 条为 V0.3.1 契约增量（`channels.delta.json` / `message.delta.keys.txt` /
+   `message.delta.keys.sha256` / `subagent.started.txt` / `subagent.finished.txt`，
+   见 `ADDED_PATH_MARKS`）。
 A3 相对基线**删除 0 条**（v0018 的 41 条一条都不能少 —— 反「重排时顺手删」）。
 A4 其余七个顶层结构的计数 `== {classification_rules 18 / criteria 23 / ddl_objects 245 /
    field_semantics 3 / notices 7 / schema 7 / status_semantics 5}`（全部不变）。
@@ -69,11 +73,22 @@ MANIFEST_REL: Final[str] = "contracts/contract-manifest.json"
 DEFAULT_BASELINE: Final[str] = "c6888b6"
 
 #: A1 —— 绝对计数（字面量）。
-EXPECTED_OBJECTS: Final[int] = 48
+#: v0019 登记 = 48；V0.3.1 · T031-01 契约增量 +5（sse/channels.delta.json +
+#: sse/golden/subagent.started.txt / subagent.finished.txt / message.delta.keys.txt /
+#: message.delta.keys.sha256，R-15 回钉 reseal，2026-10-23）⇒ 53。
+#: **再推进本数字必须有人解释为什么**（哪个版本的哪次登记、对应判据号）。
+EXPECTED_OBJECTS: Final[int] = 53
 
 #: A2/A3 —— 相对基线的增量形状。
-EXPECTED_ADDED: Final[int] = 7
-ADDED_PATH_MARK: Final[str] = "v0019"
+#: v0019 登记 +7（路径含 v0019）；V0.3.1 契约增量 +5（路径含下述四个标记之一）。
+EXPECTED_ADDED: Final[int] = 12
+ADDED_PATH_MARKS: Final[tuple[str, ...]] = (
+    "v0019",
+    "channels.delta.json",
+    "message.delta.keys",
+    "subagent.started",
+    "subagent.finished",
+)
 
 #: A4 —— 其余七个顶层结构的计数（全部不变）。
 EXPECTED_TOP_COUNTS: Final[dict[str, int]] = {
@@ -157,13 +172,13 @@ def check(document: dict[str, Any], baseline: dict[str, Any]) -> Report:
         duplicated = sorted({p for p in current_paths if current_paths.count(p) > 1})
         rep.red("object.duplicate", "objects", "no duplicates", duplicated[:10])
 
-    # A2 新增条数与命名
+    # A2 新增条数与命名（V0.3.1 起：标记为**多值**，见 ADDED_PATH_MARKS）
     added = sorted(current_set - baseline_set)
     if len(added) != EXPECTED_ADDED:
         rep.red("count.added", "objects", EXPECTED_ADDED, len(added))
     for path in added:
-        if ADDED_PATH_MARK not in path:
-            rep.red("object.added-not-v0019", path, f"path 含 {ADDED_PATH_MARK}", path)
+        if not any(mark in path for mark in ADDED_PATH_MARKS):
+            rep.red("object.added-unknown-mark", path, f"path 含 {ADDED_PATH_MARKS} 之一", path)
 
     # A3 删除必须为 0
     for path in sorted(baseline_set - current_set):
@@ -249,7 +264,7 @@ def run_self_test(manifest_path: Path, baseline: dict[str, Any]) -> int:
             "requirement": "selftest",
         }
     )
-    cases.append(("case2 加 1 条非 v0019 object", extra, "object.added-not-v0019"))
+    cases.append(("case2 加 1 条无登记标记 object（V0.3.1 起标记多值，仍必须红）", extra, "object.added-unknown-mark"))
 
     drop_notice = copy.deepcopy(document)
     drop_notice["notices"] = drop_notice["notices"][:-1]

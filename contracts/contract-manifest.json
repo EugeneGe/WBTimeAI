@@ -3086,6 +3086,14 @@
     },
     {
       "dialect_only": null,
+      "generated_by": null,
+      "path": "sse/channels.delta.json",
+      "requirement": "V0.3.1 契约增量登记台账（T031-01：父流追加 2 帧，恰 2 项）",
+      "sha256": "4aba35f9e089e9c9651edca4ac8e30c057e9a8f46eb785532c3fe7016f7405a3",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
       "generated_by": "scripts/extract-from-py/export_sse.py",
       "path": "sse/channels.json",
       "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
@@ -3182,6 +3190,22 @@
     },
     {
       "dialect_only": null,
+      "generated_by": null,
+      "path": "sse/golden/message.delta.keys.sha256",
+      "requirement": "V0.3.1 U4/G031-5 判据③ 冻结件（payload 键名:类型集合 sha manifest）",
+      "sha256": "94136926ef6d4f45bba9da0d192796bfb3720961ed0352441acf3ddb94347dd4",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": null,
+      "path": "sse/golden/message.delta.keys.txt",
+      "requirement": "V0.3.1 U4/G031-5 判据③ 被校验对象（键名:类型序列化本体）",
+      "sha256": "51a78dc60c5bb33ce5f049b206407db1cd439b336b0c6c97e4619b257e4949c1",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
       "generated_by": "scripts/extract-from-py/export_sse.py",
       "path": "sse/golden/message.delta.txt",
       "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
@@ -3194,6 +3218,22 @@
       "path": "sse/golden/skill.resolved.txt",
       "requirement": "V0.0.1/DoD#4 SSE 19 帧逐字节",
       "sha256": "7c54b75f560468d722409d92b9d19fe75fb9299b7c1ab33ffba8ca4a6bf19838",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": null,
+      "path": "sse/golden/subagent.finished.txt",
+      "requirement": "V0.3.1 delta 帧 golden（subagent.finished，编码产物形态逐字节冻结）",
+      "sha256": "37a0cb0df85795b96cc8cdc6c2533343240bbe7b459466d2496b9a2e5a2d28b6",
+      "source": "manual"
+    },
+    {
+      "dialect_only": null,
+      "generated_by": null,
+      "path": "sse/golden/subagent.started.txt",
+      "requirement": "V0.3.1 delta 帧 golden（subagent.started，编码产物形态逐字节冻结）",
+      "sha256": "78c1d4287c9b64f5474d34b0babe384d82759ad00d5794cf35e718cbd2749d1e",
       "source": "manual"
     },
     {
@@ -3306,7 +3346,7 @@
     "frozen_contract": "V0.0.1 / C-07",
     "generated_by": "scripts/extract-from-py/contract_manifest.py",
     "name": "wbtime-ai contract manifest",
-    "object_count": 48,
+    "object_count": 53,
     "version": 1
   },
   "status_semantics": {
