@@ -12,10 +12,13 @@
 //
 // 为什么落在这里（`apps/api/tests/`）而**不是** `packages/db`
 // -------------------------------------------------------
-// 依赖方向是 db → domain **没有**这条边，反过来也不该有：db 不 import domain（否则
-// 数据层被域层绑死），domain 更不能 import db（域层零 ORM 是铁律 R1）。只有
-// `apps/api` 同时依赖两者（`package.json` 的 dependencies 里 `@wbtime/db` 与
-// `@wbtime/domain` 都在）—— 所以一致性断言只能落在这一层，且**不制造**新的依赖边。
+// 依赖方向：domain 不能 import db（域层零 ORM 是铁律 R1）；db → domain 这条边在
+// V0.3.0 前**不存在**，自 T3-05 起按**裁决 #1（2026-10-22）对 agent 族开放**：
+// `agent-repo` 改 import `@wbtime/domain` 的 agent 词表/状态机（删本地复述，db 的
+// `package.json` 已带 `@wbtime/domain` workspace 依赖）——**其余族（run / tool_call
+// 等）仍禁**，不得以此为口子扩散。只有 `apps/api` 同时依赖两者（`package.json` 的
+// dependencies 里 `@wbtime/db` 与 `@wbtime/domain` 都在）—— 所以一致性断言只能落在
+// 这一层，且**不制造**新的依赖边（本文件对照的 run/tool_call 族仍取两侧各自真相源）。
 //
 // 名字不同**不是**笔误：db 侧叫 `AGENT_RUN_STATUSES`（避免与 agent 的其它状态混淆），
 // domain 侧叫 `RUN_STATUSES`（域层只有"run"一个概念）。这里用别名映射，不做重命名 ——
