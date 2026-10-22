@@ -126,10 +126,10 @@ test("J-10 反面：204 失败时仍是四键错误壳（不是空体）", async
   await fixture.close();
 });
 
-test("路由清单守恒：`/healthz` + 33 op（身份 19 + Agent 7 + Skill 7），一条不多一条不少", async () => {
+test("路由清单守恒：`/healthz` + 38 op（身份 19 + Agent 7 + Skill 7 + Conversation 5），一条不多一条不少", async () => {
   const fixture = await makeApp({ username: "inventory" });
 
-  // ① **正向**：33 个 op 的 (method, path) 逐条存在（T3-06 起：身份 19 + Agent 7 + Skill 7）
+  // ① **正向**：38 个 op 的 (method, path) 逐条存在（T3-07 起：身份 19 + Agent 7 + Skill 7 + Conversation 5）
   //    （`hasRoute` 是 Fastify 的公开 API，比解析打印树可靠）。参数位写成 Fastify 的 `:param` 形式。
   const expected = [
     ["POST", "/api/v1/auth/register"],
@@ -167,14 +167,20 @@ test("路由清单守恒：`/healthz` + 33 op（身份 19 + Agent 7 + Skill 7）
     ["POST", "/api/v1/skills/:skill_id/publish"],
     ["GET", "/api/v1/skills/:skill_id/versions"],
     ["POST", "/api/v1/skills/:skill_id/versions"],
+    // ---- Conversation 族（T3-07 · 5 op）----
+    ["GET", "/api/v1/conversations"],
+    ["POST", "/api/v1/conversations"],
+    ["GET", "/api/v1/conversations/:conversation_id"],
+    ["PUT", "/api/v1/conversations/:conversation_id"],
+    ["GET", "/api/v1/conversations/:conversation_id/messages"],
   ];
-  assert.equal(expected.length, 33);
+  assert.equal(expected.length, 38);
   for (const [method, url] of expected) {
     assert.equal(fixture.app.hasRoute({ method, url }), true, `缺少路由 ${method} ${url}`);
   }
   assert.equal(fixture.app.hasRoute({ method: "GET", url: "/healthz" }), true);
 
-  // ② **反向**：注册的**方法总数**恰为 34（33 op + healthz）。
+  // ② **反向**：注册的**方法总数**恰为 39（38 op + healthz）。
   //    为什么不逐条比对打印树：`printRoutes` 输出的是前缀树，参数段只是 `/:id` 子行，
   //    重建完整路径要靠缩进猜层数 —— 那种解析本身就会成为新的脆弱点。
   //    Fastify 默认 `exposeHeadRoutes: true`，GET 会隐含一个 HEAD，故统计时排除 HEAD。
@@ -188,7 +194,7 @@ test("路由清单守恒：`/healthz` + 33 op（身份 19 + Agent 7 + Skill 7）
       .map((item) => item.trim())
       .filter((item) => item !== "" && item !== "HEAD").length;
   }
-  assert.equal(methodCount, 34, `注册的方法总数应为 34（33 op + /healthz），实测 ${methodCount}`);
+  assert.equal(methodCount, 39, `注册的方法总数应为 39（38 op + /healthz），实测 ${methodCount}`);
 
   // ③ 契约外路由族一个都不许有（U-3 / R-26 已裁定不纳入）
   for (const [method, url] of [

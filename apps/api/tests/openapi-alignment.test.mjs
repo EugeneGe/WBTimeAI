@@ -1,7 +1,7 @@
 /**
  * T2-07 · **OpenAPI 对齐测试**（本任务最关键的一条）。
  *
- * 背景：`packages/contracts` 没有 OpenAPI 的 TS 生成物，33 个 op（身份 19 + Agent 7 + Skill 7）的 TypeBox schema
+ * 背景：`packages/contracts` 没有 OpenAPI 的 TS 生成物，38 个 op（身份 19 + Agent 7 + Skill 7 + Conversation 5）的 TypeBox schema
  * 只能手写 ⇒ **天然是第二真相源**。没有这条测试，"手写 schema"等于裸奔：改契约（或改
  * schema）时不会有任何东西红，直到联调时前端才崩。
  *
@@ -13,7 +13,7 @@
  *  3. **响应属性名集合相等**：契约成功响应的属性名（数组响应取 `items`）== 我 schema 的
  *     属性名集合。**多一个键**会污染壳，**少一个键**会让前端拿到 undefined。
  *
- * 另外断言"恰好 33 个"（T3-06 起：身份 19 + Agent 7 + Skill 7）—— 多一条说明加了契约外端点，少一条说明漏实现。
+ * 另外断言"恰好 38 个"（T3-07 起：身份 19 + Agent 7 + Skill 7 + Conversation 5）—— 多一条说明加了契约外端点，少一条说明漏实现。
  */
 
 import assert from "node:assert/strict";
@@ -60,10 +60,10 @@ function schemaRequired(schema) {
   return [...(schema?.required ?? [])].sort();
 }
 
-test("恰好 33 个 op（不多不少），且每个 operationId 都能在契约里找到", () => {
-  assert.equal(OPERATION_IDS.length, 33, "本版做 33 op（身份 19 + Agent 7 + Skill 7）");
+test("恰好 38 个 op（不多不少），且每个 operationId 都能在契约里找到", () => {
+  assert.equal(OPERATION_IDS.length, 38, "本版做 38 op（身份 19 + Agent 7 + Skill 7 + Conversation 5）");
   const contract = contractOperations();
-  assert.equal(contract.length, 33, `契约里应能对上 33 个 op，实测 ${contract.length}`);
+  assert.equal(contract.length, 38, `契约里应能对上 38 个 op，实测 ${contract.length}`);
 
   const contractIds = new Set(contract.map((item) => item.operationId));
   for (const id of OPERATION_IDS) {
@@ -148,8 +148,9 @@ test("成功响应属性名集合与契约逐条相等（数组响应取 items�
   }
 });
 
-test("33 op 的 operationId 与本任务交付的清单逐字相同（防「顺手改名」）", () => {
-  // 清单来源：01-身份与授权.md §1（19 行）+ T3-05 任务卡（7 行）+ T3-06 任务卡（7 行）；
+test("38 op 的 operationId 与本任务交付的清单逐字相同（防「顺手改名」）", () => {
+  // 清单来源：01-身份与授权.md §1（19 行）+ T3-05 任务卡（7 行）+ T3-06 任务卡（7 行）
+  //           + T3-07 任务卡（5 行）；
   // 只做"字符串层面没被改过"的守卫。
   const expected = [
     "register_api_v1_auth_register_post",
@@ -187,6 +188,12 @@ test("33 op 的 operationId 与本任务交付的清单逐字相同（防「顺�
     "publish_skill_version_api_v1_skills__skill_id__publish_post",
     "list_skill_versions_api_v1_skills__skill_id__versions_get",
     "create_skill_version_api_v1_skills__skill_id__versions_post",
+    // ---- Conversation 族（T3-07 · 5 op）----
+    "list_conversations_api_v1_conversations_get",
+    "create_conversation_api_v1_conversations_post",
+    "get_conversation_api_v1_conversations__conversation_id__get",
+    "update_conversation_api_v1_conversations__conversation_id__put",
+    "list_messages_api_v1_conversations__conversation_id__messages_get",
   ];
   assert.deepEqual([...OPERATION_IDS].sort(), [...expected].sort());
 });
