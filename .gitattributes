@@ -22,6 +22,19 @@
 *.md      text eol=lf
 *.txt     text eol=lf
 *.csv     text eol=lf
+# ---- TS/JS 源码（V0.3.0 · T3-14 行尾治理）：统一 LF ----
+# 为什么必须补：本仓 `core.autocrlf=false`，而上面那批规则只覆盖
+# py/sh/yml/yaml/json/md/txt/csv ⇒ `*.ts` / `*.mjs` 的行尾**完全由写入工具决定**
+# （Windows 侧任何编辑器/python `open('w')` 都会写 CRLF），于是"只改注释"的提交
+# 会变成整文件重写（实例：`2d729d1` 的 `+549 −540`），极端情况会把 shebang 污染成
+# `#!/usr/bin/env node\r` ⇒ POSIX 下脚本起不来（实例：`aa54219`）。
+# ⚠️ 位置约束：这 4 条**必须**在下面 `contracts/** -text -eol` 等三条冻结面规则
+#    **之前** —— git 以「最后匹配的规则」为准，冻结面必须保持在后，否则
+#    `gate:fdiff`（apps/web/src 的 243 文件逐字节）与 contracts 的 sha256 校验会崩。
+*.ts      text eol=lf
+*.tsx     text eol=lf
+*.mjs     text eol=lf
+*.js      text eol=lf
 
 # ---- 冻结面：禁止任何行尾转换 ----
 # ⚠️ 必须放在所有通用规则**之后**：git 以「最后匹配的规则」为准，
