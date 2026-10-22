@@ -516,16 +516,19 @@ test("D-1 · 幂等（验收 ④）：同一 run_id 重复提交 assistant 消�
     await seedRun(fixture, agent, created.id);
 
     const service = new ConversationService({ db: fixture.connection.db, dialect: "sqlite" });
+
+    // ★ 口径④ 的**可直调入口**：`appendAssistantMessage(tenantId, input)`（QA / T3-08 用同一个）。
+    //   入参是纯值对象（`AppendAssistantMessageInput`），**不含任何 HTTP 请求/回复对象** ——
+    //   T3-08 的 RunEventWriter 直接构造即可，不需要经过 Fastify。
     const payload = {
       conversation_id: created.id,
-      role: "assistant",
-      content: "你好，我是助手",
       run_id: RUN_ID,
+      content: "你好，我是助手",
     };
 
-    const first = await service.appendMessage(TENANT_ID, payload);
-    const second = await service.appendMessage(TENANT_ID, payload);
-    const third = await service.appendMessage(TENANT_ID, { ...payload, content: "换一段文本" });
+    const first = await service.appendAssistantMessage(TENANT_ID, payload);
+    const second = await service.appendAssistantMessage(TENANT_ID, payload);
+    const third = await service.appendAssistantMessage(TENANT_ID, { ...payload, content: "换一段文本" });
 
     assert.equal(first.created, true, "首次必须真的插入");
     assert.equal(second.created, false, "第二次命中幂等键 ⇒ 不插入");
@@ -536,12 +539,18 @@ test("D-1 · 幂等（验收 ④）：同一 run_id 重复提交 assistant 消�
 
     // 幂等键的边界（文档化）：换个 run_id ⇒ 新行；role=user 同 run ⇒ 新行（幂等只覆盖 assistant）
     const otherRun = await service.appendMessage(TENANT_ID, {
-      ...payload,
+      conversation_id: created.id,
+      role: "assistant",
       run_id: null,
       content: "无 run 的助手回执",
     });
     assert.equal(otherRun.created, true, "run_id 为空 ⇒ 无幂等键 ⇒ 正常追加");
-    const userSameRun = await service.appendMessage(TENANT_ID, { ...payload, role: "user", content: "我的手打" });
+    const userSameRun = await service.appendMessage(TENANT_ID, {
+      conversation_id: created.id,
+      role: "user",
+      run_id: RUN_ID,
+      content: "我的手打",
+    });
     assert.equal(userSameRun.created, true, "user 消息不参与 assistant 幂等（同一 run 的用户输入必须能落）");
     assert.equal(countMessages(fixture, created.id), 3);
 

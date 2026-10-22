@@ -43,11 +43,14 @@
  * 但「无分页参数」不等于「次序可以不确定」。验收 ③ 要求**同 `created_at` 用 `id`
  * 作次序键**，否则同一批消息两次调用可能给出不同次序（分页一旦引入就丢行/重行）。
  * `message` 的 `created_at` 是 `DEFAULT CURRENT_TIMESTAMP`（**秒粒度**）⇒ 同秒写入
- * 天然并列；而在 `packages/db` 的 `ChildScopedRepo.findManyWhere` 里只支持**单**排序键
- * （无第二键、无 offset，且该文件属 T3-03 冻结面、本卡不碰），因此次序键由本服务在
- * 内存里补齐：`(created_at, id)` 全序 —— 它是**数据的函数**，与 rowid / 堆序无关。
+ * 天然并列。该次序键落在**仓储层**：`MessageRepo.#findOrdered` 自 T3-07 起自己拼
+ * `orderBy(asc(created_at), asc(id))`（与 `ConversationRepo.#findOrdered` 同款先例，
+ * py `message_repository.py:79` 逐字一致）。**本服务不重排** —— 理由见
+ * {@link ConversationService.listMessages} 的「为什么把次序键放在仓储」两条：
+ * 排序键必须与 `LIMIT` 同层生效，否则截断出来的集合就不是"序的前 N 条"。
  * 复跑命令（红/绿都看这一条）：
  *   `cd apps/api && node --experimental-sqlite --test tests/routes-conversations.test.mjs`
+ *   `cd packages/db && node --experimental-sqlite --test tests/message-order.test.mjs`
  */
 
 import { randomUUID } from "node:crypto";
@@ -122,6 +125,27 @@ export interface AppendConversationMessageInput {
   readonly token_count?: number | null;
   /** 产生这条消息的 run；用户手打的输入没有 run ⇒ `null`。 */
   readonly run_id?: string | null;
+}
+
+/**
+ * **assistant 回执写入**的入参（{@link ConversationService.appendAssistantMessage}）。
+ *
+ * 单独一个类型而不是复用 {@link AppendConversationMessageInput} 的原因：这是给
+ * **T3-08 `RunEventWriter`** 用的**跨模块契约**——把 `role`（恒 assistant）与
+ * `run_id`（幂等键，必填）从"可选"提升为"结构上必然"，调用方不用看文档就知道
+ * 该给什么。**不含任何 HTTP 请求/回复对象**：入参是纯值对象，服务层不依赖 fastify。
+ */
+export interface AppendAssistantMessageInput {
+  /** 目标会话（必须在本租户 scope 内可见，否则 404）。 */
+  readonly conversation_id: string;
+  /** 产生这条回执的 run（**幂等键的一部分，必填**；run 必须在本 scope 内可见）。 */
+  readonly run_id: string;
+  /** 回执全文。 */
+  readonly content: string;
+  /** 结构化分片（多模态 / 工具片段）；不传 ⇒ `null`（读出时回落 `[]`）。 */
+  readonly content_parts?: unknown;
+  /** token 计数；未知 ⇒ 不传（**不是** 0 —— "未统计"与"统计为 0"必须可分）。 */
+  readonly token_count?: number | null;
 }
 
 /** {@link ConversationService.appendMessage} 的产物。 */
@@ -245,11 +269,16 @@ export class ConversationService {
   /**
    * 列出某会话的消息（`GET /conversations/{id}/messages`：按创建顺序）。
    *
-   * 次序 = `(created_at asc, id asc)`（验收 ③）：
-   *   - `created_at` 是主键位 —— 对话次序即时间次序；
-   *   - `id` 是**并列时的次序键**：同一秒写入的消息 `created_at` 完全相同，只按它排序时
-   *     先后由 rowid / 堆序决定（一次 `UPDATE` 就能换一种顺序）⇒ 分页会静默丢行/重行。
-   *     补 `id` 后次序成为数据的函数，两次调用逐字一致（用例 C-2 钉住）。
+   * 次序 = `(created_at asc, id asc)`（验收 ③），**由仓储给出、本层不重排**：
+   * `MessageRepo.list` 自 T3-07 起自己拼 `orderBy(created_at, id)`（与
+   * `ConversationRepo.#findOrdered` 同款先例），py oracle 逐字一致
+   * （`message_repository.py:79` 的 `order_by(created_at.asc(), id.asc())`）。
+   *
+   * 为什么把次序键放在**仓储**而不是这里：
+   *   1. 排序键必须与 `LIMIT` 在同一层生效。只在本层重排时，DB 先按**单键**序截断
+   *      （`limit` 命中上限那一格），返回的**集合**就已不是 `(created_at, id)` 序的前 N 条
+   *      —— 重排只能改顺序，改不了"取哪几条"，分页丢行/重行照样发生；
+   *   2. 单一真相源：`appendMessage` 的幂等查询走同一个 `listByRun`，两处不能有两套序。
    *
    * @throws {HttpException} 会话不可见 ⇒ 404（先判，再读消息 —— 与 py 同序）。
    */
@@ -263,7 +292,7 @@ export class ConversationService {
       descending: false,
       limit: CONVERSATION_MESSAGES_LIST_LIMIT,
     });
-    return [...rows].sort(compareMessages).map(toMessageView);
+    return rows.map(toMessageView);
   }
 
   /**
@@ -277,10 +306,21 @@ export class ConversationService {
    *      按 `run_id` 查既有消息；命中 assistant 行 ⇒ 直接返回该行（`created=false`），
    *      不再插入。`run_id` 为空（用户手打输入）不参与幂等 —— 没有幂等键就没有幂等语义。
    *
-   * 幂等是**应用层**护栏（双档 DDL 对 `(conversation_id, run_id, role)` 无唯一索引，
-   * 零 DDL 红线 ⇒ 不能加）。读-写之间存在并发窗口：同 `run_id` 的两次**并发**写入
-   * 仍可能各插一行 —— 登记为遗留（本版写入方是单写者的 run 执行路径，T3-08 接线时
-   * 以 run 级串行保证；py 侧连幂等都无）。
+   * ⚠️ **前提写清楚（不要读成"绝不会有两行"）**
+   * ------------------------------------------------------------------
+   * 幂等**只有应用层这一道**，**没有** DB 唯一约束兜底 —— 实测：
+   * `packages/db/src/schema/model.ts:895-896` 里 `message` 只有两条**非唯一**索引
+   * （`ix_message_conversation_id` / `ix_message_run_id`），全表**没有**
+   * `(conversation_id, run_id, role)` 唯一约束；零 DDL 红线 ⇒ 本卡也不能加。
+   *
+   * 所以成立的前提是**上游单写者**：同一 `run` 同一时刻只有一个 writer
+   * （T3-08 的 run 执行路径由 run-level lease / 串行保证）。在该前提下，
+   * "先查后写"是充分的；**并发**下不是 —— 读-写窗口里两次调用可以各插一行。
+   * 这不是推测，可复跑（并发两次 appendMessage ⇒ 实测 2 行的探针命令见施工记录 §5.4）；
+   * 因此本方法**不**声称并发安全，只声称**同一 run 的重复提交（串行）幂等**。
+   *
+   * py 侧完全没有幂等（`append_message` 每次都插），本能力是卡面验收 ④ 的要求，
+   * 登记为偏差（见施工记录 §6-#2）。
    *
    * @throws {HttpException} 父会话不可见 ⇒ 404 `NOT_FOUND`。
    */
@@ -314,6 +354,38 @@ export class ConversationService {
     return { message: toMessageView(created), created: true };
   }
 
+  /**
+   * 追加一条 **assistant 回执**（T3-08 `RunEventWriter` 的写入口；幂等）。
+   *
+   * 这是 {@link ConversationService.appendMessage} 的**窄签名门面**：`role` 固定为
+   * `assistant`、`run_id` 必填（幂等键），其余逐字转交 —— **委托**，不复制一份幂等逻辑
+   * （两处实现必然漂移）。幂等语义与前提见 {@link ConversationService.appendMessage}
+   * 的「前提写清楚」段：本层无 DB 唯一约束兜底，成立前提是**同一 run 单写者**。
+   *
+   * 用法（T3-08，纯值对象、不绑 HTTP）：
+   * ```ts
+   * const { message, created } = await conversations.appendAssistantMessage(tenantId, {
+   *   conversation_id, run_id, content: text, token_count: usage.outputTokens,
+   * });
+   * ```
+   *
+   * @returns `created=false` ⇒ 该 run 的回执**已经写过**，返回的是既有行（不重复入库）。
+   * @throws {HttpException} 会话不可见（不存在 / 跨租户）⇒ 404 `NOT_FOUND`。
+   */
+  appendAssistantMessage(
+    tenantId: string,
+    input: AppendAssistantMessageInput,
+  ): Promise<AppendConversationMessageResult> {
+    return this.appendMessage(tenantId, {
+      conversation_id: input.conversation_id,
+      role: "assistant",
+      content: input.content,
+      run_id: input.run_id,
+      ...(input.content_parts === undefined ? {} : { content_parts: input.content_parts }),
+      ...(input.token_count === undefined ? {} : { token_count: input.token_count }),
+    });
+  }
+
   /** scope 内取会话行；不可见 ⇒ 404（**唯一的 404 出口**，5 op 与写路径共用）。 */
   async #visible(tenantId: string, conversationId: string): Promise<ConversationRow> {
     const row = await this.#repo(tenantId).findById(new Scope(tenantId).ref(conversationId));
@@ -335,21 +407,6 @@ export class ConversationService {
 /** 会话不可见的统一错误（404 —— I-1 口径；py 文案同「会话不存在」）。 */
 function notFound(conversationId: string): Error {
   return authError(ERROR_CODES.NOT_FOUND, "会话不存在", { conversation_id: conversationId });
-}
-
-/**
- * 消息的**全序**比较：`(created_at asc, id asc)`。
- *
- * 时间先经 `toIsoOrNull` 规整再比 —— PG 档给 `Date`、SQLite 档给 `YYYY-MM-DD HH:MM:SS`
- * 文本，直接比原值会拿两种不可比的形状做 `<` 运算（`Date < string` 的隐式转换结果
- * 取决于字符串能否被解析，是个哑失败源）。
- */
-function compareMessages(left: MessageRow, right: MessageRow): number {
-  const leftAt = toIsoOrNull(left.created_at) ?? "";
-  const rightAt = toIsoOrNull(right.created_at) ?? "";
-  if (leftAt !== rightAt) return leftAt < rightAt ? -1 : 1;
-  if (left.id === right.id) return 0;
-  return left.id < right.id ? -1 : 1;
 }
 
 /** 行 → 契约视图（键集合逐字对齐 `ConversationResponse`：9 键）。 */
