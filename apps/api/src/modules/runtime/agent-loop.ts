@@ -413,9 +413,18 @@ export class AgentLoop {
    * 两个上限在这里生效：
    *   - **`maxToolCallsPerTurn`**：超出部分**不执行**（`skippedCount`），
    *     由第 9 步的停止判定收尾 —— 不是"多执行几个然后再说"。
-   *   - **拒绝/未知**的意图不送执行器，但**仍然生成 tool result**（拒绝型 observation），
-   *     否则模型永远等不到这几条结果的回音（Harness §3 第 6 步："拒绝 → 生成拒绝型
-   *     tool result（不抛异常）"）。
+   *   - **拒绝型 observation 只覆盖第 6 步的 `authorization.denied`（授权驳回）**：
+   *     那类意图已通过第 5 步校验、属"已接受"，只是不被授权 —— Harness §3 第 6 步
+   *     要求给它一条拒绝型 tool result（不抛异常），本节按 `authorization.denied` 生成。
+   *   - **`intents.rejected`（第 5 步校验驳回：未知工具 / 入参不是对象 / 同轮 id 重复）
+   *     不产生 tool result**：它们没通过校验、**不属"已接受"**。规范依据是
+   *     Harness §3 第 6 步与不变量 2 约束的「每个**已接受的** tool call 恰有一条终态」
+   *     —— 未接受的意图不在该约束的主语里（主理人 2026-10-22 裁定，见 T3-14 记录 §9）。
+   *     ⚠️ 已知后果：真实 Provider 下模型收不到这几条的回音，会重复请求同一工具直到
+   *     预算耗尽。补拒绝型 observation **必须与 `toolCalls` 回填同波**：
+   *     `context-builder.ts::toModelMessage` 现在只映射 `role` + `content`（`toolCalls`
+   *     不回填，T3-09 已登记的 V0.4.0 遗留）⇒ 只补 observation 而不回填，回填后立刻
+   *     会撞 provider 的 tool_call ↔ tool_result 配对校验。
    */
   async #executeAll(
     context: RunCallContext,

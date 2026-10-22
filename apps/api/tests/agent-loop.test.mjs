@@ -165,7 +165,7 @@ test("A-2 · GeneralHarness：有工具 ⇒ continue；无工具 ⇒ stop(model_
   assert.equal(noTools.terminalStatus, "SUCCEEDED");
 });
 
-test("A-3 · 未知工具：不执行，但仍生成**拒绝型 observation**（模型不能等空）", async () => {
+test("A-3 · 未知工具：不执行 ⇒ **无 tool 行**（第 5 步校验驳回不属「已接受」）", async () => {
   const gateway = fakeGateway([
     [
       { type: "text_delta", text: "试试" },
@@ -188,7 +188,10 @@ test("A-3 · 未知工具：不执行，但仍生成**拒绝型 observation**（
   assert.equal(validation.payload.rejected.length, 1);
   assert.match(validation.payload.rejected[0].reason, /未知工具/);
 
-  // 拒绝型结果仍然落库（role=tool），否则模型永远等不到回音
+  // 第 5 步（validate intents）驳回的意图**不产生** tool result：它没通过校验、
+  // 不属「已接受」，而 Harness §3 / 不变量 2 约束的是「每个**已接受的** tool call 恰有
+  // 一条终态」（主理人 2026-10-22 裁定）。拒绝型 observation 只在第 6 步授权驳回
+  // （`authorization.denied`）时生成 —— 那条由 `agent-loop.test.mjs` 的 A-2 覆盖。
   const toolMessages = store.rows.filter((row) => row.role === "tool");
   assert.equal(toolMessages.length, 0, "未知工具不产生 tool 行（因为它连 intent 都没通过）");
 });
