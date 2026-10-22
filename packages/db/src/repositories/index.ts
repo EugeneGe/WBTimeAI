@@ -184,3 +184,27 @@ export {
   type CreateApprovalInput,
   type DecideApprovalInput,
 } from "./approval-repo.js";
+
+// ---------------------------------------------------------------------------
+// B2 · Skill 族（`skill` 有 tenant_id ⇒ ScopedRepo；`skill_version` 无 tenant_id
+//  ⇒ 不单独建类，由 SkillRepo 一并管理（同裁定 ③ 的 `tool_version` 风格））
+// ---------------------------------------------------------------------------
+
+export {
+  SkillRepo,
+  SKILL_STATUSES,
+  SKILL_STATUS_ACTIVE,
+  SKILL_STATUS_ARCHIVED,
+  SKILL_STATUS_DRAFT,
+  SKILL_VERSION_STATUSES,
+  SKILL_VERSION_STATUS_DRAFT,
+  SKILL_VERSION_STATUS_PUBLISHED,
+  isSkillStatus,
+  isSkillVersionStatus,
+  type CreateSkillInput,
+  type CreateSkillVersionInput,
+  type SkillRow,
+  type SkillVersionListOptions,
+  type SkillVersionRow,
+  type UpdateSkillMetadataPatch,
+} from "./skill-repo.js";
