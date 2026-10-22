@@ -232,6 +232,92 @@ test("父谓词恒在：message.listByRun 不越出会话域（同租户两会�
   );
 });
 
+test("首次使用：**父存在但属于另一租户** ⇒ 读写两条路径都抛 ScopeError，且一行都不许漏进去", async (t) => {
+  const { connection, db, scopeA } = seed();
+
+  /** convB（**租户 B** 的会话）名下现有多少条消息 —— 实测，不硬写。 */
+  const countConvB = () =>
+    Number(
+      connection.raw
+        .prepare("select count(*) as n from message where conversation_id = ?")
+        .get(IDS.convB).n,
+    );
+
+  const BEFORE = countConvB();
+  assert.equal(BEFORE, 0, "夹具前提：convB 名下初始没有消息（若 seedParents 变了，改这里而不是改下面的期望）");
+
+  // ---------------------------------------------------------------------
+  // 攻击形态：**A 铸造 ref、id 指向 B 的行**
+  // ---------------------------------------------------------------------
+  // `Scope#ref(id)` 接受**任意**字符串，只把 tenantId 盖成本 scope 的。所以
+  // `owns()` 证明的是「这个 ref 由本 scope 铸造」（mint provenance），
+  // **不是**「这个 id 的行属于本租户」（row ownership）。两者都能被下面这个 ref 满足。
+  const forged = scopeA.ref(IDS.convB);
+  assert.ok(scopeA.owns(forged), "owns() 只校验铸造来源 —— 这一格它恒放行，不是安全边界");
+
+  // 构造**必须放行**：把 gate ③ 的表达边界钉死。指望 `owns()` 挡住跨租户父是错的。
+  const repo = new MessageRepo(db, scopeA, forged, DIALECT);
+
+  // ---------------------------------------------------------------------
+  // 两条路径都要探，且**不能用 assert.rejects 前置**：若 append 真的写成功了，
+  // assert.rejects 会先抛，后面的行数断言根本执行不到，证据就丢了。
+  // 这里把三处观测都收集起来，最后一次断言 —— 漏写 / 漏读 / 漏行 三项证据同时可见。
+  // ---------------------------------------------------------------------
+  /** 执行 thunk 并把「抛了什么」变成数据，不让异常打断后续观测。 */
+  const probe = async (thunk) => {
+    try {
+      await thunk();
+      return { threw: false, error: undefined, value: undefined };
+    } catch (error) {
+      return { threw: true, error, value: undefined };
+    }
+  };
+
+  const write = await probe(() => repo.append({ role: "user", content: "LEAK-W" }));
+  const read = await probe(() => repo.list());
+  const AFTER = countConvB();
+
+  /** 「父在本 scope 下不可见」的原文判据（与基类 `#checkParent` 的文案同锚）。 */
+  const isParentInvisible = (outcome) =>
+    outcome.threw &&
+    outcome.error instanceof ScopeError &&
+    /父 conversation .* 在本 scope 下不可见/.test(outcome.error.message);
+
+  /** 收集问题而不是逐条 assert：一次红要把三处证据全部打印出来。 */
+  const problems = [];
+  if (!write.threw) {
+    problems.push("写路径：append 成功了 —— 消息被写进**别的租户**的会话");
+  } else if (!isParentInvisible(write)) {
+    problems.push(`写路径：抛的不是预期的 ScopeError，实测 ${String(write.error)}`);
+  }
+  if (!read.threw) {
+    problems.push("读路径：list 成功了 —— 跨租户读泄漏（这个洞是读写双漏）");
+  } else if (!isParentInvisible(read)) {
+    problems.push(`读路径：抛的不是预期的 ScopeError，实测 ${String(read.error)}`);
+  }
+  if (AFTER !== BEFORE) {
+    problems.push(
+      `行数：convB 名下 message 从 ${BEFORE} 变成 ${AFTER} —— 有 ${AFTER - BEFORE} 行漏进去了`,
+    );
+  }
+  assert.deepEqual(problems, [], `伪造父引用必须被兜住，实测问题：\n  - ${problems.join("\n  - ")}`);
+
+  // ---------------------------------------------------------------------
+  // 对照路径：同租户的父可写可读 ⇒ 上面的"拒"不是"这张表根本写不进去"
+  // ---------------------------------------------------------------------
+  const ok = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+  const written = await ok.append({ role: "user", content: "OK" });
+  assert.equal(written.conversation_id, IDS.convA, "对照路径必须成功，否则上面的拒毫无判别力");
+  assert.equal((await ok.list()).length, 1, "对照路径读得到自己刚写的那条");
+  assert.equal(countConvB(), BEFORE, "对照路径不得顺手往 convB 写东西（夹具自检）");
+
+  t.diagnostic(
+    `forged=${IDS.convB} owns=${String(scopeA.owns(forged))} write.threw=${String(
+      write.threw,
+    )} read.threw=${String(read.threw)} convB ${BEFORE}→${AFTER}`,
+  );
+});
+
 test("父列只能由基类注入：插入自带 run_id ⇒ ScopeError", async () => {
   const { db, scopeA } = seed();
   class LeakyChild extends ChildScopedRepo {
