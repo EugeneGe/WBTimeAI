@@ -578,6 +578,26 @@ test("D-1 · 幂等（验收 ④）：同一 run_id 重复提交 assistant 消�
   }
 });
 
+/**
+ * 跑一次"应当被拒"的调用，把**「有没有被拒」变成可断言的布尔**。
+ *
+ * 为什么不用 `assert.rejects`：它在 promise **没 reject** 时会自己抛
+ * `Missing expected rejection.` 并**中止该用例** ⇒ 写在它后面的库侧断言
+ * （`countMessages(...) === 0`）**永远不执行**。于是"越权行有没有落地"这一格
+ * **从来没有被单独断言过**，并留下一条**假绿通道**：坏实现「抛了错、但已经把行写进去」
+ * 时，`assert.rejects` 照样通过 ⇒ 用例绿。
+ *
+ * 用它之后，「是否被拒」与「是否落地」是两条**都会执行**的断言，失败文案能直接说清
+ * 是哪一种事故（"没被拒" vs "落地了 N 行"）。
+ */
+async function captureRejection(run) {
+  try {
+    return { rejected: false, value: await run() };
+  } catch (error) {
+    return { rejected: true, error };
+  }
+}
+
 test("D-2 · 反例：message 写入绕过 conversation scope ⇒ 必须被拦（404 且一行不写）", async () => {
   const fixture = await makeApp({ username: "conv-d2" });
   try {
@@ -589,34 +609,48 @@ test("D-2 · 反例：message 写入绕过 conversation scope ⇒ 必须被拦�
     const service = new ConversationService({ db: fixture.connection.db, dialect: "sqlite" });
 
     // ① 跨租户会话：本租户 scope 下不可见 ⇒ 404，且**一行都不许写进隔壁会话**
-    await assert.rejects(
-      () =>
-        service.appendMessage(TENANT_ID, {
-          conversation_id: OTHER_CONVERSATION_ID,
-          role: "assistant",
-          content: "越权写入",
-          run_id: null,
-        }),
-      (error) => {
-        assert.equal(error.statusCode, 404, "跨租户写入必须是 404（不是 403、不是静默成功）");
-        assert.equal(error.code, "NOT_FOUND");
-        assert.deepEqual(error.data, { conversation_id: OTHER_CONVERSATION_ID });
-        return true;
-      },
+    //
+    // ⚠️ 断言次序是刻意的：「**有没有越权落地**」放在「**有没有被拒**」之前。
+    //   两个事实各自独立断言、都会执行；且事故发生时先说清"隔壁多了一行"这种**真实损害**，
+    //   而不是"没抛错"这种间接征兆。（若反过来先断 rejected，坏实现"没拒但写了行"会红在
+    //   "必须被拒"上，读的人看不到"已经落地"这个更严重的事实。）
+    const crossTenant = await captureRejection(() =>
+      service.appendMessage(TENANT_ID, {
+        conversation_id: OTHER_CONVERSATION_ID,
+        role: "assistant",
+        content: "越权写入",
+        run_id: null,
+      }),
     );
-    assert.equal(countMessages(fixture, OTHER_CONVERSATION_ID), 0, "隔壁会话必须一行都没有");
+    assert.equal(
+      countMessages(fixture, OTHER_CONVERSATION_ID),
+      0,
+      "越权落地检查：隔壁会话必须一行都没有（抛错之后又把行写进去，同样是缺陷）",
+    );
+    assert.equal(crossTenant.rejected, true, "跨租户写入必须被拒（不是 403、不是静默成功）");
+    assert.equal(
+      crossTenant.error?.statusCode,
+      404,
+      "跨租户写入必须是 404（不是 403、不是 500）",
+    );
+    assert.equal(crossTenant.error?.code, "NOT_FOUND");
+    assert.deepEqual(
+      crossTenant.error?.data,
+      { conversation_id: OTHER_CONVERSATION_ID },
+      "错误 data 必须点名会话 id（py 同形）",
+    );
 
-    // ② 不存在的会话：同样 404（与①同形，防存在性探测）
-    await assert.rejects(
-      () =>
-        service.appendMessage(TENANT_ID, {
-          conversation_id: MISSING_CONVERSATION_ID,
-          role: "user",
-          content: "无主消息",
-          run_id: null,
-        }),
-      (error) => error.statusCode === 404,
+    // ② 不存在的会话：同样 404（与①同形，防存在性探测）—— 同样用捕获式，不挡住后续断言
+    const missing = await captureRejection(() =>
+      service.appendMessage(TENANT_ID, {
+        conversation_id: MISSING_CONVERSATION_ID,
+        role: "user",
+        content: "无主消息",
+        run_id: null,
+      }),
     );
+    assert.equal(missing.rejected, true, "不存在的会话也必须被拒（404 语义）");
+    assert.equal(missing.error?.statusCode, 404);
 
     // ③ 对照：本租户自己的会话写得进去（否则①②的 404 可能只是"整个写路径坏了"）
     const ok = await service.appendMessage(TENANT_ID, {
