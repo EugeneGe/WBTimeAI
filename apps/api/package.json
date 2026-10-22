@@ -13,7 +13,7 @@
     "build": "tsc -b tsconfig.json",
     "typecheck": "tsc -b tsconfig.json",
     "start": "node dist/main.js",
-    "test": "tsc -b tsconfig.json && node --experimental-sqlite --test \"tests/**/*.test.mjs\""
+    "test": "tsc -b tsconfig.json && node ../../scripts/run-api-tests.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.85",
