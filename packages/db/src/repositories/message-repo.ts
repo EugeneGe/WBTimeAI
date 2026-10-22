@@ -35,7 +35,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { eq, type InferSelectModel } from "drizzle-orm";
+import { asc, desc, eq, type InferSelectModel, type SQL, type Table } from "drizzle-orm";
 
 import { message as pgMessage } from "../schema/pg/conversation.js";
 import { message as sqliteMessage } from "../schema/sqlite/conversation.js";
@@ -47,7 +47,14 @@ import {
 } from "./child-scoped-repo.js";
 import { ConversationRepo } from "./conversation-repo.js";
 import { resolveTable, type SqlDialect } from "./dialect.js";
-import { ScopeError, type DrizzleDatabase, type ListOptions, type Scope, type ScopedRef } from "./scoped-repo.js";
+import {
+  resolveListLimit,
+  ScopeError,
+  type DrizzleDatabase,
+  type ListOptions,
+  type Scope,
+  type ScopedRef,
+} from "./scoped-repo.js";
 
 /** `message` 行。 */
 export type MessageRow = InferSelectModel<typeof pgMessage>;
@@ -81,6 +88,15 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
    */
   readonly #runs: AgentRunRepo;
 
+  /**
+   * 表对象（**T3-07 新增**，仅为有序列举服务）。
+   *
+   * 基类 `ChildScopedRepo` 不暴露表对象（`#table` 是私有的），而本类的两个 list 方法
+   * 要自己拼 `orderBy(...)` 才能补第二排序键（见 {@link MessageRepo.#findOrdered}），
+   * 故在构造时留一份 —— 与 `ConversationRepo` 同款先例（那边也是构造期留 `#table`）。
+   */
+  readonly #table: Table;
+
   constructor(
     db: DrizzleDatabase,
     scope: Scope,
@@ -96,15 +112,26 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
     };
     super(db, resolveTable(dialect, pgMessage, sqliteMessage), scope, conversationRef, options);
     this.#runs = new AgentRunRepo(db, scope, dialect);
+    this.#table = resolveTable(dialect, pgMessage, sqliteMessage);
   }
 
-  /** 本会话的消息（**按 created_at 升序** —— 对话次序即时间次序）。 */
+  /**
+   * 本会话的消息（**按 `(created_at asc, id asc)`** —— 对话次序即时间次序）。
+   *
+   * 第二键 `id` 是 T3-07 补的（原先只排 `created_at`）：该列是秒粒度的
+   * `DEFAULT CURRENT_TIMESTAMP`，同一秒写入的消息完全并列，只按它排序时先后由
+   * rowid / 堆序决定 ⇒ 一旦引入分页或有 `LIMIT` 截断，"取哪几条"就不是数据的函数
+   * （丢行 / 重行都是它）。
+   *
+   * **py oracle 逐字对齐**：`list_by_conversation` 实测
+   * `order_by(OrmMessage.created_at.asc(), OrmMessage.id.asc())`
+   * （`wbtime_ai_conversation/repositories/message_repository.py:79`）。
+   *
+   * 实现方式与 `ConversationRepo.#findOrdered` 同款（子类自拼有序链）：
+   * 基类 `findManyWhere` 只接受**单**排序键，没有第二键入口。
+   */
   list(options: ListOptions = {}): Promise<MessageRow[]> {
-    return this.findManyWhere(undefined, {
-      orderBy: "created_at",
-      descending: false,
-      ...options,
-    });
+    return this.#findOrdered(undefined, options);
   }
 
   /**
@@ -134,11 +161,39 @@ export class MessageRepo extends ChildScopedRepo<MessageRow, "conversation_id"> 
           `（仓储 scope = ${this.scope.tenantId}）—— 裸 id / 跨租户 ref 一律抛错`,
       );
     }
-    return this.findManyWhere(eq(this.columns.run_id, runRef.id), {
-      orderBy: "created_at",
-      descending: false,
-      ...options,
-    });
+    return this.#findOrdered(eq(this.columns.run_id, runRef.id), options);
+  }
+
+  /**
+   * 带 `id` 兜底排序的有序列举（`list` / `listByRun` 的**唯一查询出口**）。
+   *
+   * 与 `ConversationRepo.#findOrdered` 同款（那边按 `updated_at` 主键 + `id` 兜底，
+   * 这里按 `created_at` 主键 + `id` 兜底）；两边的**理由也同源**：双档 DDL 的时间列
+   * 都是 `DEFAULT CURRENT_TIMESTAMP`（秒粒度），同秒记录只按时间排序时先后不由数据决定
+   * —— SQLite 吐 rowid 序、PG 吐堆序，一次 `UPDATE` 就能换一种顺序。
+   *
+   * 后果不是"看起来乱"，而是**分页 / 截断静默丢行或重行**：同一个 `limit` 两次可能
+   * 取到不同的集合。`id` 是主键、全序且不随时间变化 ⇒ 补成第二键后，**取哪几条**与
+   * **怎么排**都成为数据的函数。
+   *
+   * 排序方向：`descending === true` 才降序（缺省升序 —— 与 py `created_at.asc()`
+   * 一致，也保持本类改造前的行为）。第二键恒 `asc(id)`，与 `ConversationRepo` 一致。
+   *
+   * @param condition 除父谓词外的附加条件（`undefined` = 不限）。
+   * @param options 排序 / 上限（`limit` 的合法区间由 {@link resolveListLimit} 校验）。
+   */
+  async #findOrdered(condition: SQL | undefined, options: ListOptions): Promise<MessageRow[]> {
+    await this.ensureParent();
+    const limit = resolveListLimit(this.tableName, options.limit);
+    const orderColumn = this.columns[options.orderBy ?? "created_at"] ?? this.columns.created_at;
+    const primary = options.descending === true ? desc(orderColumn) : asc(orderColumn);
+    const chain = this.db
+      .select()
+      .from(this.#table)
+      .where(this.scopedWhere(condition))
+      .orderBy(primary, asc(this.columns.id))
+      .limit(limit);
+    return (await (chain as unknown as PromiseLike<MessageRow[]>)).slice();
   }
 
   /**
