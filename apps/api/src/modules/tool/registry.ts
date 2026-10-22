@@ -1,5 +1,5 @@
 /**
- * T3-10 · 工具注册表（5 个内置工具的唯一入口）。
+ * T3-10 · 工具注册表（内置工具的唯一入口；V0.3.1 起 6 个 —— 第 6 个 `spawn_agent`）。
  *
  * 与 `packages/db` 的 `BUILTIN_TOOLS` 是什么关系
  * ------------------------------------------
@@ -20,6 +20,7 @@ import { filesystemTool } from "./builtin/filesystem.js";
 import { gitTool } from "./builtin/git.js";
 import { httpTool } from "./builtin/http.js";
 import { shellTool } from "./builtin/shell.js";
+import { spawnAgentTool, type SpawnAgentDelegation } from "./builtin/spawn-agent.js";
 
 import type { SandboxProvider, SandboxSession } from "../sandbox/types.js";
 import type { HostResolver } from "./guards/ssrf.js";
@@ -40,6 +41,14 @@ export interface ToolContext {
   readonly resolver?: HostResolver;
   /** 单次执行超时（缺省由沙箱决定）。 */
   readonly timeoutMs?: number;
+  /**
+   * 子 Agent 委派端口（V0.3.1 · `spawn_agent` 专用）。
+   *
+   * 由 run 装配侧绑定（T031-03/T031-04 接线）：未注入 ⇒ `spawn_agent` 一调即拒
+   * （`INTERNAL_ERROR`），**不静默降级** —— 一个"看起来注册了、实际处处放行"的
+   * 委派通道比明确拒绝危险得多。
+   */
+  readonly delegation?: SpawnAgentDelegation;
 }
 
 /** 工具执行结果（比 `ToolExecutionResult` 更细：带 output / exitCode）。 */
@@ -63,13 +72,18 @@ export interface BuiltinTool {
 }
 
 /**
- * 5 个内置工具（**顺序 == `BUILTIN_TOOLS` 的顺序**，便于人眼比对）。
+ * 6 个内置工具（**顺序 == `BUILTIN_TOOLS` 的顺序**，便于人眼比对）。
+ *
+ * 第 6 个 `spawn_agent` 是 V0.3.1（G031-SPK）新增：实现是 spike 最小骨架，
+ * 委派端口（`ToolContext.delegation`）未装配前一调即拒。
  *
  * `Map` 而不是对象：工具名是外部输入，`Map` 不会因为 `__proto__` 之类的键名产生
  * 原型链查询（对象字面量会）。
  */
 export const BUILTIN_REGISTRY: ReadonlyMap<string, BuiltinTool> = new Map(
-  [filesystemTool, gitTool, httpTool, shellTool, codeExecTool].map((tool) => [tool.name, tool])
+  [filesystemTool, gitTool, httpTool, shellTool, codeExecTool, spawnAgentTool].map(
+    (tool) => [tool.name, tool] as const
+  )
 );
 
 /** 取工具实现；未注册 ⇒ `undefined`（由 executor 折成 `FAILED`）。 */

@@ -21,6 +21,7 @@ import { agent_run as sqliteAgentRun } from "../schema/sqlite/index.js";
 import { instantLiteral, resolveTable, type SqlDialect } from "./dialect.js";
 import {
   ScopedRepo,
+  resolveListLimit,
   type DrizzleDatabase,
   type ListOptions,
   type Scope,
@@ -227,6 +228,35 @@ export class AgentRunRepo extends ScopedRepo<AgentRunRow> {
 
   create(row: TenantScopedInsert<AgentRunRow>): Promise<AgentRunRow> {
     return this.insertRow(row);
+  }
+
+  /**
+   * 数本会话内的**活跃** run（V0.3.1 · G031-SPK · 并发闸 `guardRunCreation` 的数据面）。
+   *
+   * 为什么是「按上限截断的计数」而不是真 `COUNT(*)`
+   * ---------------------------------------------
+   *   `ScopedRepo` 的查询原语（`findManyWhere` / `columns` / `scopedWhere`）全部是
+   *   `protected`，且 `ScopedDb` 端口（`scoped-repo.ts:156-161`）的 `select()` 不接受
+   *   列列表、`QueryChain` 没有 `.count()` ⇒ **在现有端口下写不出真 SQL `COUNT(*)`**。
+   *   而并发闸只需要回答"活跃 run 数是否已达 `maxRuns`"—— 用 `limit = cap` 读出来
+   *   数行数即可精确回答（读行数有界，`cap` 受 `resolveListLimit` 的 1..500 校验）。
+   *   若日后要展示真实计数，须先扩 `ScopedDb` 端口（infra 级动作，不在本卡）。
+   *
+   * @param conversationId 会话 id（scope 谓词恒在 ⇒ 只数本租户的行）。
+   * @param cap 计数上限（同时是读取 limit；合法区间 1..500，越界抛 `ScopeError`）。
+   * @returns 至多 `cap` 的活跃 run 行数 —— 对「是否 `>= maxRuns`」的判定**精确**，
+   *          但**不是**全量总数（超过 `cap` 的部分不读）。
+   */
+  async countActiveByConversation(conversationId: string, cap = 1): Promise<number> {
+    const limit = resolveListLimit("agent_run", cap);
+    const rows = await this.findManyWhere(
+      and(
+        eq(this.columns.conversation_id, conversationId),
+        inArray(this.columns.status, [...ACTIVE_AGENT_RUN_STATUSES]),
+      ),
+      { limit },
+    );
+    return rows.length;
   }
 
   /**

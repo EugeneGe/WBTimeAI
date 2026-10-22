@@ -2,7 +2,7 @@
  * T3-03 · `tool` 仓储 + 内置工具注册表 + `ensureBuiltinTools`（**R3-23**）。
  *
  * 三件事写在同一个文件里，因为它们的口径互相绑定：
- *   1. **注册表**（`BUILTIN_TOOLS`）：5 个内置工具的 `input_schema` **唯一真源**；
+ *   1. **注册表**（`BUILTIN_TOOLS`）：6 个内置工具的 `input_schema` **唯一真源**（第 6 个 `spawn_agent` 为 V0.3.1 · G031-SPK 新增）；
  *   2. **物化**（{@link ToolRepo.ensureBuiltinTools}）：把注册表按租户写进 `tool` 表，
  *      **幂等**（两次调用 ⇒ 仍 5 行）；
  *   3. **借位读取**（{@link readToolPermissionAction}）：`tool` 表没有
@@ -114,7 +114,7 @@ const CODE_EXEC_INPUT_SCHEMA = {
 } as const;
 
 /**
- * 5 个内置工具的注册表 —— `input_schema` 的**唯一真源**（R3-23 ①）。
+ * 6 个内置工具的注册表 —— `input_schema` 的**唯一真源**（R3-23 ①；第 6 个 `spawn_agent` 为 V0.3.1 新增）。
  *
  * 顺序取 R3-23 列举的次序（`filesystem` / `git` / `http` / `shell` / `code_exec`）。
  * 每个 `input_schema` 都是**手写字面量**：不 spread、不排序、不裁剪 ——
@@ -205,6 +205,27 @@ export const BUILTIN_TOOLS: readonly BuiltinToolSpec[] = [
     requiresSandbox: true,
     inputSchema: CODE_EXEC_INPUT_SCHEMA,
   },
+  {
+    // V0.3.1 · G031-SPK 新增的第 6 个内置工具。schema 形状 = 裁定书 R8 ① 的签名
+    // `spawn_agent(target_agent_id, task, budget_hint?)`；`input_schema` 仍是
+    // **手写字面量**（键序即序列化顺序，禁止运行时重排）。
+    name: "spawn_agent",
+    displayName: "子 Agent 委派",
+    description: "派生一个子 agent_run 执行子任务（深度上限缺省 1，超限必拒）",
+    category: "agent",
+    permissionAction: "EXECUTE",
+    requiresSandbox: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        target_agent_id: { type: "string", minLength: 1 },
+        task: { type: "string", minLength: 1 },
+        budget_hint: { type: "integer", minimum: 1 },
+      },
+      required: ["target_agent_id", "task"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 /**
@@ -242,7 +263,7 @@ export interface BuiltinToolsSummary {
   readonly inserted: readonly string[];
   /** 本次已存在、未动的工具名。 */
   readonly existing: readonly string[];
-  /** 注册表条目数（恒 5；**不是**表里的行数 —— 行数异常由 `findDuplicates` 暴露）。 */
+  /** 注册表条目数（恒 6 = `BUILTIN_TOOLS.length`；**不是**表里的行数 —— 行数异常由 `findDuplicates` 暴露）。 */
   readonly registered: number;
 }
 

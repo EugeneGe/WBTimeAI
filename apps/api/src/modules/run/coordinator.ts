@@ -42,7 +42,7 @@ import {
   type FinalizeRunPatch,
   type SqlDialect,
 } from "@wbtime/db";
-import { TERMINAL_RUN_STATUSES, isTerminalRunStatus } from "@wbtime/domain";
+import { RUN_ORIGIN_SUBAGENT, TERMINAL_RUN_STATUSES, isTerminalRunStatus } from "@wbtime/domain";
 
 import { authError } from "../auth/errors.js";
 
@@ -56,6 +56,96 @@ export const ACTIVE_RUN_STATUSES = [
 
 /** 取消时写入的 `error_type`（py `CANCELLED_ERROR_TYPE` 同值）。 */
 export const CANCELLED_ERROR_TYPE = "CANCELLED";
+
+/**
+ * 同一会话允许的**并发** run 数（V0.3.1 · G031-SPK · D8/K3）。
+ *
+ * ⚠️ TS 线**此前没有**这条闸（全仓 grep `max_runs_per_conversation` 零命中，
+ * `ACTIVE_RUN_STATUSES` 亦无消费方）—— py 线的 `DEFAULT_MAX_RUNS_PER_CONVERSATION = 1`
+ * 在 TS 线是**待新建**的语义，不是"口径改造"。因此它的接线（在 run 创建入口调用
+ * {@link guardRunCreation}）属 T031-04；spike 阶段本函数只作为**独立导出**存在，
+ * 不接进任何既有链路 ⇒ V0.3.0 行为零变化。
+ */
+export const DEFAULT_MAX_RUNS_PER_CONVERSATION = 1;
+
+/** {@link guardRunCreation} 的入参（**单对象**；`fn.length === 1`，判据按此形态调用）。 */
+export interface GuardRunCreationArgs {
+  readonly db: DrizzleDatabase;
+  readonly dialect?: SqlDialect;
+  readonly tenantId: string;
+  readonly conversationId: string;
+  /**
+   * 入口来源（**显式形参**，D10 核心）：仅 `"SUBAGENT"`（应用层单入口传真值）获豁免。
+   * 客户端可达字段到不了这里 ⇒ 无法伪造。
+   */
+  readonly origin: string;
+  /**
+   * 仅作标记、**永不参与放行**（D10）。接收它只为把"传了什么"记进审计/结果对象；
+   * 判定逻辑对它零引用 —— 这是刻意写成的"数据不流经"，不是遗漏。
+   */
+  readonly trigger?: string;
+  /** 并发上限（缺省 {@link DEFAULT_MAX_RUNS_PER_CONVERSATION}；须为 1..500 的整数）。 */
+  readonly maxRuns?: number;
+}
+
+/** {@link guardRunCreation} 的结果（判据 `normalizeGuardOutcome` 认 `allowed: boolean` 形态）。 */
+export interface GuardRunCreationOutcome {
+  readonly allowed: boolean;
+  readonly reason: "OK" | "CONCURRENCY_LIMIT";
+  /** 原样带回的 `origin`（审计用）。 */
+  readonly origin: string;
+  /** 恒 `true`：D10 的文档化 —— trigger 不参与判定的机器可读声明。 */
+  readonly triggerIgnored: boolean;
+  /** 活跃 run 数（**至多 `maxRuns` 的截断计数**，见 `AgentRunRepo.countActiveByConversation`）。 */
+  readonly activeRuns: number;
+  readonly maxRuns: number;
+}
+
+/**
+ * run 创建闸（V0.3.1 · D8/D10 的判定函数）。
+ *
+ * 语义（与 py 线 `add_guarded` 对齐、但按 TS 线现状"建闸 + 豁免"一次成型）：
+ *   - 会话内活跃 run 数已达 `maxRuns` 且 `origin !== "SUBAGENT"` ⇒ **拒绝**
+ *     （这就是"第二个用户主动 run 仍 409"的判定来源；HTTP 侧把 `allowed=false`
+ *     折成 409 `CONFLICT` 的接线归 T031-04）；
+ *   - `origin === "SUBAGENT"` ⇒ 豁免计数（"父 + 1 子"不 409 的正向面）；
+ *   - `trigger` 无论传什么都不影响结果（D10：裸 `trigger == "subagent"` 判据必红）。
+ *
+ * spike 边界：本函数**未被任何生产链路调用**（接线属 T031-04），因此当前仓库的
+ * 既有行为不变 —— "闸真正生效"不是本卡的验收项，不要把 spike 绿读成 D8 达成。
+ */
+export async function guardRunCreation(
+  args: GuardRunCreationArgs
+): Promise<GuardRunCreationOutcome> {
+  const maxRuns = args.maxRuns ?? DEFAULT_MAX_RUNS_PER_CONVERSATION;
+  if (!Number.isInteger(maxRuns) || maxRuns < 1 || maxRuns > 500) {
+    throw new RangeError(
+      `maxRuns 必须是 1..500 的整数（实测 ${String(maxRuns)}）—— 非法值直接拒绝，不静默夹取`
+    );
+  }
+  const exempted = args.origin === RUN_ORIGIN_SUBAGENT;
+  // 计数上限 = maxRuns：只需要回答"是否已到上限"，读到 cap 行即足够精确（有界读）。
+  const activeRuns = await new AgentRunRepo(args.db, new Scope(args.tenantId), args.dialect ?? "pg")
+    .countActiveByConversation(args.conversationId, maxRuns);
+  if (!exempted && activeRuns >= maxRuns) {
+    return {
+      allowed: false,
+      reason: "CONCURRENCY_LIMIT",
+      origin: args.origin,
+      triggerIgnored: true,
+      activeRuns,
+      maxRuns,
+    };
+  }
+  return {
+    allowed: true,
+    reason: "OK",
+    origin: args.origin,
+    triggerIgnored: true,
+    activeRuns,
+    maxRuns,
+  };
+}
 
 /** lease 没抢到（别的 worker 已经在推这一次 run）。 */
 export class LeaseRejectedError extends Error {

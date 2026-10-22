@@ -105,6 +105,18 @@ export function framesOf(rows: readonly AgentEventRow[]): Buffer[] {
 
 /** `streamRunFrames` 的依赖（只读 + 一个终态探针）。 */
 export interface StreamRunFramesOptions {
+  /**
+   * **归属过滤**（V0.3.1 · D2-a / D2-b）：只下发来源行 `agent_event.run_id === runId` 的行。
+   *
+   * 为什么判**行级列**而不是帧 payload（架构裁定 §8.5）：帧 payload 是通道投影的产物，
+   * 19 条里有 4 条（`knowledge.indexed` / `memory.written` / `approval.requested` /
+   * `approval.decided`）**结构上就不带 `run_id`** —— 把门禁建在 payload 上等于建在
+   * 偶然事实上。行级 `run_id` 列是父谓词来源，不可被 payload 伪造。
+   *
+   * 缺省 `undefined` = 不过滤（既有调用方行为不变；判据 S-2 的反向面靠
+   * "传与不传输出不同"钉住 `runId` 必须被真正消费）。
+   */
+  readonly runId?: string;
   /** 读 `seq > afterSeq` 的行（升序）。 */
   readonly readAfter: (afterSeq: number, limit: number) => Promise<AgentEventRow[]>;
   /** run 是否已终态。终态且无新事件 ⇒ 收尾。 */
@@ -135,6 +147,34 @@ export interface StreamRunFramesResult {
 }
 
 /**
+ * 归属过滤（D2）+ 无 `seq` 行的**显式拒绝**（D6，路线①）。
+ *
+ * ① 归属：`runId` 未传 ⇒ 原样返回（既有行为不变）；传了 ⇒ 只留本 run 的行。
+ *
+ * ② D6：`seq` 不是 ≥1 整数的行**不得下发、也不得推进游标**（直接剔除）。
+ *    理由（裁定登记建议，2026-10-23 工程师结论）：无 `seq` 的行若继续下行，
+ *    `encodeDataFrame` 直接 RangeError **崩掉整条流**（QA `sse-watermark.test.mjs`
+ *    W-2a 实测抓到的既有崩溃路径）；若给它本地自增编号冒充，则会与父 run 真 seq
+ *    **撞号**且三道既有门禁都验不出水位来源。两害相权：写侧（`AgentEventRepo.appendAt`）
+ *    本就保证 `seq` 为 ≥1 整数 ⇒ 库里出现无 `seq` 行只能是脏数据 —— 剔除它、让
+ *    真事件照常下发，是唯一不崩流、不冒充、不推高水位的处理（QA W-2a 语义 = "rejected"）。
+ *
+ * ⚠️ **次序是硬约束：先过滤、后 `continualFrom`**（本函数只允许在
+ * `streamRunFrames` 里被调用且恰在 continualFrom 之前）。`continualFrom` 是对
+ * **单一 seq 序列**的 gap-aware 裁剪 —— 若先裁剪再过滤，父子交错的父行会呈现
+ * 1、3、5 的形态而被误判成"洞" ⇒ **父流静默丢帧**。先过滤 ⇒ 每个 run 各自拿到
+ * 自己的连续 seq 段，`continualFrom` 的 `afterSeq === 0` 起点对齐分支（`expected
+ * = null`）会把起点对齐**过滤后**的第一条未发事件，父 run 首帧 seq 不是 1 也能正常起流。
+ */
+function selectStreamableRows(
+  rows: readonly AgentEventRow[],
+  runId: string | undefined
+): readonly AgentEventRow[] {
+  const owned = runId === undefined ? rows : rows.filter((row) => row.run_id === runId);
+  return owned.filter((row) => Number.isInteger(row.seq) && (row.seq as number) >= 1);
+}
+
+/**
  * 轮询 + 下发，直到终态 / 中断 / 轮数用尽。
  *
  * 每次轮询都重新 `continualFrom` ⇒ **洞出现时本批只发到洞前**，下一轮从新的
@@ -159,7 +199,7 @@ export async function streamRunFrames(
     }
 
     const rows = await options.readAfter(lastSeq, batchLimit);
-    const contiguous = continualFrom(rows, lastSeq);
+    const contiguous = continualFrom(selectStreamableRows(rows, options.runId), lastSeq);
     for (const row of contiguous) {
       // 内部行（turn/step 级）不进 SSE：`frameOf` 返回 `null` 时**仍然推进游标**
       // —— 否则下一轮会反复读到同一批内部行，永远推不动。
@@ -174,7 +214,8 @@ export async function streamRunFrames(
     // 终态判定放在"发完本批"之后：终态 run 的最后几帧必须发出去，否则前端永远差尾帧。
     if (await options.isTerminal()) {
       // 再读一次，把终态前后脚写入的行也带走（同一轮内的竞态）。
-      const tail = continualFrom(await options.readAfter(lastSeq, batchLimit), lastSeq);
+      const tailRows = await options.readAfter(lastSeq, batchLimit);
+      const tail = continualFrom(selectStreamableRows(tailRows, options.runId), lastSeq);
       for (const row of tail) {
         const frame = frameOf(row);
         if (frame !== null) {

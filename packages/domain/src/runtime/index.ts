@@ -9,3 +9,5 @@ export * from "./run-state.js";
 export * from "./tool-call-state.js";
 export * from "./budget-ledger.js";
 export * from "./ports.js";
+// V0.3.1 · G031-SPK：子 Agent 委派的域常量（零 DDL 标记值；只新增导出，不改既有结构）。
+export * from "./subagent.js";
