@@ -413,7 +413,20 @@ def probe_inject(source_repo: Path, scratch_root: Path, *, timeout_s: float, kee
     gate = "scripts/inject_counterexample.py"
     clone = _prepare_clone(source_repo, scratch_root, "inject", keep=keep)
     case_id = "ddl-hnsw-deleted-naive"
-    argv = ["--case", case_id]
+    # T3-18: the engine refuses to judge without external truth, and the clone
+    # carries only ``scripts/`` + ``contracts/`` — no ``_old``.  Left to its own
+    # resolution the engine guessed ``<clone>/_old`` inside the scratch directory
+    # and every healthy tree reported UNEVALUABLE(41).  Pass the REAL
+    # repository's resolved legacy root explicitly (``$E2E_LEGACY_ROOT`` still
+    # wins inside ``GatePaths.resolve``, so a broken operator override keeps
+    # failing loud — it is never silently swapped for a guessed path).  This is
+    # the same pattern probe_oracle has used since it landed.
+    argv = [
+        "--case",
+        case_id,
+        "--legacy-root",
+        str(_gate_io.GatePaths.resolve(repo_root=source_repo).legacy_root),
+    ]
 
     control = _run(clone, gate, argv, timeout_s=timeout_s)
     control_detected = control.exit_code == 0
