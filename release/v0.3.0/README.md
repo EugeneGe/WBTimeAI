@@ -1,7 +1,8 @@
 # V0.3.0 · 可分发包
 
 > **版本**：`0.3.0`（产品版，按 `docs/README.md` N-3 与 `施工纪律.md` §4.2-2 必出包）
-> **出包时间**：2026-10-22 20:04 GMT+8
+> **出包时间**：2026-10-22 20:04 GMT+8（首发）· **2026-10-22 23:2x GMT+8（重出 #2，同日复核修复批）**
+> **重出原因**：闭版树收到独立复核审计（17 条：P1×3 / P2×7 / P3×7），用户裁定「全量修 + 重出包」。本包是**修复后重建**，与首发同名同版本、**字节不同**（见 §6.1 的「包内体现边界」）。
 > **形态裁定**：**方案 A — 基座包**（`pnpm pack` 库包 tarball + 前端构建归档）
 > **裁定理由**：V0.3.0 是 **L1 首个产品可用点**（能对话 + 能看到 Agent 调工具），但仍**无 Electron 壳**（归 V0.9.0）、
 > **无 CLI**（归 V0.8.0）；服务入口 `apps/api` 属仓库运行形态（`pnpm --filter @wbtime/api start`），不产出安装器。
@@ -20,14 +21,18 @@
 | 3 | `wbtime-config-0.3.0.tgz` | 37.5 K | 18 | env 解析 + `WBTIME_AI_MODE=local\|server` |
 | 4 | `wbtime-logging-0.3.0.tgz` | 29.0 K | 14 | pino + AsyncLocalStorage `request_id` 贯通 |
 | 5 | `wbtime-event-0.3.0.tgz` | 43.0 K | 22 | 19 个 SSE 通道 + 数值格式归一化 + golden 帧编码器 |
-| 6 | `wbtime-db-0.3.0.tgz` | 290.0 K | 254 | 61 表双档 drizzle schema（v0019 = 630 列）+ `ScopedRepo<T>` 九仓储 |
+| 6 | `wbtime-db-0.3.0.tgz` | 293.9 K | 254 | 61 表双档 drizzle schema（v0019 = 630 列）+ `ScopedRepo<T>` 九仓储（**重出 #2 变更**：`finalizeIfActive` 条件终态写 + `listTail` 尾部窗口） |
 | 7 | `wbtime-domain-0.3.0.tgz` | 50.4 K | 58 | `Task` + 运行时领域纯函数（7 值状态机 / 11 值 `stop_reason` 矩阵 / 预算账本 / tool-call 状态 / 5 端口） |
 | 8 | `wbtime-ports-0.3.0.tgz` | 19.8 K | 31 | 队列/调度端口空实现（登记「未启用」，归 V0.5.0） |
 | 9 | `wbtime-security-0.3.0.tgz` | 48.3 K | 22 | 规则注册表（凭据 5 + PII 3 + 注入 2 + `baseline` 底线）+ `detectSensitive`/`redactSensitive` 同源 + `scanSensitive` |
-| 10 | `web-dist-0.3.0.tar.gz` | 414.7 K | 46 | 前端构建产物（19 页面分包，**已排除 35 个 sourcemap**） |
+| 10 | `web-dist-0.3.0.tar.gz` | 415.3 K | 44 | 前端构建产物（19 页面分包，**已排除 35 个 sourcemap**；重出 #2 变更 = 聊天审批闭环，分包边界随之微调：46 → 44 文件） |
 | — | `SHA256SUMS` | 0.9 K | — | 上述 10 个文件的 sha256 |
 
-**合计**：约 **1.0 M**（1 025 224 B）。
+**合计**：约 **1.0 M**（**1 029 874 B**；首发 1 025 224 B，重出 #2 +4 650 B）。
+
+> **重出 #2 的哈希变化面（必须写明，防止「以为整包重打了」）**：9 个库包中**只有 `wbtime-db` 变了**
+> （`8c8e25e8…`）；config / contracts / core / domain / event / logging / ports / security **八个包的 sha256 与首发逐字节相同**
+> —— 本批没有改它们的源码。`web-dist` 亦变（`915e0f58…`）。这是「只重打有变化的产物」的正常结果，不是漏打。
 
 > **口径纠正（1 条，非偏离）**：卡面写「**8 库包**」是 **V0.1.0 的存量表述**、未随 `@wbtime/security` 入册同步；
 > 本版实际分发集为 **9 个库包** —— `@wbtime/security` 是 V0.2.0 M-04 下沉、V0.3.0 起为 `apps/api` 的**直接依赖**，
@@ -107,7 +112,7 @@ pnpm -r --filter '!@wbtime/e2e' build
 DEST="$(pwd)/release/v0.3.0"
 pnpm --filter './packages/*' --filter '!@wbtime/e2e' exec pnpm pack --pack-destination "$DEST"
 tar czf "$DEST/web-dist-0.3.0.tar.gz" -C apps/web/dist --exclude='*.map' .
-cd "$DEST" && sha256sum *.tgz *.tar.gz > SHA256SUMS
+cd "$DEST" && sha256sum -b *.tgz *.tar.gz > SHA256SUMS   # `-b` ⇒ `*` 前缀，与随包发布的 SHA256SUMS 同格式
 ```
 
 > `SHA256SUMS` 记录**产物哈希** ⇒ 重跑 pack 必然得到不同 sha256（tarball 含时间戳等元数据）。
@@ -117,9 +122,21 @@ cd "$DEST" && sha256sum *.tgz *.tar.gz > SHA256SUMS
 
 出包前已确认：
 
-- **版本串全栈一致**：**13 个 `package.json`（根 + 2 apps + 10 packages）全为 `0.3.0`**；`git diff --stat` = 13 files / +13 / −13（只动 `version` 行）
-- **全包构建退出 0**：11 个单元 `Done`（含 `web: ✓ 2089 modules transformed`）
+- **版本串全栈一致**：**13 个 `package.json`（根 + 2 apps + 10 packages）全为 `0.3.0`**（重出 #2 未改版本号：同版本、不同字节，口径见 §6.1）
+- **全包构建退出 0**：11 个单元 `Done`
 - **门禁全绿**：`pnpm gate:all` exit 0（12 条脚本链）· `pnpm check` exit 0 · `pnpm typecheck` exit 0 · `check_docs.py` PASS
-- **冻结面零变化**：DDL `61/630/176`（v0019）+ `61/629/176`（v0018）· OpenAPI `100/134/116` · SSE 19 帧 sha256 全等 · 前端 243 文件 + 4 个已登记例外（fdiff exit 0）
-- **测试全绿**：api `566/566`（files=66，带 `WBTIME_PY_ORACLE_PYTHON`）· workspace `pnpm -r test` exit 0 · `pnpm test:e2e:all` 四组 `21 pass` · `run-runtime-e2e.mjs` `13/13`
+- **冻结面零变化**：DDL `61/630/176`（v0019）+ `61/629/176`（v0018）· OpenAPI `100/134/116` · SSE 19 帧 sha256 全等 · 前端 243 文件 + **9 个已登记例外**（F-4 四条 + AUD-06 五条；fdiff exit 0）
+- **测试全绿**：api **`596/596`（files=70，带 `WBTIME_PY_ORACLE_PYTHON`）** · workspace `pnpm -r test` exit 0（db **186** / web **505**）· `pnpm test:e2e:all` 四组 `21 pass` · `run-runtime-e2e.mjs` `13/13` · i18n **1132/1132** 双向相等
 - **未验证（如实登记）**：真实厂商连通性烟测（凭据不可得）· PG 运行时 e2e（依赖不可得）
+
+### 6.1 重出 #2 的「包内体现边界」（**不要误读成「P1 修复在包里」**）
+
+本批 12 条代码修复里，**多数落在 `apps/api`** —— 按方案 A，`apps/api` 是**仓库运行形态**，不进 9 个库包。因此：
+
+| 修复 | 落在哪 | 是否在包内 |
+|---|---|---|
+| AUD-01 / AUD-03（`listTail` / `finalizeIfActive`） | `@wbtime/db` | ✅ **在包内**（`wbtime-db` 的 sha 已变） |
+| AUD-06（审批闭环） | `apps/web` | ✅ **在包内**（`web-dist`） |
+| AUD-02 / 04 / 05 / 07 / 09 / 10 / 11 / 14 / 17 | `apps/api` | ❌ **不在包内** —— 随仓库运行形态交付（`pnpm --filter @wbtime/api start`） |
+
+**所以：只装这 9 个 tgz 的消费方拿到的是「库层 + 前端」的修复，拿不到运行时修复。** 这是方案 A 的形态结论，不是打包遗漏；要分发运行时，须等 V0.9.0 的壳 / V0.8.0 的 CLI。
