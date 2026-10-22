@@ -205,11 +205,17 @@ test("父谓词恒在：message.listByRun 不越出会话域（同租户两会�
   const inConvA = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
   const inConvA2 = new MessageRepo(db, scopeA, scopeA.ref(convA2), DIALECT);
 
-  // 两个会话各插一条，**run_id 相同**（runA 归属 convA；message.run_id 没有
-  // "必须等于所在会话的 run" 的约束 ⇒ 库里可以造出这种数据，正是要挡的形态）。
+  // 两个会话各一条，**run_id 相同**。⚠️ convA2 那条**必须走原生 SQL**：
+  // `append({ runId: runA })` 现在会被「run 必须属于本会话」这条不变式拒掉
+  // （runA 归属 convA，不是 convA2）。而库里**仍然可以**出这种行 —— `message.run_id`
+  // 的 FK 只查 run 存在性，没有「必须等于所在会话的 run」的约束。也就是说：
+  // 这条判据要验的是**存量脏数据**下的读取行为，而脏数据只能由原生 SQL 造。
   const mine = await inConvA.append({ role: "user", content: "in convA", runId: IDS.runA });
-  const theirs = await inConvA2.append({ role: "user", content: "in convA2", runId: IDS.runA });
-  assert.notEqual(mine.id, theirs.id);
+  const theirsId = "aaaa0000-0000-4000-8000-0000000000e2";
+  connection.raw
+    .prepare("insert into message (id, conversation_id, run_id, role, content) values (?, ?, ?, ?, ?)")
+    .run(theirsId, convA2, IDS.runA, "user", "in convA2");
+  assert.notEqual(mine.id, theirsId);
 
   // 对照路径：库里确实有 **2** 条同 run_id 的消息（证明下面的"只回 1 条"是过滤掉的，
   // 不是另一条根本没插进去）。
@@ -227,7 +233,7 @@ test("父谓词恒在：message.listByRun 不越出会话域（同租户两会�
   const listedFromA2 = await inConvA2.listByRun(runRef);
   assert.deepEqual(
     listedFromA2.map((row) => row.id),
-    [theirs.id],
+    [theirsId],
     "会话 A2 查同一 run 只应看到自己那条",
   );
 });
@@ -389,4 +395,155 @@ test("父仓储仍然是 ScopedRepo（agent_run 走租户直挂，不进子表�
 test("导出完整性：ChildConflictError 可用（R3-05 的抛错类型）", () => {
   assert.equal(new ChildConflictError("x").name, "ChildConflictError");
   assert.ok(new ChildConflictError("x") instanceof Error);
+});
+
+// ---------------------------------------------------------------------------
+// `append({ runId })` 的 run 归属校验（第三入口：写路径）
+//
+// 背景：`message.run_id` 是**可空** FK。外键只保证"这个 run 存在"，**不保证**
+// 「它属于本租户」或「它属于本会话」。而 `agent_run.conversation_id` 是 `NOT NULL`，
+// 所以「这条消息的 run 必须发生在它所在的那个会话里」是**精确定义**的不变式，
+// 可以在应用层判。两个子判据各自要能单独打红：
+//   · 去掉 scoped `findById`（不过租户直查）⇒ 跨租户那条红；
+//   · 去掉会话一致性判断            ⇒ 同租户跨会话那条红。
+// ---------------------------------------------------------------------------
+
+/** 某会话名下现有多少条消息（实测值，夹具自检用）。 */
+function countMessages(connection, conversationId) {
+  return Number(
+    connection.raw
+      .prepare("select count(*) as n from message where conversation_id = ?")
+      .get(conversationId).n,
+  );
+}
+
+/**
+ * 原生 SQL 造一条 run（**故意不经仓储**）。
+ *
+ * 理由：仓储层不该存在「建一条跨会话 run」的入口，要造出"run 存在、但属于另一个
+ * 会话"这种**合法存量数据**，只能绕过仓储。列清单与 `fixtures/runtime-fixture.mjs`
+ * 的 `seedParents` 保持逐列一致（那里也是原生 SQL）。
+ */
+function insertRunRaw(connection, { runId, tenant, conversation, idempotencyKey }) {
+  connection.raw.exec(
+    "insert into agent_run (id, tenant_id, agent_id, agent_version_id, conversation_id, user_id, " +
+      "task_id, trigger, run_mode, status, trace_id, span_id, last_heartbeat_at, idempotency_key, " +
+      "started_at, completed_at, duration_ms, token_usage, success, error_type, tool_error_count, " +
+      "cost, cost_currency, cost_price_version, cost_estimated, cost_breakdown, cost_status, error, stop_reason) values " +
+      `('${runId}', '${tenant}', '${IDS.agentA}', '${IDS.versionA}', '${conversation}', '${IDS.userA}', ` +
+      `null, 'user', 'INLINE', 'QUEUED', null, null, null, '${idempotencyKey}', null, null, null, null, ` +
+      `null, null, 0, null, null, null, 0, null, 'UNPRICED', null, null)`,
+  );
+}
+
+test("append({runId})：**跨租户 run** ⇒ ScopeError「本 scope 下不可见」，且该行不落库", async () => {
+  const { connection, db, scopeA } = seed();
+  const messages = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+
+  const BEFORE = countMessages(connection, IDS.convA);
+
+  // `IDS.runB` 是**租户 B** 的 run，在库里**真实存在** ⇒ 外键会放行。
+  // 也就是说这一格上 FK 不是屏障，能挡住的只有 scoped `findById`。
+  const outcome = await (async () => {
+    try {
+      return { threw: false, row: await messages.append({ role: "tool", content: "X", runId: IDS.runB }) };
+    } catch (error) {
+      return { threw: true, error };
+    }
+  })();
+  const AFTER = countMessages(connection, IDS.convA);
+
+  // 三处观测一起断言：不落库的证据不能依赖「抛错断言先通过」。
+  const problems = [];
+  if (!outcome.threw) {
+    problems.push(`append 成功了（行 ${String(outcome.row?.id)} 落进 convA）—— 别的租户的 run 被挂上来了`);
+  } else if (!(outcome.error instanceof ScopeError)) {
+    problems.push(`抛的不是 ScopeError，实测 ${String(outcome.error)}`);
+  } else if (!/run .* 在本 scope 下不可见/.test(outcome.error.message)) {
+    problems.push(`错误文案不是「run 在本 scope 下不可见」，实测：${outcome.error.message}`);
+  }
+  if (AFTER !== BEFORE) {
+    problems.push(`convA 下 message 从 ${BEFORE} 变成 ${AFTER} —— 有 ${AFTER - BEFORE} 行漏进去了`);
+  }
+  assert.deepEqual(problems, [], `跨租户 run 必须被拒：\n  - ${problems.join("\n  - ")}`);
+
+  // 对照路径：同一个仓储、换成**本会话**的 runA ⇒ 成功（证明拒的不是"这张表写不进去"）
+  const ok = await messages.append({ role: "tool", content: "OK", runId: IDS.runA });
+  assert.equal(ok.run_id, IDS.runA);
+  assert.equal(countMessages(connection, IDS.convA), BEFORE + 1);
+});
+
+test("append({runId})：**同租户、但属于另一个会话**的 run ⇒ ScopeError（文案与跨租户那条可区分）", async () => {
+  const { connection, db, scopeA } = seed();
+
+  // 租户 A 下的第二个会话 + 属于它的 run（都真实存在、同租户、FK 全过）
+  const otherConvId = "aaaa0000-0000-4000-8000-0000000000c1";
+  const otherRunId = "aaaa0000-0000-4000-8000-0000000000c2";
+  const conversations = new ConversationRepo(db, scopeA, DIALECT);
+  await conversations.create({
+    id: otherConvId,
+    workspaceId: IDS.wsA,
+    agentId: IDS.agentA,
+    userId: IDS.userA,
+    title: "conv-other",
+  });
+  insertRunRaw(connection, {
+    runId: otherRunId,
+    tenant: T_A,
+    conversation: otherConvId,
+    idempotencyKey: "idem-other-1",
+  });
+
+  const messages = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+  const BEFORE = countMessages(connection, IDS.convA);
+
+  await assert.rejects(
+    () => messages.append({ role: "user", content: "跨会话 run", runId: otherRunId }),
+    (error) => {
+      assert.ok(error instanceof ScopeError, `必须是 ScopeError，实测 ${String(error)}`);
+      // 这一格 run 是**本租户可见**的 ⇒ 必须报"会话不一致"，不能报成"不可见"。
+      // 两条错误信息可区分，服务层才能分别翻译（前者 403/404、后者 400）。
+      assert.match(error.message, /与本会话 .* 不一致/);
+      assert.doesNotMatch(
+        error.message,
+        /在本 scope 下不可见/,
+        "run 是本租户可见的，报成跨租户说明 scoped 查询没生效或判断顺序错了",
+      );
+      return true;
+    },
+  );
+  assert.equal(countMessages(connection, IDS.convA), BEFORE, "被拒的行不得落库");
+
+  // 对照路径：**同一个 run** 在它自己的会话里就能挂 ⇒ 拒的不是"这个 run 不能用"。
+  const inOther = new MessageRepo(db, scopeA, scopeA.ref(otherConvId), DIALECT);
+  const okRow = await inOther.append({ role: "user", content: "在自己会话里", runId: otherRunId });
+  assert.equal(okRow.run_id, otherRunId);
+});
+
+test("append({runId})：**正确的 run**（同租户 + 同会话）⇒ 成功", async () => {
+  const { connection, db, scopeA } = seed();
+  const messages = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+
+  // runA 的 `conversation_id` 就是 convA（见 fixtures）
+  const row = await messages.append({ role: "assistant", content: "同会话 run", runId: IDS.runA });
+  assert.equal(row.run_id, IDS.runA);
+  assert.equal(row.conversation_id, IDS.convA);
+  assert.equal(countMessages(connection, IDS.convA), 1);
+
+  // runA2 同租户、同会话（fixtures 里也是 convA）⇒ 同样可挂
+  const row2 = await messages.append({ role: "assistant", content: "第二个 run", runId: IDS.runA2 });
+  assert.equal(row2.run_id, IDS.runA2);
+  assert.equal(countMessages(connection, IDS.convA), 2);
+});
+
+test("append({runId})：`runId` 省略 / 显式 null ⇒ 行为不变（可空是契约允许的）", async () => {
+  const { connection, db, scopeA } = seed();
+  const messages = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+
+  const omitted = await messages.append({ role: "user", content: "手打输入没有 run" });
+  assert.equal(omitted.run_id, null, "省略 runId ⇒ run_id 为 null（不是空串、不是 0）");
+
+  const explicitNull = await messages.append({ role: "user", content: "显式 null", runId: null });
+  assert.equal(explicitNull.run_id, null);
+  assert.equal(countMessages(connection, IDS.convA), 2, "两条都必须落库（空 run 不受新校验影响）");
 });
