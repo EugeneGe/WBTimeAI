@@ -99,9 +99,15 @@ export const TOKEN_VALUE_PATTERNS: readonly RegExp[] = Object.freeze([
 /**
  * 高熵 token 的字符集白名单（无空白、无 CJK ⇒ 天然排除自然语言描述）。
  *
- * Python: `re.compile(r"^[A-Za-z0-9+/=_\-]+$")`。
- * 注意 JS 的 `$` **不**匹配「末尾换行前」的位置（Python 的 `$` 会），
- * 于是带尾随换行的串在 JS 侧判为非 token —— 这一侧更严格，不会漏报真凭据。
+ * Python: `re.compile(r"^[A-Za-z0-9+/=_\-]+$")`，py 侧用 `.match()` 消费
+ * （`import_.py:127`）。注意 JS 的 `$` **不**匹配「末尾换行前」的位置（Python 的
+ * `$` 会 —— `re.match(r"^[a]+$", "aaa\n")` 命中，实测 Python 3.13 / Node 22），
+ * 于是带尾随换行的串在 JS 侧判为**非 token**、不进入熵检。
+ *
+ * 方向（V0.2.0 审计 #27 订正：原注释把结论写反了）：本表是**候选白名单**，
+ * 更严 = 更少候选 ⇒ 相对 py 是**漏报方向**的差异（尾随换行的真凭据 py 会报
+ * `high-entropy`、JS 不会），**不是**「更严格所以不会漏报」。实际凭据值不携带
+ * 尾随换行（都来自机密管理器的 trimmed 值），故接受该继承差异；golden 不变。
  */
 const TOKEN_CHARSET = /^[A-Za-z0-9+/=_-]+$/;
 
