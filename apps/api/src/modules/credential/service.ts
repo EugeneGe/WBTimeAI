@@ -151,7 +151,9 @@ export class CredentialService {
    * 绑定凭据到供应商。
    *
    * 两道存在性检查都必须是 scoped 的：供应商与凭据**任一**不可见 ⇒ 404。
-   * 凭据先查（更具体的码 `CREDENTIAL_NOT_FOUND`），再查供应商（`NOT_FOUND`）。
+   * 检查顺序与实现一致（V0.2.0 审计 #26 订正：原 JSDoc 写反了方向）：
+   * **供应商先查**（`NOT_FOUND`），**再查凭据**（更具体的码 `CREDENTIAL_NOT_FOUND`）
+   * —— 该顺序对齐 py（依据见方法体内注释）。
    *
    * @param tenantId 租户。
    * @param providerId 供应商 id。
