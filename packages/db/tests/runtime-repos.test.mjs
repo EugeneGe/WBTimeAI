@@ -29,6 +29,7 @@ import {
   TERMINAL_TOOL_CALL_STATUSES,
   ToolCallRepo,
   TOOL_CALL_STATUSES,
+  ToolRepo,
 } from "../dist/repositories/index.js";
 
 import { DIALECT, freshConnection, IDS, seedParents, T_A, T_B } from "./fixtures/runtime-fixture.mjs";
@@ -724,4 +725,90 @@ test("D · message：同租户的**另一个**会话也不可见（父谓词恒�
   assert.equal(inA[0].conversation_id, IDS.convA);
   assert.equal(inOther[0].conversation_id, other.id);
   assert.notEqual(inA[0].id, inOther[0].id);
+});
+
+// ---------------------------------------------------------------------------
+// E · 方言档 = 真的换了表对象（**B-3r**：`dialect` 被忽略时这里必须红）
+//
+// 为什么判别式只能看 `columnType`：
+//   · 两档表 `getTableName()` **同名**（"conversation" / "message" / "tool"）⇒ `tableName`
+//     这条唯一可见通道两档恒等，没有判别力；
+//   · `ScopedRepo.#table` 是**真私有字段**（`#`），外部取不到；
+//   · 而 `columns` 是 `protected get` 且值来自 `getTableColumns(#table)` ⇒ 它忠实反映
+//     "到底用了哪档表"；两档列构造器不同 ⇒ `columnType` 就是判别式。
+//     次选是 `id` 列（pg `PgUUID` / sqlite `SQLiteText`），本文件三张表都用不上次选。
+//
+// 期望值一律是**先在运行时打印真值、再手写写死**的字面量，**不是**
+// `resolveTable(...)` / `getTableColumns(pg 表)` 这类派生表达式 —— 那等于把判据又接回
+// 被测的同一条链上（忽略 dialect 时两边一起变＝假绿）。
+// ---------------------------------------------------------------------------
+
+test("E · ConversationRepo：dialect 决定表对象（created_at / updated_at 的 columnType）", () => {
+  const { db, scopeA } = seed();
+  const sq = new ConversationRepo(db, scopeA, "sqlite");
+  const pg = new ConversationRepo(db, scopeA, "pg");
+
+  assert.equal(sq.tableName, pg.tableName, "两档表同名 —— 所以 tableName 挡不住这条 bug");
+  assert.equal(sq.tableName, "conversation");
+
+  assert.equal(sq.columns.created_at.columnType, "SQLiteText", "sqlite 档 created_at 必须是 SQLiteText");
+  assert.equal(pg.columns.created_at.columnType, "PgTimestamp", "pg 档 created_at 必须是 PgTimestamp");
+  assert.notEqual(
+    sq.columns.created_at.columnType,
+    pg.columns.created_at.columnType,
+    "两档取到同一个列构造器 ⇒ dialect 被忽略（恒用同一档表）",
+  );
+
+  assert.equal(sq.columns.updated_at.columnType, "SQLiteText");
+  assert.equal(pg.columns.updated_at.columnType, "PgTimestamp");
+
+  // 缺省档是生产档 pg（不许悄悄变成 sqlite）
+  assert.equal(
+    new ConversationRepo(db, scopeA).columns.created_at.columnType,
+    "PgTimestamp",
+    "缺省 dialect 必须是 pg（dialect.ts 的缺省 = 生产档）",
+  );
+});
+
+test("E · MessageRepo：dialect 决定表对象（created_at / run_id / content_parts 的 columnType）", () => {
+  const { db, scopeA } = seed();
+  // 构造期不连库（parentExists 是"首次使用"才调）⇒ 用 pg 档构造也安全。
+  const sq = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), "sqlite");
+  const pg = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), "pg");
+
+  assert.equal(sq.tableName, pg.tableName);
+  assert.equal(sq.tableName, "message");
+
+  assert.equal(sq.columns.created_at.columnType, "SQLiteText");
+  assert.equal(pg.columns.created_at.columnType, "PgTimestamp");
+  assert.notEqual(sq.columns.created_at.columnType, pg.columns.created_at.columnType);
+
+  // 父列也必须是真表对象的列（父谓词拼在 sq/pg 各自的列上）
+  assert.equal(sq.columns.run_id.columnType, "SQLiteText");
+  assert.equal(pg.columns.run_id.columnType, "PgUUID");
+  assert.equal(sq.columns.content_parts.columnType, "SQLiteTextJson");
+  assert.equal(pg.columns.content_parts.columnType, "PgJsonb");
+});
+
+test("E · ToolRepo：dialect 决定表对象（id / requires_sandbox / input_schema 的 columnType）", () => {
+  const { db, scopeA } = seed();
+  const sq = new ToolRepo(db, scopeA, "sqlite");
+  const pg = new ToolRepo(db, scopeA, "pg");
+
+  assert.equal(sq.tableName, pg.tableName);
+  assert.equal(sq.tableName, "tool");
+
+  // `tool` 没有时间列 ⇒ 主键列即判别式（pg uuid / sqlite text 必然不同）。
+  assert.equal(sq.columns.id.columnType, "SQLiteText");
+  assert.equal(pg.columns.id.columnType, "PgUUID");
+  assert.notEqual(
+    sq.columns.id.columnType,
+    pg.columns.id.columnType,
+    "两档取到同一个列构造器 ⇒ ToolRepo 的 resolveTable 被绕过/接反",
+  );
+
+  assert.equal(sq.columns.requires_sandbox.columnType, "SQLiteBoolean");
+  assert.equal(pg.columns.requires_sandbox.columnType, "PgBoolean");
+  assert.equal(sq.columns.input_schema.columnType, "SQLiteTextJson");
+  assert.equal(pg.columns.input_schema.columnType, "PgJsonb");
 });
