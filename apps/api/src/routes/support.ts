@@ -23,6 +23,7 @@ import type { FastifyRequest } from "fastify";
 
 import { AuthService, type AuthUser } from "../modules/auth/service.js";
 import { authError, unauthorized } from "../modules/auth/errors.js";
+import { AgentService } from "../modules/agent/service.js";
 import { CredentialService } from "../modules/credential/service.js";
 import { OrganizationService } from "../modules/organization/service.js";
 import {
@@ -41,6 +42,15 @@ export interface IdentityDeps {
   readonly auth: AuthService;
   readonly organizations: OrganizationService;
   readonly credentials: CredentialService;
+  /**
+   * Agent 族服务（T3-05 · 7 op）。
+   *
+   * 为什么挂在 IdentityDeps 而不是另立容器：它的依赖（db / dialect / tenantId）
+   * 与身份族完全同源，而 `buildApp` 的装配入口只有一个 —— 多一个容器就会多一条
+   * "两次装配各拿一份依赖"的漂移路径。名字沿用 `deps.agents`（复数，与路由文件
+   * `agentRoutes(app, deps)` 的读取面一致）。
+   */
+  readonly agents: AgentService;
   /**
    * 未认证 register 的限速器（FIX-04）。
    *

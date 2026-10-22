@@ -25,6 +25,10 @@
 
 import { Type, type Static, type TSchema } from "@sinclair/typebox";
 
+// `POST /agents/{id}/run` 的请求体复用 v0019 落地的 `RunRequestSchema`（W0 收尾件，
+// 单一真相源 —— 不二次手抄；字段对齐由 `schemas-run-v0019.test.mjs` 锁定）。
+import { RunRequestSchema } from "./schemas-run.js";
+
 /** `string | null` 的简写（契约里大量 `anyOf: [string, null]`）。 */
 const NullableString = Type.Union([Type.String(), Type.Null()]);
 
@@ -255,6 +259,91 @@ export const BindCredentialRequestSchema = Type.Object({
 export type BindCredentialRequestBody = Static<typeof BindCredentialRequestSchema>;
 
 // ---------------------------------------------------------------------------
+// Agent 族（T3-05 · 7 op）
+// ---------------------------------------------------------------------------
+
+/** 契约 `AgentResponse`（10 键；`status` default DRAFT / `type` default PRIMARY）。 */
+export const AgentResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    tenant_id: NullableString,
+    name: Type.String(),
+    workspace_id: NullableString,
+    description: NullableString,
+    type: Type.String(),
+    status: Type.String(),
+    current_version_id: NullableString,
+    created_by: Type.String(),
+    created_at: NullableString,
+    updated_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type AgentResponseBody = Static<typeof AgentResponseSchema>;
+
+/** 契约 `CreateAgentRequest`（required = `name`；`type` default PRIMARY）。 */
+export const CreateAgentRequestSchema = Type.Object({
+  name: Type.String({ minLength: 1, maxLength: 255 }),
+  description: Type.Optional(NullableString),
+  type: Type.Optional(Type.String({ maxLength: 50, default: "PRIMARY" })),
+  workspace_id: Type.Optional(NullableString36),
+});
+export type CreateAgentRequestBody = Static<typeof CreateAgentRequestSchema>;
+
+/** 契约 `UpdateAgentRequest`（缺省字段不变；`status` 走服务层状态机，见 routes/agents.ts）。 */
+export const UpdateAgentRequestSchema = Type.Object({
+  name: Type.Optional(Type.Union([Type.Null(), Type.String({ maxLength: 255 })])),
+  description: Type.Optional(NullableString),
+  status: Type.Optional(Type.Union([Type.Null(), Type.String({ maxLength: 50 })])),
+});
+export type UpdateAgentRequestBody = Static<typeof UpdateAgentRequestSchema>;
+
+/**
+ * 契约 `AgentVersionResponse`（9 键；`model_config` / `runtime_config` 开放对象，
+ * `status` default PUBLISHED —— 一次发布 = 一个新行）。
+ */
+export const AgentVersionResponseSchema = Type.Object(
+  {
+    id: Type.String(),
+    agent_id: Type.String(),
+    version: Type.String(),
+    system_prompt: Type.String(),
+    model_config: Type.Object({}, { additionalProperties: true }),
+    runtime_config: Type.Object({}, { additionalProperties: true }),
+    status: Type.String(),
+    created_by: Type.String(),
+    created_at: NullableString,
+  },
+  { additionalProperties: false }
+);
+export type AgentVersionResponseBody = Static<typeof AgentVersionResponseSchema>;
+
+/**
+ * 契约 `PublishRequest`（无 required 字段 —— 实测契约；`version` 可空）。
+ *
+ * ⚠️ `tools`（`AgentToolBind[]`）收下不落库：`agent_tool` 承接归后续接线
+ * （§13.8.7 挂账 #7），schema 仍须逐键对齐契约（对齐测试按属性名集合比对）。
+ */
+export const PublishRequestSchema = Type.Object({
+  system_prompt: Type.Optional(Type.String({ default: "" })),
+  model_config: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  runtime_config: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  version: Type.Optional(Type.Union([Type.Null(), Type.String()])),
+  tools: Type.Optional(Type.Array(Type.Object({ tool_id: Type.String() }, { additionalProperties: true }))),
+});
+export type PublishRequestBody = Static<typeof PublishRequestSchema>;
+
+/**
+ * `POST /agents/{id}/run` 的成功响应（T3-05：**入口回执**，非 `RunResponse`）。
+ *
+ * 契约该 200 的 schema 是**空对象** `{}`（ unconstrained）—— 对齐测试按"属性名
+ * 集合"比对，这里也必须是**无属性**的对象 schema，否则 `openapi-alignment` 红。
+ * 回执的真实形状（`agent_id` / `harness` / `execution` 等）见
+ * `modules/agent/service.ts` 的 `RunEntryReceipt`；T3-08 落执行后整体替换。
+ */
+export const AgentRunEntryResponseSchema = Type.Object({}, { additionalProperties: true });
+
+// ---------------------------------------------------------------------------
 // op → schema 映射（键 = 契约的 operationId，**逐字**）
 // ---------------------------------------------------------------------------
 
@@ -273,11 +362,12 @@ export interface OperationSchemas {
 export const EmptyBodySchema = Type.Null();
 
 /**
- * 19 个 op 的字典。键是契约 `operationId`，值与 `01-身份与授权.md §1` 的表逐条对应。
+ * 全部 op 的字典。键是契约 `operationId`，值与各任务卡 §1/§2 的表逐条对应。
  *
- * **不多不少 19 条** —— 这条由 `openapi-alignment.test.mjs` 断言（多一条 = 加了契约外
- * 端点；少一条 = 漏实现）。`/api/v1/settings/credentials` 的 2 个镜像 op 按 U-3/R-5
- * **不纳入**；Workspace 任何路由按 R-26 **不纳入**。
+ * **身份 19 op（T2-07）+ Agent 7 op（T3-05）= 26 条** —— 条数由
+ * `openapi-alignment.test.mjs` 断言（多一条 = 加了契约外端点；少一条 = 漏实现）。
+ * `/api/v1/settings/credentials` 的 2 个镜像 op 按 U-3/R-5 **不纳入**；
+ * Workspace 任何路由按 R-26 **不纳入**。
  */
 export const OPERATION_SCHEMAS: Readonly<Record<string, OperationSchemas>> = Object.freeze({
   // ---- 认证族 -------------------------------------------------------------
@@ -411,7 +501,55 @@ export const OPERATION_SCHEMAS: Readonly<Record<string, OperationSchemas>> = Obj
     successStatus: 200,
     response: ModelProviderResponseSchema,
   },
+
+  // ---- Agent 族（T3-05 · 7 op）--------------------------------------------
+  list_agents_api_v1_agents_get: {
+    method: "GET",
+    path: "/api/v1/agents",
+    successStatus: 200,
+    response: Type.Array(AgentResponseSchema),
+  },
+  create_agent_api_v1_agents_post: {
+    method: "POST",
+    path: "/api/v1/agents",
+    successStatus: 201,
+    body: CreateAgentRequestSchema,
+    response: AgentResponseSchema,
+  },
+  get_agent_api_v1_agents__agent_id__get: {
+    method: "GET",
+    path: "/api/v1/agents/{agent_id}",
+    successStatus: 200,
+    response: AgentResponseSchema,
+  },
+  update_agent_api_v1_agents__agent_id__put: {
+    method: "PUT",
+    path: "/api/v1/agents/{agent_id}",
+    successStatus: 200,
+    body: UpdateAgentRequestSchema,
+    response: AgentResponseSchema,
+  },
+  publish_agent_api_v1_agents__agent_id__publish_post: {
+    method: "POST",
+    path: "/api/v1/agents/{agent_id}/publish",
+    successStatus: 201,
+    body: PublishRequestSchema,
+    response: AgentVersionResponseSchema,
+  },
+  run_agent_api_v1_agents__agent_id__run_post: {
+    method: "POST",
+    path: "/api/v1/agents/{agent_id}/run",
+    successStatus: 200,
+    body: RunRequestSchema,
+    response: AgentRunEntryResponseSchema,
+  },
+  list_versions_api_v1_agents__agent_id__versions_get: {
+    method: "GET",
+    path: "/api/v1/agents/{agent_id}/versions",
+    successStatus: 200,
+    response: Type.Array(AgentVersionResponseSchema),
+  },
 });
 
-/** 19 个 operationId（顺序与 `01-身份与授权.md §1` 的表一致）。 */
+/** 全部 operationId（顺序：身份 19 op 在前，Agent 7 op 按 §2 W3 卡顺序随后）。 */
 export const OPERATION_IDS: readonly string[] = Object.freeze(Object.keys(OPERATION_SCHEMAS));
