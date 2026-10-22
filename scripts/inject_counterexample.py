@@ -275,6 +275,25 @@ def _argv_v031_watermark(contracts: Path, legacy: Path) -> list[str]:
     return ["--experimental-sqlite", "--test", inject_cases.V031_WATERMARK_CARRIER]
 
 
+def _argv_v031_delegation(contracts: Path, legacy: Path) -> list[str]:
+    """Arguments for the V0.3.1 delegation carrier (a **Node** gate).
+
+    D3/D4/D5（取消扇出 / 预算短路 / scope 收窄）判据载体
+    （``apps/api/tests/subagent-delegation.test.mjs``，QA 落盘，执行者 ≠ 判定者），
+    与 :func:`_argv_v031_spike` / :func:`_argv_v031_watermark` 同款：
+    ``--experimental-sqlite`` 强制 + 仓库相对路径（gate 以 ``cwd=<clone root>`` 运行）。
+
+    Args:
+        contracts: Contracts directory (unused — the carrier reads it itself).
+        legacy: Legacy root (unused).
+
+    Returns:
+        The argument list, **including** the script path.
+    """
+    del contracts, legacy
+    return ["--experimental-sqlite", "--test", inject_cases.V031_DELEGATION_CARRIER]
+
+
 def prepare_v031_clone(clone: Path, source_repo: Path) -> None:
     """Wire ``node_modules`` into a clone without copying the pnpm store.
 
@@ -389,6 +408,20 @@ GATES: Final[dict[str, GateSpec]] = {
         label="V0.3.1 D6 watermark carrier (node --test)",
         # 与 `v031_spike` 同口径：exit 1 = 至少一条断言红（真红）；其余退出码
         # （模块加载崩溃 / 旗标错 / runner 缺失）一律不可判，绝不读作反驳。
+        red_codes=(1,),
+        unevaluable_codes=(2, 9),
+        interpreter="node",
+        clone_dirs=("contracts", "scripts", "apps/api", "output"),
+        prepare=prepare_v031_clone,
+        reseals=False,
+    ),
+    "v031_delegation": GateSpec(
+        key="v031_delegation",
+        script="",
+        build_argv=_argv_v031_delegation,
+        label="V0.3.1 D3/D4/D5 delegation carrier (node --test)",
+        # 与 `v031_spike` / `v031_watermark` 同口径：exit 1 = 至少一条断言红（真红）；
+        # 其余退出码一律不可判，绝不读作反驳。
         red_codes=(1,),
         unevaluable_codes=(2, 9),
         interpreter="node",
@@ -1264,11 +1297,12 @@ def _self_test() -> int:
 
     # Registry sanity: an empty or mis-wired registry must not look like success.
     ids = [case.case_id for case in cases]
-    # The registry grew from 5 contract cases to 5 + 4 V031 cases (3 spike
-    # carriers + 1 watermark carrier).  A count change alone is not a
-    # regression, but an *unexplained* one is: the probe pins the exact size so
-    # an accidental case loss cannot hide behind "more cases were added anyway".
-    record("registry-has-9-cases", len(cases), 9, f"ids={ids}")
+    # The registry grew: 5 contract cases + 7 V031 cases (3 spike + 1 watermark
+    # + 3 delegation carriers).  A count change alone is not a regression, but
+    # an *unexplained* one is: the probe pins the exact size so an accidental
+    # case loss cannot hide behind "more cases were added anyway".  Bumping this
+    # pin is part of adding a case — forgetting it is what this probe catches.
+    record("registry-has-12-cases", len(cases), 12, f"ids={ids}")
     record("registry-ids-unique", len(set(ids)) == len(ids), True)
     record(
         "registry-targets-known-gates",

@@ -64,6 +64,10 @@ __all__ = [
     "VICTIM_V031_DEPTH",
     "V031_WATERMARK_CARRIER",
     "VICTIM_V031_WATERMARK",
+    "V031_DELEGATION_CARRIER",
+    "VICTIM_V031_CANCEL_FANOUT",
+    "VICTIM_V031_BUDGET",
+    "VICTIM_V031_SCOPE",
     "MARKER_IMPL_NOT_LANDED",
     "MARKER_DIST_STALE",
 ]
@@ -118,6 +122,15 @@ V031_WATERMARK_CARRIER: Final[str] = "apps/api/tests/sse-watermark.test.mjs"
 #: 第四个改坏点：无 `seq` 兜底分支被保留为**连接本地自增**（不按 run 隔离）。
 VICTIM_V031_WATERMARK: Final[str] = "无 seq 兜底分支（连接本地自增冒充 id:）"
 
+#: T031-02 委派执行链判据载体（相对仓库根）。D3 取消传播 / D4 预算下拨 / D5 权限
+#: 收窄 + S3 附加判据。由 QA 落盘，实现者不得自建自评。
+V031_DELEGATION_CARRIER: Final[str] = "apps/api/tests/subagent-delegation.test.mjs"
+
+#: 第五~七个改坏点（T031-02 · D3 / D4 / D5）。
+VICTIM_V031_CANCEL_FANOUT: Final[str] = "取消向下传播的子 run 探针组合"
+VICTIM_V031_BUDGET: Final[str] = "预算超限拦截（只记录不短路）"
+VICTIM_V031_SCOPE: Final[str] = "子 scope 收窄（父 ∩ 目标）"
+
 #: Gate keys understood by :mod:`inject_counterexample`.  Declared here so the
 #: registry fails loudly on a typo instead of silently skipping a case.
 GATE_KEYS: Final[tuple[str, ...]] = (
@@ -128,6 +141,7 @@ GATE_KEYS: Final[tuple[str, ...]] = (
     "run_check",
     "v031_spike",
     "v031_watermark",
+    "v031_delegation",
 )
 
 
@@ -949,6 +963,129 @@ def v031_watermark_local_increment(contracts: Path, repo: Path) -> str:
     )
 
 
+def v031_cancel_child_no_fanout(contracts: Path, repo: Path) -> str:
+    """改坏点 ⑤：子探针不组合父探针 —— 取消传播找不到子 run（D3 反例）。
+
+    正确实现：`POST /runs/{parent}/cancel` 的扇出用 `trigger == 'subagent'`
+    （或 `RUN_TRIGGER_SUBAGENT`）定位子 run，并在 ≤30s 内把它们全部推到
+    `CANCELLED` + `destroy()` 沙箱。
+    改坏后：定位谓词被换成永不匹配的常量（或机制出口被换成空结果 IIFE）⇒
+    扇出**零命中** ⇒ 子 run 永远 RUNNING。
+    ⇒ `apps/api/tests/subagent-delegation.test.mjs` 的 **D3-2** 必红。
+
+    Args:
+        contracts: 未使用（本族改的是实现，不是契约件）。
+        repo: 克隆仓库根。
+
+    Returns:
+        一行"改了什么"。
+
+    Raises:
+        MutationError: 实现未落地 / dist 落后 / 锚点命中次数不为 1。
+    """
+    del contracts
+    return _v031_patch(
+        repo,
+        (
+            "apps/api/src/modules/run/coordinator.ts",
+            "apps/api/src/modules/run/run-service.ts",
+            "apps/api/src/modules/run/delegation.ts",
+        ),
+        (
+            # 形态 ①：扇出定位谓词（trigger 判等）→ 永假常量 ⇒ 子探针与父探针断开。
+            (
+                r"(trigger\s*(?:===|==)\s*)(?:[\"']subagent[\"']|RUN_TRIGGER_SUBAGENT)",
+                r'\1"__no_subagent__" /* v031-cancel-child-no-fanout */',
+            ),
+            # 形态 ②：机制出口调用 → 恒空结果 IIFE（扇出被整体短路）。
+            #   负向行首断言避开 `function propagateCancel(` 声明本身。
+            (
+                r"(?<!function\s)\b(?:propagateCancel|cancelDownstream|cancelChildren)\s*\(",
+                "(()=>({cancelled:[],pending:[]}))(",
+            ),
+        ),
+        label=f"⑤ {VICTIM_V031_CANCEL_FANOUT}：子探针与父探针断开（扇出零命中）",
+    )
+
+
+def v031_budget_record_only(contracts: Path, repo: Path) -> str:
+    """改坏点 ⑥：预算只记录不拦截（`if False:` 短路式）（D4 反例）。
+
+    正确实现：预算闸判 `exceeded` 为真时**必中断**（stop / throw / cancel 子 run）。
+    改坏后：`exceeded` 的消费点被短路成永假（或比较恒 false）⇒ 触顶照跑不误。
+    ⇒ `apps/api/tests/subagent-delegation.test.mjs` 的 **D4-3** 必红。
+
+    Args:
+        contracts: 未使用。
+        repo: 克隆仓库根。
+
+    Returns:
+        一行"改了什么"。
+
+    Raises:
+        MutationError: 实现未落地 / dist 落后 / 锚点命中次数不为 1。
+    """
+    del contracts
+    return _v031_patch(
+        repo,
+        (
+            "apps/api/src/modules/run/delegation.ts",
+            "apps/api/src/modules/run/subagent-budget.ts",
+            "apps/api/src/modules/run/subagent-spawner.ts",
+        ),
+        (
+            # 形态 ①：`if (<x>.exceeded)` → `if (false)`（py `if False:` 短路式的 JS 同形）。
+            (r"if\s*\(\s*(?:\w+\.)*exceeded\s*\)", "if (false) /* v031-budget-record-only */"),
+            # 形态 ②：`<x>.exceeded === true` → `false`。
+            (r"(?:\w+\.)*exceeded\s*===?\s*true", "false /* v031-budget-record-only */"),
+        ),
+        label=f"⑥ {VICTIM_V031_BUDGET}：exceeded 消费点短路成永假",
+    )
+
+
+def v031_scope_passthrough(contracts: Path, repo: Path) -> str:
+    """改坏点 ⑦：直接透传父 scope（不取交集）（D5 反例）。
+
+    正确实现：`intersectPermissionScope(parentScope, targetScope)` 返回**父 ∩ 目标**。
+    改坏后：函数体开头插入 `return parentScope;` ⇒ 直接透传父 scope。
+    ⇒ `apps/api/tests/subagent-delegation.test.mjs` 的 **D5-2** 必红
+    （透传满足「⊆ 父」，但 `target ⊆ 父时交集 == target` 的反向断言必红 ——
+    载体反向断言存在的意义）。
+
+    锚点按《调用契约》声明的形参名钉死（`parentScope` / `targetScope`）。
+    实现方若用不同形参名 ⇒ 锚点不命中 ⇒ UNEVALUABLE(12) ⇒ 按纪律回报 QA
+    校准锚点，**不得**改断言迁就实现。
+
+    Args:
+        contracts: 未使用。
+        repo: 克隆仓库根。
+
+    Returns:
+        一行"改了什么"。
+
+    Raises:
+        MutationError: 实现未落地 / dist 落后 / 锚点命中次数不为 1。
+    """
+    del contracts
+    return _v031_patch(
+        repo,
+        (
+            "apps/api/src/modules/run/delegation.ts",
+            "apps/api/src/modules/run/subagent-scope.ts",
+            "apps/api/src/modules/run/subagent-guard.ts",
+        ),
+        (
+            # 函数头注入 early-return（覆盖 `function f(a, b) {` 与
+            # `const f = (a, b) => {` 两种声明形态 —— `(?:=>\s*)?` 兼容箭头体）。
+            (
+                r"(intersectPermissionScope\s*\(\s*parentScope\s*,\s*targetScope\s*\)\s*(?:=>\s*)?\{)",
+                r"\1 return parentScope; /* v031-scope-passthrough */",
+            ),
+        ),
+        label=f"⑦ {VICTIM_V031_SCOPE}：收窄函数 → 直接透传父 scope（不取交集）",
+    )
+
+
 # ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
@@ -1099,6 +1236,63 @@ CASES: Final[tuple[InjectionCase, ...]] = (
         mutator=v031_watermark_local_increment,
         checks_integrity=False,
     ),
+    InjectionCase(
+        case_id="v031-cancel-child-no-fanout",
+        dod="V0.3.1 D3 · T031-02",
+        target_gate="v031_delegation",
+        expected_reason=(
+            f"{VICTIM_V031_CANCEL_FANOUT} 被断开 ⇒ delegation 载体的 D3-2 红"
+            "（父 cancel 后子 run 永远 RUNNING = 取消向下传播失守）"
+        ),
+        description=(
+            "把取消扇出的子 run 定位谓词（trigger=='subagent'）换成永假常量，"
+            "或把 propagateCancel 调用换成恒空结果 IIFE，src 与 dist 双写。"
+        ),
+        must_be_red=(
+            "D3-2",
+            "CANCELLED",
+        ),
+        mutator=v031_cancel_child_no_fanout,
+        checks_integrity=False,
+    ),
+    InjectionCase(
+        case_id="v031-budget-record-only",
+        dod="V0.3.1 D4 · T031-02",
+        target_gate="v031_delegation",
+        expected_reason=(
+            f"{VICTIM_V031_BUDGET} 被短路 ⇒ delegation 载体的 D4-3 红"
+            "（usage 超限 exceeded=true 却不中断 = 预算只记录不拦截）"
+        ),
+        description=(
+            "把预算闸的 `if (<x>.exceeded)` 短路成 `if (false)`（或 exceeded 比较恒 false），"
+            "src 与 dist 双写。"
+        ),
+        must_be_red=(
+            "D4-3",
+            "预算只记录不拦截",
+        ),
+        mutator=v031_budget_record_only,
+        checks_integrity=False,
+    ),
+    InjectionCase(
+        case_id="v031-scope-passthrough",
+        dod="V0.3.1 D5 · T031-02",
+        target_gate="v031_delegation",
+        expected_reason=(
+            f"{VICTIM_V031_SCOPE} 被透传 ⇒ delegation 载体的 D5-2 红"
+            "（target ⊆ 父时交集 != target：子权限不是父 ∩ 目标 = 权限收窄失守）"
+        ),
+        description=(
+            "在 intersectPermissionScope 函数体开头注入 `return parentScope;`"
+            "（直接透传父 scope，不取交集），src 与 dist 双写。"
+        ),
+        must_be_red=(
+            "D5-2",
+            "不得恒空",
+        ),
+        mutator=v031_scope_passthrough,
+        checks_integrity=False,
+    ),
 )
 
 
@@ -1144,4 +1338,7 @@ def victims() -> dict[str, str]:
         "v031_stream": VICTIM_V031_STREAM,
         "v031_depth": VICTIM_V031_DEPTH,
         "v031_watermark": VICTIM_V031_WATERMARK,
+        "v031_cancel_fanout": VICTIM_V031_CANCEL_FANOUT,
+        "v031_budget": VICTIM_V031_BUDGET,
+        "v031_scope": VICTIM_V031_SCOPE,
     }
