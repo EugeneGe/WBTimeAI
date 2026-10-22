@@ -1,16 +1,15 @@
 /**
- * `@wbtime/security` —— 安全原语出口（V0.2.0 · M-04）。
+ * `@wbtime/security` —— 安全原语出口。
  *
- * 本版**只有一个**原语：`scanSensitive`（及其常量）。
- * `redactSensitive` / `SafetyGate` / 七挂点 / 语义审核归 V0.3.0
- * （依据 `docs/V1.0/00-安全拦截链-设计补充.md` §15 / R16），不在此处预留空壳 ——
- * 空壳会被误当"已实现"，比缺函数更危险。
+ * M-04（V0.2.0）：`scanSensitive` 及其常量（detect-only，凭据子集）。
+ * T3-13（V0.3.0）：`redactSensitive`（R3-16 同源脱敏）+ 规则注册表 + 风险等级映射。
  *
- * 常量与函数的导出面**就是** M-04 的等价性判据面（计划 §6）：
- * `SENSITIVE_KEY_PATTERN` / `TOKEN_VALUE_PATTERNS` 必须可被测试逐项对齐 py 源码，
- * 因此两者是 public export 而不是模块内部细节。
+ * `SafetyGate` 的**编排**不在这里（R3-16 ①：编排归 `apps/api/src/modules/safety`）；
+ * 本包不进 `@wbtime/contracts` / `packages/ports`（`gate:extpoints` 仍 **9**）。
+ * 依赖仅 `@wbtime/core`（值）+ `@wbtime/domain`（`DomainError`，V0.2.0 R-11 裁定）。
  */
 
+// ---- M-04（V0.2.0，detect-only 凭据扫描）----------------------------------
 export {
   scanSensitive,
   SENSITIVE_KEY_PATTERN,
@@ -30,3 +29,24 @@ export type {
   ScanSensitiveData,
   TooDeepData,
 } from "./scan-sensitive.js";
+
+// ---- T3-13（V0.3.0，同源规则注册表 + 脱敏 + 等级映射）----------------------
+export {
+  SAFETY_RULES,
+  detectSensitive,
+  redactSensitive,
+  registeredRuleIds,
+  baselineRuleIds,
+  COVERAGE_STATEMENT,
+} from "./rule-registry.js";
+
+export type {
+  SafetyRule,
+  SafetyCategory,
+  SafetyHit,
+  DetectOptions,
+  RedactResult,
+} from "./rule-registry.js";
+
+export { riskLevelOf } from "./classify.js";
+export type { Stage, Provenance, RiskLevel } from "./classify.js";

@@ -163,7 +163,20 @@ export interface RunEventWriterPort {
 // 4. SafetyPort —— 内容安全裁决（七挂点共用）
 // ---------------------------------------------------------------------------
 
-export type SafetyStage = "input" | "tool_result" | "output";
+/**
+ * 七个拦截点（T3-13 扩到 7 值；原 3 值是 T3-04 的首版口径）。
+ *
+ * S3（`delegation`）本版**不装配**（R3-17：子 Agent 归 V0.3.1），但值域保留 ——
+ * 否则门禁没法断言「`resource_id='delegation'` 行数 == 0 是期望」。
+ */
+export type SafetyStage =
+  | "input"
+  | "context"
+  | "delegation"
+  | "model_request"
+  | "tool_args"
+  | "tool_result"
+  | "output";
 
 export interface SafetyRequest {
   readonly stage: SafetyStage;
