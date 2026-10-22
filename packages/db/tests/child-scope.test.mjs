@@ -514,3 +514,33 @@ test("append({runId})：`runId` 省略 / 显式 null ⇒ 行为不变（可空�
   assert.equal(explicitNull.run_id, null);
   assert.equal(countMessages(connection, IDS.convA), 2, "两条都必须落库（空 run 不受新校验影响）");
 });
+
+test("append({runId})：run 可见性**每次都要重查**（同实例先成功后换跨租户 run ⇒ 仍必须抛）", async () => {
+  const { connection, db, scopeA } = seed();
+  const messages = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+
+  // 第一次：合法 run —— 让实例进入"已经成功查过一次"的状态。
+  // 基类 `ensureParent()` 的 `#parentCheck` 就是"查过一次就不再查"的实例级缓存，
+  // 父引用构造期固定，那样缓存是对的；但 `runId` **每次 append 都可能不同**，
+  // 若把可见性结果也缓存到实例上，第二次换 runId 就会直接跳过校验 —— 典型假绿。
+  const first = await messages.append({ role: "user", content: "第一次", runId: IDS.runA });
+  assert.equal(first.run_id, IDS.runA, "对照：第一次必须成功（否则后面无从谈'第二次')");
+  const BEFORE = countMessages(connection, IDS.convA);
+
+  // 第二次：同一个仓储实例，换成**租户 B** 的 run —— 必须仍然被拒。
+  await assert.rejects(
+    () => messages.append({ role: "user", content: "第二次", runId: IDS.runB }),
+    (error) => {
+      assert.ok(error instanceof ScopeError, `必须是 ScopeError，实测 ${String(error)}`);
+      assert.match(error.message, /在本 scope 下不可见/);
+      return true;
+    },
+    "同一实例的第二次 append 换了 runId，校验不得被缓存跳过",
+  );
+  assert.equal(countMessages(connection, IDS.convA), BEFORE, "被拒的第二条不得落库");
+
+  // 第三次：再换一个合法 run（runA2，同会话）—— 证明拒的不是"第二次之后整个实例坏了"。
+  const third = await messages.append({ role: "user", content: "第三次", runId: IDS.runA2 });
+  assert.equal(third.run_id, IDS.runA2);
+  assert.equal(countMessages(connection, IDS.convA), BEFORE + 1);
+});
