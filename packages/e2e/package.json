@@ -16,6 +16,7 @@
     "test:legacy": "node ../../scripts/run-legacy.mjs",
     "test:smoke": "node ../../scripts/run-smoke.mjs",
     "test:conformance": "node ../../scripts/run-conformance.mjs",
+    "test:runtime": "node ../../scripts/run-runtime-e2e.mjs",
     "test:all": "node ../../scripts/run-all.mjs"
   }
 }
