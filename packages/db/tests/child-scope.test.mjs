@@ -131,6 +131,38 @@ test("首次使用：父在本 scope 下不可见 ⇒ ScopeError（R3-22 的属�
   );
 });
 
+test("首次使用：父在**库里不存在** ⇒ 插入抛 ScopeError 且该行不落库（parentExists 不得恒真）", async () => {
+  const { connection, db, scopeA } = seed();
+  // 这个 ref 构造期**合法**：由 scopeA.ref() 产出、owns() 能过 —— 挡不住"库里没有这行"。
+  // 能拦住的只有基类的首次使用校验（`parentExists`）：
+  // 把它改成 `() => true`，本用例前半段必红（外键报的是另一种 Error，不是 ScopeError）。
+  const missingConv = "aaaa0000-0000-4000-8000-00000000dead";
+  const repo = new MessageRepo(db, scopeA, scopeA.ref(missingConv), DIALECT);
+
+  await assert.rejects(
+    () => repo.append({ role: "user", content: "orphan" }),
+    (error) => {
+      assert.ok(error instanceof ScopeError, `必须是 ScopeError，实测 ${String(error)}`);
+      assert.match(error.message, /父 conversation .* 在本 scope 下不可见/);
+      return true;
+    },
+  );
+
+  // 只断言"抛了错"不够：`parentExists` 恒真时外键也会报错（所以前半段已红），
+  // 但若哪天外键被关掉（迁移/初始化顺序），就只剩这一条能证明"没有半条孤儿行落库"。
+  const total = connection.raw.prepare("select count(*) as n from message").get();
+  assert.equal(Number(total.n), 0, "父不可见时一行都不许落库（出现行说明校验发生在写之后）");
+  const orphan = connection.raw
+    .prepare("select count(*) as n from message where conversation_id = ?")
+    .get(missingConv);
+  assert.equal(Number(orphan.n), 0, "不得出现挂在不存在会话下的孤儿行");
+
+  // 对照路径：同一张表换成真实存在的父会话就能写进去 ⇒ 上面的 0 不是"写不进去"。
+  const real = new MessageRepo(db, scopeA, scopeA.ref(IDS.convA), DIALECT);
+  const written = await real.append({ role: "user", content: "real" });
+  assert.equal(written.conversation_id, IDS.convA, "对照路径必须成功，否则 0 行无意义");
+});
+
 test("父谓词恒在：A 的 run 看不到 B 的 run 的子行", async () => {
   const { db, scopeA, scopeB } = seed();
   const eventsA = new AgentEventRepo(db, scopeA, scopeA.ref(IDS.runA), DIALECT);
