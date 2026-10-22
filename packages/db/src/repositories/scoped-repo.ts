@@ -58,6 +58,24 @@ export class ScopeError extends Error {
  * 租户作用域。**所有**数据访问都必须先有它。
  *
  * ``workspaceId`` 给了就同时锁定工作区（多工作区表）；不给表示「该租户下全部工作区」。
+ *
+ * ⚠️ ``ref()`` / ``owns()`` 的**心智模型**（读一遍可以省掉一次跨租户事故）
+ * -------------------------------------------------------------------
+ * * ``ref(id)`` 接受**任意**非空字符串，只把 ``tenantId`` 盖成本 scope 的章。
+ *   所以一个 ``ScopedRef`` 携带的 ``tenantId`` 说明的是「**谁铸造了它**」，
+ *   **不是**「它 id 指向的那一行属于哪个租户」。
+ * * ``owns(ref)`` 因此验的是**铸造来源**（mint provenance）：
+ *   品牌是真的 + 章的租户相同。它**不验行归属**（row ownership）。
+ *   反例：``scopeA.ref(conversationOfTenantB)`` —— 品牌合法、``owns()`` 为 true，
+ *   而 id 指向隔壁租户的行。**这一格 ``owns()`` 恒放行。**
+ * * 行归属**只能**由**作用域查询**证明：拿该 id 去**带 scope 谓词的仓储**里查一次，
+ *   查得到才算本租户的（``ChildScopedRepo`` 的 ``parentExists`` 就是这个含义 ——
+ *   它用父表的 scoped ``findById``，不是用 ``owns()``）。
+ * * 反例的判据在 ``tests/child-scope.test.mjs``：
+ *   「首次使用：**父存在但属于另一租户** ⇒ 读写两条路径都抛 ScopeError 且一行都不许漏进去」。
+ *   把 ``parentExists`` 注入成 ``() => true`` 该用例即红（而且不是红在外键上）。
+ *
+ * 一句话：``owns()`` 是**用法**校验，不是**安全边界**；安全边界是 scoped where。
  */
 export class Scope {
   readonly tenantId: string;
@@ -71,7 +89,13 @@ export class Scope {
     this.workspaceId = workspaceId ?? null;
   }
 
-  /** 把一个 id 提升为带 scope 的引用。**唯一**的 ``ScopedRef`` 生产入口。 */
+  /**
+   * 把一个 id 提升为带 scope 的引用。**唯一**的 ``ScopedRef`` 生产入口。
+   *
+   * ⚠️ 接受**任意**非空 id：它不查库、不验证该 id 是否存在、更不验证归属。
+   * 盖章的 ``tenantId`` 表示「本 scope 铸造了它」（mint provenance），
+   * **不表示**「这一行属于本租户」（row ownership）。归属要靠 scoped 查询。
+   */
   ref(id: string): ScopedRef {
     if (typeof id !== "string" || id.trim() === "") {
       throw new ScopeError("ScopedRef 需要非空 id");
@@ -79,7 +103,14 @@ export class Scope {
     return Object.freeze({ id, tenantId: this.tenantId, [REF_BRAND]: true as const });
   }
 
-  /** 该引用是否属于本 scope（纵深防御用，正常代码不需要调）。 */
+  /**
+   * 该引用是否由**本 scope 铸造**（纵深防御用，正常代码不需要调）。
+   *
+   * ⚠️ 只校验两件事：品牌为真 + ``tenantId`` 相同。**不是行归属证明** ——
+   * ``this.ref(idOfAnotherTenant)`` 一样返回 true（见类注释的反例）。
+   * 任何「靠 ``owns()`` 认定这一行属于本租户」的写法都是错的；
+   * 归属必须由**带 scope 谓词的查询**给出（``parentExists`` / ``findById`` 等）。
+   */
   owns(ref: ScopedRef): boolean {
     return isScopedRef(ref) && ref.tenantId === this.tenantId;
   }
