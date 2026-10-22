@@ -11,6 +11,10 @@
  *      且**不丢行不重行**（C-2 组：直接用 raw 把 6 条消息的 `created_at` 拉平到同一秒）；
  *   ④ **消息写入幂等**：同一 `run_id` 重复提交 assistant 消息**不产生第二行**（D-1 组，
  *      走服务层入口 `ConversationService.appendMessage` —— 契约无消息写 op，故不挂路由）。
+ *   ⑤ **认证面回归网**（QA 补强，2026-10-22）：5 op 无令牌 ⇒ **401**；未认证 + 非法 body
+ *      ⇒ **仍是 401**（`preValidation` 早于 schema 校验）；契约外路径 ⇒ **404**（F 组）。
+ *      A–E 组全带令牌，认证从来没被正面钉住 ⇒ 摘掉某个 handler 的 `preValidation`
+ *      不会有任何一条变红。F 组就是那张"摘掉即红"的网。
  *
  * 反例（注入复验见施工记录 T3-07 §5）：
  *   - 分页丢行/重行 ⇒ C-2 组必红（去掉 `id` 次序键后两次调用次序不再确定）；
@@ -30,6 +34,7 @@ import {
   UpdateConversationRequestSchema,
 } from "../dist/routes/schemas.js";
 import {
+  errorOf,
   makeApp,
   ORG_ID,
   OTHER_TENANT_ID,
@@ -700,6 +705,154 @@ test("E-2 · 范围红线：无 DELETE 会话、无消息写路由（契约无 �
       assert.equal(res.statusCode, 404, `${method} ${url} 不该存在（${res.body}）`);
     }
     assert.equal(rawConversation(fixture, created.id).id, created.id, "会话仍在（没被删）");
+  } finally {
+    await fixture.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// F · 认证面回归网（QA 补强 2026-10-22；**不改 src 一行**）
+// ---------------------------------------------------------------------------
+// 定位：A–E 组全部带令牌 ⇒ 认证面**从未被正面钉住**。若有人把某个 handler 的
+// `preValidation: authenticate(deps)` 摘掉，A–E 一条都不会红（带令牌照样通过），
+// 而未认证请求会掉进"schema 先报 422 / 业务先 404"的形态 —— 那正是 §5.1 的第一条边界
+// （"未认证 ⇒ 401"）被绕开的典型方式。F 组是"摘掉即红"的网。
+//
+// 六条 401 判据只断三件事：状态码 401（不是 422 / 403 / 200）、`code=UNAUTHORIZED`、
+// 四键错误壳齐全（`errorOf` 内断言）。不断文案 —— 文案不是契约面。
+
+/** 断言"未认证 ⇒ 401 + UNAUTHORIZED + 四键壳"。 */
+function assertUnauthorized(response, label) {
+  assert.equal(
+    response.statusCode,
+    401,
+    `${label} 必须 401（实测 ${response.statusCode}：${response.body}）`,
+  );
+  const body = errorOf(response);
+  assert.equal(body.code, "UNAUTHORIZED", `${label} 的 code 必须是 UNAUTHORIZED`);
+}
+
+test("F-1 · 无令牌 GET /conversations ⇒ 401", async () => {
+  const fixture = await makeApp({ username: "conv-f1" });
+  try {
+    assertUnauthorized(
+      await request(fixture, "GET", "/api/v1/conversations", { auth: false }),
+      "GET /conversations",
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("F-2 · 无令牌 POST /conversations ⇒ 401（合法 body 也不得先被处理）", async () => {
+  const fixture = await makeApp({ username: "conv-f2" });
+  try {
+    seedWorkspace(fixture);
+    assertUnauthorized(
+      await request(fixture, "POST", "/api/v1/conversations", {
+        auth: false,
+        payload: { agent_id: "00000000-0000-4000-8000-000000000000", workspace_id: WORKSPACE_ID },
+      }),
+      "POST /conversations",
+    );
+    // 对照：未认证请求不得写出任何行
+    assert.equal(
+      fixture.raw.prepare("select count(*) as n from conversation").get().n,
+      0,
+      "未认证请求不得落库",
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("F-3 · 无令牌 GET /conversations/{id} ⇒ 401（不是 404：不得用状态码探测存在性）", async () => {
+  const fixture = await makeApp({ username: "conv-f3" });
+  try {
+    assertUnauthorized(
+      await request(fixture, "GET", `/api/v1/conversations/${MISSING_CONVERSATION_ID}`, {
+        auth: false,
+      }),
+      "GET /conversations/{id}",
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("F-4 · 无令牌 PUT /conversations/{id} ⇒ 401", async () => {
+  const fixture = await makeApp({ username: "conv-f4" });
+  try {
+    assertUnauthorized(
+      await request(fixture, "PUT", `/api/v1/conversations/${MISSING_CONVERSATION_ID}`, {
+        auth: false,
+        payload: { title: "越权改名" },
+      }),
+      "PUT /conversations/{id}",
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("F-5 · 无令牌 GET /conversations/{id}/messages ⇒ 401（不是空数组、不是 404）", async () => {
+  const fixture = await makeApp({ username: "conv-f5" });
+  try {
+    assertUnauthorized(
+      await request(fixture, "GET", `/api/v1/conversations/${MISSING_CONVERSATION_ID}/messages`, {
+        auth: false,
+      }),
+      "GET /conversations/{id}/messages",
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("F-6 · 未认证 + **非法 body** ⇒ 仍是 401（钉住 preValidation 早于 schema 校验）", async () => {
+  const fixture = await makeApp({ username: "conv-f6" });
+  try {
+    // `{}` 缺 agent_id ⇒ 已认证时会 422。未认证时若先跑 schema，就会得到 422 —— 那么
+    // "有没有令牌"这件事就被 422 的 data 绕开了（§5.1 第一条边界）。
+    assertUnauthorized(
+      await request(fixture, "POST", "/api/v1/conversations", { auth: false, payload: {} }),
+      "未认证 + 非法 body",
+    );
+    // 反向对照：**已认证**时同一 body 必须是 422 —— 证明这条判据不是"整个端点都在 401"
+    const authed = await request(fixture, "POST", "/api/v1/conversations", { payload: {} });
+    assert.equal(authed.statusCode, 422, `已认证 + 非法 body 必须 422（实测 ${authed.statusCode}）`);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("F-7 · 契约外 DELETE /conversations/{id} ⇒ 404 且会话仍在（范围红线：无删除）", async () => {
+  const fixture = await makeApp({ username: "conv-f7" });
+  try {
+    seedWorkspace(fixture);
+    const agent = await createAgent(fixture);
+    const created = await createConversation(fixture, agent.id);
+
+    const res = await request(fixture, "DELETE", `/api/v1/conversations/${created.id}`);
+    assert.equal(res.statusCode, 404, `DELETE 不该存在（实测 ${res.statusCode}：${res.body}）`);
+    assert.ok(rawConversation(fixture, created.id), "会话必须仍在（没有删除语义）");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("F-8 · 契约外 POST /conversations/{id}/messages ⇒ 404 且一行未写（消息写只有服务层入口）", async () => {
+  const fixture = await makeApp({ username: "conv-f8" });
+  try {
+    seedWorkspace(fixture);
+    const agent = await createAgent(fixture);
+    const created = await createConversation(fixture, agent.id);
+
+    const res = await request(fixture, "POST", `/api/v1/conversations/${created.id}/messages`, {
+      payload: { content: "不该落地" },
+    });
+    assert.equal(res.statusCode, 404, `POST messages 不该存在（实测 ${res.statusCode}：${res.body}）`);
+    assert.equal(countMessages(fixture, created.id), 0, "契约外路径不得写入任何消息行");
   } finally {
     await fixture.close();
   }
