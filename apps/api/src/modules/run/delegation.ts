@@ -24,15 +24,26 @@
 
 import { randomUUID } from "node:crypto";
 
-import type { DrizzleDatabase, SqlDialect } from "@wbtime/db";
+import {
+  AgentRunRepo,
+  Scope,
+  type DrizzleDatabase,
+  type SqlDialect,
+} from "@wbtime/db";
 import {
   DEPTH_EXCEEDED_REASON,
   MAX_SUBAGENT_DEPTH,
+  RUN_TRIGGER_SUBAGENT,
   pickBudgetStopReason,
+  type ModelGatewayPort,
 } from "@wbtime/domain";
 
+import { AgentVersioningService } from "../agent/versioning.js";
 import { SafetyGate, type SafetyVerdict } from "../safety/gate.js";
 import { evaluateDelegation } from "../safety/stages/delegation.js";
+import type { SandboxProvider } from "../sandbox/types.js";
+import { RunCoordinator } from "./coordinator.js";
+import { RunDriver } from "./driver.js";
 import { isDepthAllowed } from "./subagent-guard.js";
 import { discoverChildRunIds, finalizeChildCancelled } from "./subagent-cancel.js";
 import { SubAgentSpawner, type SpawnRejectReason } from "./subagent-spawner.js";
@@ -294,8 +305,129 @@ export interface DelegateSpawnInput {
   readonly budget?: ChildBudget;
   /** 父 run 的 policy_version 快照（S3：子 run 必须继承；缺省回落当前策略版本）。 */
   readonly parentPolicyVersion?: string;
-  /** 沙箱端口（子 run 执行 `code_exec` 用；生产装配注入，缺省 ⇒ 子 run 不预占沙箱）。 */
-  readonly sandbox?: unknown;
+  /** 沙箱端口（子 run 执行 `code_exec` 用；生产装配注入，缺省 ⇒ 需沙箱的工具返回 `FAILED`）。 */
+  readonly sandbox?: SandboxProvider;
+  /** 子 run 归属用户（缺省继承父 run 的 `user_id`；父行也无 ⇒ 拒绝启动，不猜）。 */
+  readonly userId?: string;
+  /**
+   * **模型网关**（V0.3.1 主理人裁定 A-a，2026-10-23）。
+   *
+   * 用途**仅限**测试注入与 T031-04 的生产装配：**缺省 ⇒ 子 run 只建行、不启动执行**
+   * （`RunDriver.start` 无网关即 `CONFIGURATION_ERROR` fail loud，这里**不静默降级** ——
+   * 降级会把「没有模型能力」推迟成「看起来在跑」）。
+   * `contracts/**` 零改动：这是**内部函数签名**，不是契约面。
+   */
+  readonly gateway?: ModelGatewayPort;
+  /**
+   * **协调器**（可选注入）。`app.ts` 装配注释写明「协调器**单实例**：`RunService.cancel`
+   * 的进程内 abort 信号与 `RunDriver` 的取消传播必须是同一个对象 —— 两个实例各持一份
+   * Map，取消就有一半收不到」。生产装配**必须**注入 `app.ts` 的那个实例；缺省时本函数
+   * 自建一个 ⇒ **仅够执行、取消传播不跨实例**（已知缺口，移交 T031-04，见施工记录 §五）。
+   */
+  readonly coordinator?: RunCoordinator;
+  /**
+   * 子 run 启动后**等待收敛**的毫秒上限（>0 才等；缺省不等 —— 与 `RunDriver.start`
+   * 的 HTTP 侧口径一致：异步驱动、不等终态）。判据若要断言执行产物（`tool_call` 行）
+   * 需显式给这个值，或用轮询。
+   */
+  readonly settleTimeoutMs?: number;
+}
+
+/** {@link startChildRun} 的结果：要么拿到子 run id，要么给出不启动的原因（不抛异常）。 */
+type ChildStartOutcome =
+  | { readonly started: true; readonly childRunId: string }
+  | { readonly started: false; readonly reason: string };
+
+/**
+ * A-c · 用 **`RunDriver` 既有公共入口**真驱动子 run（裁定 1：**不内联、不自建执行循环**）。
+ *
+ * 装配点 = `RunDriver.start({...})`（`driver.ts:451`）—— 它是唯一会 `#drive` 的公共入口，
+ * 本函数**只按现有签名装配依赖**，driver 内部零改动（裁定 3）。
+ *
+ * 两条必须显式登记的形态约束（不是缺陷掩饰，是复用既有入口的代价）：
+ *   ① `RunDriver.start` **自建** run（`trigger: "user"` 写死在 `driver.ts:504`）⇒
+ *      本函数在 start 之后把该行的 `trigger` **回填**成 `RUN_TRIGGER_SUBAGENT`
+ *      （子 run 标记是 D1③ / D3 发现的语义前提，不能留 `user`）；
+ *   ② `guardRunCreation`（D8/D10 并发闸）**在 driver 建行之后**才被调用 ⇒ 该路径的
+ *      并发闸是**后置防御**而非前置闸。解除它要改 `RunDriver.start`，属 T031-04 的
+ *      生产接线面（已登记移交）。
+ */
+async function startChildRun(
+  input: DelegateSpawnInput,
+  task: string,
+  gate: SafetyGate,
+  dialect: SqlDialect
+): Promise<ChildStartOutcome> {
+  if (input.gateway === undefined) return { started: false, reason: "NO_GATEWAY" };
+
+  const scope = new Scope(input.tenantId);
+  let systemPrompt = "";
+  let modelConfig: Record<string, unknown> = {};
+  let runtimeConfig: Record<string, unknown> = {};
+  try {
+    const version = await new AgentVersioningService({ db: input.db, dialect }).findVersion(
+      input.tenantId,
+      input.targetAgentId,
+      input.targetVersionId
+    );
+    systemPrompt = version.system_prompt;
+    modelConfig = version.model_config;
+    runtimeConfig = version.runtime_config;
+  } catch (error) {
+    return {
+      started: false,
+      reason: `AGENT_VERSION_UNRESOLVED:${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  const parent = await new AgentRunRepo(input.db, scope, dialect).findById(
+    scope.ref(input.parentRunId)
+  );
+  const userId = parent?.user_id ?? input.userId;
+  if (userId === null || userId === undefined || userId === "") {
+    return { started: false, reason: "PARENT_USER_UNRESOLVED" };
+  }
+
+  const driver = new RunDriver({
+    db: input.db,
+    dialect,
+    tenantId: input.tenantId,
+    coordinator:
+      input.coordinator ?? new RunCoordinator({ db: input.db, dialect, tenantId: input.tenantId }),
+    gateway: input.gateway,
+    safety: gate,
+    ...(input.sandbox === undefined ? {} : { sandbox: input.sandbox }),
+  });
+
+  try {
+    const started = await driver.start({
+      tenantId: input.tenantId,
+      userId,
+      agentId: input.targetAgentId,
+      agentVersionId: input.targetVersionId,
+      systemPrompt,
+      modelConfig,
+      runtimeConfig,
+      conversationId: input.conversationId,
+      workspaceId: null,
+      agentWorkspaceId: null,
+      message: task,
+      requestId: randomUUID(),
+    });
+    // ① trigger 回填（子 run 标记；见本函数头注）。
+    await new AgentRunRepo(input.db, scope, dialect).update(scope.ref(started.run.id), {
+      trigger: RUN_TRIGGER_SUBAGENT,
+    });
+    if (input.settleTimeoutMs !== undefined && input.settleTimeoutMs > 0) {
+      await driver.awaitSettled(started.run.id, input.settleTimeoutMs);
+    }
+    return { started: true, childRunId: started.run.id };
+  } catch (error) {
+    return {
+      started: false,
+      reason: `CHILD_DRIVE_FAILED:${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 }
 
 /** 派生结果（判据归一器认 `accepted` 布尔形态）。 */
@@ -374,7 +506,26 @@ export async function delegateSpawn(input: DelegateSpawnInput): Promise<Delegate
     return { accepted: false, reason: DEPTH_EXCEEDED_REASON, stage: DELEGATION_STAGE };
   }
 
-  // ---- 3. 并发闸 + 建 run + 双源写行（origin = SUBAGENT 豁免并发计数）-----------
+  // ---- 3a. A-c · 有网关 ⇒ 用 RunDriver 真驱动子 run（子 run 行由 driver 建）------
+  const childStart = await startChildRun(input, effectiveTask, gate, dialect);
+  if (input.gateway !== undefined && !childStart.started) {
+    // 给了网关却没驱动起来 ⇒ **不得**退回"只建行不执行"（那是静默降级）⇒ 拒绝并落
+    // D1 式观察面（父 tool_call FAILED + subagent.rejected）。子 run 行数恒 0。
+    const rejectReason: SpawnRejectReason = "CHILD_DRIVE_FAILED";
+    await spawner.rejectDelegation(
+      {
+        parentRunId: input.parentRunId,
+        targetAgentId: input.targetAgentId,
+        task: effectiveTask,
+        depth,
+        maxDepth,
+      },
+      { stage: DELEGATION_STAGE, reason: rejectReason }
+    );
+    return { accepted: false, reason: childStart.reason, stage: DELEGATION_STAGE };
+  }
+
+  // ---- 3b. 并发闸 + 建 run（无网关时）+ 双源写行（origin = SUBAGENT 豁免）-------
   const outcome = await spawner.delegate({
     parentRunId: input.parentRunId,
     targetAgentId: input.targetAgentId,
@@ -383,6 +534,7 @@ export async function delegateSpawn(input: DelegateSpawnInput): Promise<Delegate
     task: effectiveTask,
     depth,
     maxDepth,
+    ...(childStart.started ? { childRunId: childStart.childRunId } : {}),
     budget: toBudgetRecord(input.budget),
     policyVersion: input.parentPolicyVersion,
     rejectionStage: DELEGATION_STAGE,

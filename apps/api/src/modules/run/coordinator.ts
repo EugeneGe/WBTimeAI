@@ -45,7 +45,6 @@ import {
 import { RUN_ORIGIN_SUBAGENT, TERMINAL_RUN_STATUSES, isTerminalRunStatus } from "@wbtime/domain";
 
 import { authError } from "../auth/errors.js";
-import { discoverChildRunIds, finalizeChildCancelled } from "./subagent-cancel.js";
 
 /** run 处于非终态（可被取消 / 可被抢占）的四个状态。 */
 export const ACTIVE_RUN_STATUSES = [

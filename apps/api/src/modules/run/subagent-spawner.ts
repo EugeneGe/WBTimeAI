@@ -80,7 +80,12 @@ export interface SpawnChildArgs {
  * `SpawnChildOutcome.reason` 继续是**穷举**的（否则只能退化成 `string`，把
  * "拒绝原因"这个分类信息抹掉）。已在施工记录 `T031-02.md` 登记。
  */
-export type SpawnRejectReason = "DEPTH_EXCEEDED" | "CONCURRENCY_LIMIT" | "PARENT_NOT_VISIBLE" | "SAFETY_DENIED";
+export type SpawnRejectReason =
+  | "DEPTH_EXCEEDED"
+  | "CONCURRENCY_LIMIT"
+  | "PARENT_NOT_VISIBLE"
+  | "SAFETY_DENIED"
+  | "CHILD_DRIVE_FAILED";
 
 /** 派生结果的原因（`OK` = 放行，其余见 {@link SpawnRejectReason}）。 */
 export type SpawnOutcomeReason = "OK" | SpawnRejectReason;
@@ -303,6 +308,11 @@ export class SubAgentSpawner {
     readonly budget?: Record<string, number>;
     readonly policyVersion?: string;
     readonly rejectionStage: string;
+    /**
+     * A-c：子 run 已由 `RunDriver.start` 建立时传入（**本方法不再建行**，只做
+     * 双源写行与观察面）。缺省 ⇒ 本方法自己建（无网关 / 未装配执行链的形态）。
+     */
+    readonly childRunId?: string;
   }): Promise<
     | { readonly accepted: true; readonly childRunId: string; readonly policyVersion: string }
     | { readonly accepted: false; readonly reason: string; readonly stage?: string }
@@ -355,8 +365,11 @@ export class SubAgentSpawner {
     }
 
     const policyVersion = input.policyVersion ?? SAFETY_POLICY_VERSION;
-    const childRunId = randomUUID();
-    await this.#runs().create(this.#childRunValues(args, parent, childRunId));
+    // A-c：`childRunId` 已由 `RunDriver.start` 建好 ⇒ 不重复建行（D8 的「建 run 一次」）。
+    const childRunId = input.childRunId ?? randomUUID();
+    if (input.childRunId === undefined) {
+      await this.#runs().create(this.#childRunValues(args, parent, childRunId));
+    }
 
     const toolCallId = randomUUID();
     const toolCalls = this.#toolCalls(input.parentRunId);
