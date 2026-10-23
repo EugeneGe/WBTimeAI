@@ -973,6 +973,16 @@ def v031_cancel_child_no_fanout(contracts: Path, repo: Path) -> str:
     扇出**零命中** ⇒ 子 run 永远 RUNNING。
     ⇒ `apps/api/tests/subagent-delegation.test.mjs` 的 **D3-2** 必红。
 
+    **锚点校准（2026-10-23，QA A-b 改造时发现并登记）**：原形态 ① 的锚点
+    `trigger == "subagent"` 在 `coordinator.ts` / `run-service.ts` /
+    `delegation.ts` 三个候选文件里**零命中** —— 裁定 5 的双源发现实现用的是
+    「tool_call 行查 + 应用层 JSON 解析 + `agent_event` 交叉验证」，**没有**
+    trigger 判等谓词；形态 ② 的 `propagateCancel(` 也零命中（`coordinator.ts`
+    尚未接线，见移交单 D3-2b）。按双律 6b（先钉声明的危险形态「扇出零命中」，
+    再推导可观察面）补形态 ①'：把**子侧交叉验证谓词**
+    `parentBack === parentRunId` 换成永假常量 —— 这是当前实现里真实存在的
+    「子 run 定位谓词」，改坏它同样使 `discoverChildRunIds` 零命中。
+
     Args:
         contracts: 未使用（本族改的是实现，不是契约件）。
         repo: 克隆仓库根。
@@ -990,14 +1000,26 @@ def v031_cancel_child_no_fanout(contracts: Path, repo: Path) -> str:
             "apps/api/src/modules/run/coordinator.ts",
             "apps/api/src/modules/run/run-service.ts",
             "apps/api/src/modules/run/delegation.ts",
+            # 裁定 5 的双源发现叶模块：交叉验证谓词在这里（src 与 dist 双写锚点）。
+            "apps/api/src/modules/run/subagent-cancel.ts",
         ),
         (
-            # 形态 ①：扇出定位谓词（trigger 判等）→ 永假常量 ⇒ 子探针与父探针断开。
+            # 形态 ①：子侧交叉验证谓词（`子 run 事件里的 parent_run_id == 父 run id`）
+            #   → 永假常量 ⇒ 子探针与父探针断开 ⇒ `discoverChildRunIds` 零命中
+            #   ⇒ `propagateCancel` 扇出零命中（子 run 恒 RUNNING）。
+            #   为什么先放这条：它是**当前实现里真实存在的**那个定位谓词。
+            #   ⚠️ 替换用**回调**而非字符串：`_replace_code_matches` 是手工切片，
+            #     不做反向引用替换（`\1` 会被当字面量写进文件 ⇒ 语法错误 ⇒ 假红）。
+            (
+                r"(parentBack\s*===\s*)parentRunId",
+                lambda m: f'{m.group(1)}"__no_subagent__" /* v031-cancel-child-no-fanout */',
+            ),
+            # 形态 ②：扇出定位谓词（trigger 判等）→ 永假常量 ⇒ 子探针与父探针断开。
             (
                 r"(trigger\s*(?:===|==)\s*)(?:[\"']subagent[\"']|RUN_TRIGGER_SUBAGENT)",
                 r'\1"__no_subagent__" /* v031-cancel-child-no-fanout */',
             ),
-            # 形态 ②：机制出口调用 → 恒空结果 IIFE（扇出被整体短路）。
+            # 形态 ③：机制出口调用 → 恒空结果 IIFE（扇出被整体短路）。
             #   负向行首断言避开 `function propagateCancel(` 声明本身。
             (
                 r"(?<!function\s)\b(?:propagateCancel|cancelDownstream|cancelChildren)\s*\(",
@@ -1014,6 +1036,13 @@ def v031_budget_record_only(contracts: Path, repo: Path) -> str:
     正确实现：预算闸判 `exceeded` 为真时**必中断**（stop / throw / cancel 子 run）。
     改坏后：`exceeded` 的消费点被短路成永假（或比较恒 false）⇒ 触顶照跑不误。
     ⇒ `apps/api/tests/subagent-delegation.test.mjs` 的 **D4-3** 必红。
+
+    **锚点校准（2026-10-23，QA A-b 改造时发现并登记）**：原形态 ①② 的锚点
+    （`if (<x>.exceeded)` / `<x>.exceeded === true`）在三个候选文件里**零命中** ——
+    生产代码里**没有** `exceeded` 的调用点（`applyChildBudget` 只被测试调用，
+    T031-04 的执行接线尚未落地）。按双律 6b 补形态 ③：把 `flags` 喂空给域判定
+    `pickBudgetStopReason(flags)` ⇒ flags 照算（记录）但不喂判定（不拦截）
+    ⇒ `stopReason` 恒 null ⇒ `{ exceeded: false }`。危险形态与可观察面都不变。
 
     Args:
         contracts: 未使用。
@@ -1038,6 +1067,19 @@ def v031_budget_record_only(contracts: Path, repo: Path) -> str:
             (r"if\s*\(\s*(?:\w+\.)*exceeded\s*\)", "if (false) /* v031-budget-record-only */"),
             # 形态 ②：`<x>.exceeded === true` → `false`。
             (r"(?:\w+\.)*exceeded\s*===?\s*true", "false /* v031-budget-record-only */"),
+            # 形态 ③：**当前实现形态**（2026-10-23 校准）。`applyChildBudget` 是预算闸的
+            #   唯一判定点，而「消费 `exceeded` 的调用点」在生产代码里**尚不存在**
+            #   （T031-04 执行接线后才会有）⇒ 形态 ①② 的锚点零命中。
+            #   按双律 6b：声明的危险形态是「触顶**不中断**」，可观察面是
+            #   `exceeded === true`；故把 `flags` 喂空给域判定 —— flags 照算
+            #   （**记录**）但不喂给判定（**不拦截**）⇒ `stopReason` 恒 null
+            #   ⇒ `{ exceeded: false }` ⇒ 触顶照跑不误。这就是 py `if False:`
+            #   短路式在这个实现里的同形物。
+            #   ⚠️ 替换用**回调**：`_replace_code_matches` 手工切片，`\1` 不是反向引用。
+            (
+                r"(pickBudgetStopReason\(\s*)flags(\s*\))",
+                lambda m: f"{m.group(1)}{{}}{m.group(2)} /* v031-budget-record-only */",
+            ),
         ),
         label=f"⑥ {VICTIM_V031_BUDGET}：exceeded 消费点短路成永假",
     )
@@ -1055,6 +1097,15 @@ def v031_scope_passthrough(contracts: Path, repo: Path) -> str:
     锚点按《调用契约》声明的形参名钉死（`parentScope` / `targetScope`）。
     实现方若用不同形参名 ⇒ 锚点不命中 ⇒ UNEVALUABLE(12) ⇒ 按纪律回报 QA
     校准锚点，**不得**改断言迁就实现。
+
+    **锚点校准（2026-10-23，QA A-b 改造时发现并登记）**：原锚点
+    `intersectPermissionScope(parentScope, targetScope) {` 按形参名**逐字**匹配 ——
+    它在 **dist（编译后 JS）命中 1 次，在 src（TS）零命中**（src 是多行签名，
+    形参带 `: readonly string[] | ReadonlySet<string>` 类型标注，形参名不相邻）。
+    `_v031_patch` 要求**两侧**命中次数相等且 ≥1 ⇒ src 零命中 ⇒ 用例永久
+    UNEVALUABLE(12)。按双律 6b 改锚「函数头 + 函数体首个 `{`」：两侧同形
+    （`[^)]*` 吃签名、`(?::[^{]*)?` 吃 TS 返回类型标注），危险形态不变
+    （函数体开头 early-return ⇒ 直接透传父 scope，不取交集）。
 
     Args:
         contracts: 未使用。
@@ -1075,11 +1126,23 @@ def v031_scope_passthrough(contracts: Path, repo: Path) -> str:
             "apps/api/src/modules/run/subagent-guard.ts",
         ),
         (
-            # 函数头注入 early-return（覆盖 `function f(a, b) {` 与
-            # `const f = (a, b) => {` 两种声明形态 —— `(?:=>\s*)?` 兼容箭头体）。
+            # 函数体开头注入 early-return（直接透传父 scope，不取交集）。
+            #
+            # 为什么锚「函数头 + 首个 `{`」而不是「形参名逐字」：src 是 TS
+            # **多行签名**（`parentScope: readonly string[] | ReadonlySet<string>`），
+            # dist 是编译后**单行签名**（`(parentScope, targetScope)`）—— 按形参名
+            # 逐字匹配的锚点在 src 侧**永不命中** ⇒ 用例永久 UNEVALUABLE(12)，
+            # 那是把判据写成了不可判。本锚点两侧同形：
+            #   src  `…intersectPermissionScope(\n  parentScope: …\n): string[] {`
+            #   dist `intersectPermissionScope(parentScope, targetScope) {`
+            # `[^)]*` 吃签名内部、`(?::[^{]*)?` 吃 TS 的返回类型标注，`\{` 落到函数体首括号。
+            # 形参名 `parentScope` / `targetScope` 仍是《调用契约》钉死的名字（不得改名）。
+            # ⚠️ 替换用**回调**：`_replace_code_matches` 手工切片，不做反向引用替换
+            #   （`\1` 会被当字面量写进文件 ⇒ 语法错误 ⇒ 假红）；且 src / dist 的签名
+            #   文本不同（多行带类型标注 vs 单行），只能用回调原样带回匹配全文。
             (
-                r"(intersectPermissionScope\s*\(\s*parentScope\s*,\s*targetScope\s*\)\s*(?:=>\s*)?\{)",
-                r"\1 return parentScope; /* v031-scope-passthrough */",
+                r"(intersectPermissionScope\s*\([^)]*\)\s*(?::[^{]*)?\{)",
+                lambda m: f"{m.group(0)} return [...parentScope]; /* v031-scope-passthrough */",
             ),
         ),
         label=f"⑦ {VICTIM_V031_SCOPE}：收窄函数 → 直接透传父 scope（不取交集）",
