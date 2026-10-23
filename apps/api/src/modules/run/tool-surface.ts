@@ -45,7 +45,7 @@ import { BUILTIN_REGISTRY, type BuiltinTool } from "../tool/registry.js";
 export interface ToolSurface {
   /** 工具名 → 实现（内置 + MCP；MCP 带 `mcp:` 前缀）。 */
   readonly tools: ReadonlyMap<string, BuiltinTool>;
-  /** 模型可见的工具规格（顺序：内置 5 个按注册表顺序，其后 MCP 按名字升序）。 */
+  /** 模型可见的工具规格（顺序：内置 6 个按注册表顺序，其后 MCP 按名字升序）。 */
   readonly specs: readonly ModelToolSpec[];
   /** MCP 工具的归属表（`name → {server, tool}`），供 `mcp.*` 帧与授权串使用。 */
   readonly mcp: ReadonlyMap<string, { readonly server: string; readonly tool: string }>;
@@ -54,7 +54,7 @@ export interface ToolSurface {
 /**
  * 内置工具的模型规格（`input_schema` 取 `packages/db` 的真源，不在此处手抄）。
  *
- * @returns 5 条 `ModelToolSpec`（顺序 == `BUILTIN_TOOLS` 的顺序）。
+ * @returns 6 条 `ModelToolSpec`（顺序 == `BUILTIN_TOOLS` 的顺序）。
  */
 export function builtinToolSpecs(): ModelToolSpec[] {
   return BUILTIN_TOOLS.map((spec) => ({
@@ -155,7 +155,7 @@ export async function loadMcpTools(options: LoadMcpToolsOptions): Promise<Loaded
  * 组装一个 run 的工具执行面。
  *
  * @param options `db` / `dialect` / `tenantId` + 可选出网白名单。
- * @returns 见 {@link ToolSurface}（内置 5 个恒在；MCP 按库里有几个装几个）。
+ * @returns 见 {@link ToolSurface}（内置 6 个恒在；MCP 按库里有几个装几个）。
  */
 export async function buildToolSurface(options: LoadMcpToolsOptions): Promise<ToolSurface> {
   const tools = new Map<string, BuiltinTool>(BUILTIN_REGISTRY);

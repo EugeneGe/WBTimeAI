@@ -349,9 +349,10 @@ type ChildStartOutcome =
  *   ① `RunDriver.start` **自建** run（`trigger: "user"` 写死在 `driver.ts:504`）⇒
  *      本函数在 start 之后把该行的 `trigger` **回填**成 `RUN_TRIGGER_SUBAGENT`
  *      （子 run 标记是 D1③ / D3 发现的语义前提，不能留 `user`）；
- *   ② `guardRunCreation`（D8/D10 并发闸）**在 driver 建行之后**才被调用 ⇒ 该路径的
- *      并发闸是**后置防御**而非前置闸。解除它要改 `RunDriver.start`，属 T031-04 的
- *      生产接线面（已登记移交）。
+ *   ② 并发闸（D8/D10）**不在本函数内判** —— 主理人 2026-10-23 裁定 (v) 已把它
+ *      **前移**到 `delegateSpawn` 步骤 3a（两条建行路径**共同上游**、建行之前）；
+ *      本路径下游的 `spawner.delegate` 带 `concurrencyGuard: "skip"` 不再判 ⇒
+ *      一次派生恰好判 1 次（D8③「恒 1」不破）。 driver 建行之后**没有**闸。
  */
 async function startChildRun(
   input: DelegateSpawnInput,
@@ -448,8 +449,12 @@ const DELEGATION_STAGE = "delegation";
  *   1. **S3 闸**（`SafetyStage = delegation`，子任务文本过闸；`REDACT` 就地取脱敏文本，
  *      `ALLOW` 放行，`DENY` 拒绝）；
  *   2. **深度闸**（`max_subagent_depth` 缺省 1，超限必拒 —— D1）；
- *   3. **并发闸 + 建 run + 双源写行**（复用 `SubAgentSpawner.delegate`，`origin=SUBAGENT`
- *      豁免并发计数；父 run 的 `spawn_agent` tool_call 记 SUCCESS(child_run_id)）。
+ *   3a. **并发闸**（D8/D10）—— **前置**，且全程**只此一次**（主理人 2026-10-23
+ *       裁定 v：两条建行路径共同上游；拒绝 ⇒ 两条路径都不建行 ⇒ 子 run 行数恒 0）；
+ *   3b. **有网关 ⇒ A-c 真驱动**（`startChildRun` 走 `RunDriver.start`，子 run 行由
+ *       driver 自建、`trigger` 回填；驱动失败 ⇒ 拒绝，**不**静默退回"只建行"）；
+ *   3c. **无网关 ⇒ `spawner.delegate` 建行 + 双源写行**（`concurrencyGuard: "skip"`
+ *       —— 闸已在 3a 判过；父 run 的 `spawn_agent` tool_call 记 SUCCESS(child_run_id)）。
  */
 export async function delegateSpawn(input: DelegateSpawnInput): Promise<DelegateSpawnOutcome> {
   const dialect = input.dialect ?? "pg";
