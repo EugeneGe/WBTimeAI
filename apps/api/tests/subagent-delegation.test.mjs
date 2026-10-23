@@ -91,9 +91,15 @@
  *  --------------------------------------
  *   ① **D3-2 拆两层**（A-d 裁定）：**D3-2a**（机制面，归本批）= `propagateCancel`
  *      枚举子 run 并调用取消，子 run 由 `delegateSpawn` 真实建立并驱动（**废裸
- *      SQL 插行**）；**D3-2b**（端到端 HTTP 取消传播，归 **T031-04**）= 载体已
- *      建好但**未注册为 test**（显式标注 pending —— 注册会让控制组恒红，反例
- *      注入器的三条 case 会全部退成 UNEVALUABLE）。
+ *      SQL 插行**）；**D3-2b**（端到端 HTTP 取消传播，归 **T031-04**）= 载体先建
+ *      好并显式标注 pending，T031-04 收口时**注册为 test** —— 但**只判两面**：
+ *      ① 父 cancel ⇒ 子 run ≤30s 全 `CANCELLED`（集合全等）；② 无关 run 不连带。
+ *      **第三面（沙箱回收 / destroy 计数）留桩不判**：主理人 2026-10-23 裁定（选项 2
+ *      「分面注册」）—— 该面的观察面需要 `sandbox_session` 行与
+ *      `tool_call.sandbox_session_id` 链接，二者**在生产侧无任何 producer**（V0.3.0
+ *      T3-10 遗留 2 的承接链断裂：T3-13 未接 / T3-14 待做），留桩见台账 **FG-1**
+ *      （前向门禁：V0.3.3 R6 DoD-D3「`sandbox_session` 活跃行数 ≤ 上限」的硬前置）。
+ *      判据强度不降：已判两面有反例红证（注释 `#propagateToChildren` ⇒ 必红）。
  *   ② **D5-4 改注入网关**：子 run 必须真跑起来，`DENIED` 才能由真实
  *      `ToolExecutor` 权限链落（裁定 7）。
  *   ③ **「是否等收敛」两档相反**（附加 C）：D5-4 取 `settleTimeoutMs` 等收敛；
@@ -104,6 +110,11 @@
  *   "destroy 调用计数"取 `sandbox_session` 中 `run_id ∈ 子集合 且 ended_at 非空`
  *   的 **distinct run 计数**。子 run 的 `code_exec` `tool_call` 行与
  *   `sandbox_session` 行**必须由执行链产生** —— 测试不代插（否则前置恒真 = 自导自演）。
+ *   **⚠ 本版该口径只留桩不判**（D3-2b 第三面 → 台账 FG-1）：源码取证确认
+ *   `sandbox_session` 表全仓零生产写入、`tool_call.sandbox_session_id` 恒 null
+ *   （`ToolExecutionResult` 域端口无该字段，工具侧 `ToolOutcome.sandboxSessionId`
+ *   被执行器丢弃）⇒ 观察面无 producer，强行断言只会恒红。helper
+ *   {@link destroyedRunCount} 保留（FG-1 paste-back 用），本版 D3-2b 不调用。
  *
  * 复跑（与 G031-4 · S2 同款）
  * -------------------------
@@ -119,6 +130,9 @@ import test from "node:test";
 import { AgentRunRepo } from "@wbtime/db";
 import * as domain from "@wbtime/domain";
 
+// D3-2b 的沙箱端口（T3-10 既有模块，非 V0.3.1 新增 ⇒ 静态导入；与 `app.ts` 装配
+// 同款 `new LocalProcessSandbox({})` 构造 —— 判据要的是**真实执行链**占沙箱）。
+import { LocalProcessSandbox } from "../dist/modules/sandbox/local-process.js";
 import { errorOf, makeApp, request, TENANT_ID, fakeGateway } from "./routes-harness.mjs";
 import {
   createAgentWithVersion,
@@ -181,12 +195,58 @@ const CHILD_DRIVE_SCRIPT = Object.freeze([
   {
     type: "tool_call",
     id: "call-ce-in-scope",
+    // C 修（T031-04 收口）：入参必须对齐代码执行工具的真实 schema —— `code`
+    // （`code-exec.ts:80-88` 要 `code` 非空字符串），原写 `{command:"echo ok"}`
+    // 是**非法调用**（恒 FAILED「code 必须是非空字符串」）= 夹具假象。取 node
+    // 档（`process.execPath` 必在，且 node 档无本地代码表守卫）。
     name: "code_exec",
-    input: { command: "echo ok" },
+    input: { runtime: "node", code: "console.log('ok')" },
   },
   { type: "usage", usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 } },
   { type: "finish", reason: "model_finish" },
 ]);
+
+/**
+ * D3-2b 专用驱动脚本**工厂**：**阻塞型保活**（B 修，T031-04 收口 · 防抖必做）。
+ *
+ * 为什么必须保活：假 Provider **每轮从同一脚本起播**（`fake-provider.ts` 注释
+ * 「每次都从同一脚本起播 ⇒ 确定性」），子 run 的驱动轮数由
+ * `DEFAULT_STOP_LIMITS.maxModelTurns = 20` 收敛。用共享脚本（瞬时工具调用）时
+ * 子 run **约 350ms 自然收敛**（`budget_turns`）—— cancel 一旦晚到，就把
+ * 「已收敛」误判成「未传播」= 抖动判据。这里让 code_exec 真跑 ≥2.5s，
+ * 把 RUNNING 窗口拉到取消必然落在其中的宽度（cancel 前另有 RUNNING 前置断言）。
+ *
+ * 为什么**不复用**共享脚本：保活会让「无 cancel 的用例」（D5-4 等收敛档）
+ * 每轮多 2.5s × 最多 20 轮 ≈ 40s 后台驱动 —— 判据文件的时序被一个用例绑架。
+ * 专用脚本把影响面钉死在本用例（cancel 在 ~100ms 落到，驱动在首个保活 exec
+ * 结束后即随 abort 退出）。
+ *
+ * 为什么是**工厂**而不是常量（实测踩坑，2026-10-23）：`tool_call.id` 是**全局
+ * PK**，而 `ToolCallRepo.findById` 按 run **作用域**过滤 ⇒ 两个子 run 若回放
+ * **同一个** callId，B 的 `findById` 查不到 A 的行 ⇒ `createPending` 撞 PK
+ * ⇒ 每轮抛错 ⇒ 20 轮后 `budget_turns` 终态、**tool_call 行数为 0**（探针实测：
+ * 第二个子 run 在 ~300ms 失败、零行）。callId 必须**逐子 run 唯一**。
+ *
+ * 为什么用 node 档而不是 `sleep`：shell 命令会过 `checkCommand` 命令表守卫
+ * （`code-exec.ts` 闸 1），`sleep` 未必在白名单；node 档走 `process.execPath`
+ * （必在）且无本地代码表守卫 —— `setTimeout` 是确定性、无副作用、可被判据
+ * 解释的保活写法。
+ *
+ * @param {string|number} tag 子 run 标识（拼进 callId，保证全局唯一）。
+ */
+function d3_2bDriveScript(tag) {
+  return Object.freeze([
+    { type: "text_delta", text: "D3-2b：先跑一段保活代码，等父取消到达" },
+    {
+      type: "tool_call",
+      id: `call-ce-keepalive-d32b-${tag}`,
+      name: "code_exec",
+      input: { runtime: "node", code: "setTimeout(() => {}, 2500)" },
+    },
+    { type: "usage", usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 } },
+    { type: "finish", reason: "model_finish" },
+  ]);
+}
 
 /**
  * D5-4 等子 run 收敛的上限（`delegateSpawn` 的可选 `settleTimeoutMs`）。
@@ -348,6 +408,11 @@ function isSubset(child, parent) {
 /**
  * destroy 调用计数（D3 观察面）：`sandbox_session` 中 `run_id ∈ runIds 且
  * `ended_at` 非空` 的 **distinct run 计数**（`destroy` 的落库口径是写 `ended_at`）。
+ *
+ * **留桩（FG-1 paste-back 用；本版 D3-2b 不调用）**：主理人 2026-10-23 裁定
+ * （选项 2「分面注册」）—— 本 helper 的观察面在生产侧无 producer
+ * （`sandbox_session` 零写入），D3-2b 第三面留桩不判；FG-1 落地后把
+ * D3-2b 的三处断言原文粘回即可复判。仪器自证用例 `0-3` 仍用它验证 SQL 口径。
  *
  * @param {import("node:sqlite").DatabaseSync} raw
  * @param {string[]} runIds
@@ -699,27 +764,42 @@ test("D3-2a · 机制面：propagateCancel 枚举子 run 并调用取消（Map �
 });
 
 /**
- * **D3-2b · 端到端 HTTP 取消传播 —— 移交 T031-04 · 当前 pending（未注册为 test）**
+ * **D3-2b · 端到端 HTTP 取消传播 —— T031-04 已注册为 test（A-d 裁定 · 行为面）**
  *
  * 主理人 2026-10-23 A-d 裁定：D3 拆两层 —— D3-2a（机制面）归本批 T031-02；
- * D3-2b（行为面，`POST /runs/{parent}/cancel` ⇒ 子 run ≤30s 到 CANCELLED +
- * 沙箱 destroy 计数 == 子 run 数）归 **T031-04**。
+ * D3-2b（行为面）归 **T031-04**。本函数判**两面**：
+ *   ① `POST /runs/{parent}/cancel` ⇒ 子 run ≤30s 全到终态 `CANCELLED`（集合全等）；
+ *   ② 传播范围恰好是子集合 —— 无关 RUNNING run 不连带。
+ * **第三面（沙箱回收 / destroy 计数）留桩不判 → 台账 FG-1**（主理人 2026-10-23
+ * 「选项 2 · 分面注册」裁定）：该面的两个观察面工件在生产侧**无 producer** ——
+ * `sandbox_session` 表全仓零写入（`LocalProcessSandbox` 的 `onSessionCreated` /
+ * `onSessionDestroyed` 回调设计了但两个构造点都未接线）、`tool_call.sandbox_session_id`
+ * 恒 null（`ToolExecutionResult` 域端口无该字段）。强行断言只会恒红、并把反例
+ * 注入器拖成 UNEVALUABLE。FG-1 落地后把三处断言原文粘回即可复判（paste-back
+ * 在台账）。**行为面本身是好的**：`driver.ts` 的 `executor.destroySession(runId)`
+ * 在 `#drive` 的 `finally` 里 —— cancel ⇒ abort 退出 loop ⇒ finally ⇒ destroy
+ * 恒被执行；缺的只是持久化证据。
  *
- * **为什么 pending**：该链路的接线必经 `routes/runs.ts`（T031-05）→
- * `coordinator.ts::RunCoordinator.cancel`（T031-04）—— 二者都不在 T031-02
- * 文件域，`coordinator.ts` 至今**未调** `propagateCancel`。此处**把载体先建好**
- * 并登记移交单四项，**不注册为 `test()`**：注册会让控制组恒红（⇒ 反例注入器
- * 三条 case 全部退成 UNEVALUABLE），那是拿门禁换形式。
+ * T031-04 收口实际落的动作：
+ *   ① **注册**（本函数下方 `test(...)`）：`coordinator.ts::RunCoordinator.cancel`
+ *      命中分支已调 `#propagateToChildren`（T01 接线）⇒ 控制组不再恒红。
+ *   ② **注入 sandbox**（保留、但**不加断言**）：循环内 `probeSpawn` 每子 run 一实例
+ *      `new LocalProcessSandbox({})`（与 `app.ts` 装配同款构造）—— 让执行形态贴近
+ *      生产（session create/destroy 真实发生），为 FG-1 备好夹具。
+ *   ③ **共享表免传 coordinator**：子 driver 自建实例的 controller 落在模块级
+ *      `ABORT_CONTROLLERS`（T01 落地、AUD-02 加强为进程内唯一表）⇒ app 实例的
+ *      `cancel` 找得到 —— 这正是选模块级共享表的判据级收益（§附C）。
+ *   ④ **B 修 · 阻塞型保活**（防抖，见 {@link d3_2bDriveScript}）：子 run 用共享
+ *      脚本会约 350ms 自然收敛（`budget_turns`）⇒ cancel 晚到会把「已收敛」误判成
+ *      「未传播」；专用脚本（**callId 逐子 run 唯一**）跑 ≥2.5s 的 code_exec，
+ *      并在 POST cancel 前**断言两个子 run 均 RUNNING**（保活失败的报文与传播失败
+ *      分开，见下）。
  *
- * 收口执行人（T031-04）只需两步：把本函数体 `test(...)` 注册 + 注入沙箱端口
- * （`delegateSpawn` 的 `sandbox?` 已备好注入位；判据**不**代插 `sandbox_session`
- * 行 —— 文件头口径）。
+ * 判红手法（移交单原文修正版）：注释 `coordinator.ts::RunCoordinator.cancel` 里的
+ * `await this.#propagateToChildren(runId);` ⇒ 子 run 不再被 CAS 成 `CANCELLED`，
+ * 保活结束后自然收敛为 `FAILED`（`budget_turns`）⇒ 面① 必红（`# fail` 恰 1）。
  *
- * 判红手法（写进移交单）：`coordinator.ts::RunCoordinator.cancel` 不调
- * `propagateCancel`（或子探针不组合父探针）⇒ 子 run 恒 `RUNNING` /
- * destroy 计数 0 ⇒ 本函数**必红**。
- *
- * @returns 观察面快照（供 T031-04 收口时贴台账）。
+ * @returns 观察面快照（供台账回填）。
  */
 export async function d3_2b_httpCancelPropagation() {
   const fixture = await makeApp({ username: "del-d32b" });
@@ -728,6 +808,9 @@ export async function d3_2b_httpCancelPropagation() {
     const parentRunId = seedRunRow(fixture, { ...chain, status: "RUNNING" });
     const childRunIds = [];
     for (const index of [0, 1]) {
+      // 动作②：每个子 run 一个沙箱实例（与 `app.ts` 装配同款构造）—— 只备夹具，
+      // **不加断言**（第三面留桩 → FG-1）。
+      const sandbox = new LocalProcessSandbox({});
       const outcome = await probeSpawn(SPAWN_FN.value, {
         db: fixture.connection.db,
         dialect: "sqlite",
@@ -739,7 +822,8 @@ export async function d3_2b_httpCancelPropagation() {
         task: `D3-2b 子任务 ${index}`,
         depth: 0,
         maxDepth: 1,
-        gateway: fakeGateway(CHILD_DRIVE_SCRIPT),
+        gateway: fakeGateway(d3_2bDriveScript(index)),
+        sandbox,
       });
       if (outcome.normalized.accepted !== true) {
         throw new Error(`派生必须成功（D3-2b 前提）；实测 ${outcome.normalized.shape}`);
@@ -753,20 +837,17 @@ export async function d3_2b_httpCancelPropagation() {
       status: "RUNNING",
     });
 
-    // 前置：至少 1 个子 run 走 code_exec **真实**占用沙箱。这些行必须由执行链
-    // 产生 —— 测试不代插（代插 = 前置恒真 = 自导自演）。
-    const sandboxed = fixture.raw
-      .prepare(
-        "select count(*) as n from tool_call where run_id in (?, ?) and tool_name = 'code_exec' " +
-          "and sandbox_session_id is not null"
-      )
-      .get(...childRunIds).n;
-    if (sandboxed < 1) {
-      throw new Error(
-        "前置：必须至少 1 个子 run 经 code_exec 真实占用沙箱（否则 destroy 计数恒 0、判据真假绿）；" +
-          `实测 code_exec+sandbox 行数 = ${sandboxed} —— 执行链未产生 ⇒ 判据不可判`
-      );
-    }
+    // 前置（B 修②）：cancel 到达时两个子 run 必须**均未终态** —— 由专用脚本的
+    // 阻塞型 code_exec 确定性保活（≥2.5s）。这里失败 = **保活失败**（夹具问题），
+    // 不是「传播失败」：报文分开写，排障不串案。
+    const beforeCancel = childRunIds.map((id) => runRow(fixture, id).status);
+    assert.deepEqual(
+      beforeCancel,
+      ["RUNNING", "RUNNING"],
+      "前置：cancel 前两个子 run 必须均 RUNNING（保活脚本 ≥2.5s 的确定性窗口）；" +
+        `实测 [${beforeCancel.join(", ")}] —— 红因是**保活失败**（夹具/时序问题），` +
+        "不是取消传播未生效"
+    );
 
     const cancelled = await request(fixture, "POST", `/api/v1/runs/${parentRunId}/cancel`);
     assert.equal(cancelled.statusCode, 200, "父 cancel 成功");
@@ -789,13 +870,6 @@ export async function d3_2b_httpCancelPropagation() {
       "子 run status 集合 == {CANCELLED}（集合全等，不是行数相等）"
     );
 
-    // 沙箱被回收：destroy 调用计数 == 子 run 数（落库口径 = ended_at 非空的 distinct run）。
-    assert.equal(
-      destroyedRunCount(fixture.raw, childRunIds),
-      childRunIds.length,
-      "每个子 run 的沙箱都必须被 destroy()（D3：取消传播的机制面）"
-    );
-
     // **反向断言**：传播范围恰好是子集合 —— 无关 run 不得被连带取消。
     assert.equal(
       runRow(fixture, unrelatedRunId).status,
@@ -806,7 +880,6 @@ export async function d3_2b_httpCancelPropagation() {
     return {
       childRunIds,
       childStatuses: statuses.map((row) => row.status),
-      destroyedRunCount: destroyedRunCount(fixture.raw, childRunIds),
       unrelatedStatus: runRow(fixture, unrelatedRunId).status,
     };
   } finally {
@@ -814,6 +887,15 @@ export async function d3_2b_httpCancelPropagation() {
   }
 }
 
+// 动作①：D3-2b 注册为 test —— 控制组已因 T01 的
+// `coordinator.ts::RunCoordinator.cancel` → `#propagateToChildren` 接线而转绿。
+// 标题只承诺**已判两面**：第三面（沙箱回收）留桩 → FG-1，标题不得撒谎
+// （主理人 2026-10-23 裁定；`inject_cases.py::v031-cancel-child-no-fanout` 的
+// `must_be_red=("D3-2","CANCELLED")` 复核不受影响）。
+test(
+  "D3-2b · HTTP 取消向下传播：≤30s 子 run 全 CANCELLED + 无关 run 不连带（沙箱回收面留桩 → FG-1）",
+  d3_2b_httpCancelPropagation
+);
 
 test("D3-3 · 机制面出口：propagateCancel 就位且接受单对象入参（行为判据之外的接口契约）", () => {
   assert.equal(
