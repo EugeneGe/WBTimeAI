@@ -1,6 +1,6 @@
 {
   "name": "@wbtime/core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "WBTimeAI 平台基座 · 错误码 / 响应壳 / Result —— 全部字段由 contracts/ 生成，契约是唯一 oracle",
   "type": "module",

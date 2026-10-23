@@ -1,6 +1,6 @@
 {
   "name": "wbtime-ai",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "WBTimeAI 社区线（ts/）重建仓 —— V0.1.0 基座：数据层 + 域 + 契约层 + 前端原样迁入（首个「前端业务代码 0 改动」可证点）",
   "packageManager": "pnpm@9.15.0",

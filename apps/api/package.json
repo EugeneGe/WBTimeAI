@@ -1,6 +1,6 @@
 {
   "name": "@wbtime/api",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "WBTimeAI API 服务 · Fastify 5 + TypeBox 装配 —— V0.2.0 首次落地（响应壳 / 错误码 / 身份 4 路由族）",
   "type": "module",

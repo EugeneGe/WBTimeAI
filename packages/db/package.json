@@ -1,6 +1,6 @@
 {
   "name": "@wbtime/db",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "WBTimeAI 数据层 · Drizzle 双档 schema（PG / SQLite）+ ScopedRepo 泛型仓储 —— 结构由 contracts/schema.v0018.*.normalized.json 生成，禁手改",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@wbtime/event",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "WBTimeAI 平台基座 · 19 条 SSE 通道定义 + 数值字段上线格式定死（golden 帧逐字节可比）",
   "type": "module",
