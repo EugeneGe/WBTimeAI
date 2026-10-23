@@ -270,6 +270,21 @@ export function buildIdentityStack(args: {
     safety,
     ...(args.gateway === undefined ? {} : { gateway: args.gateway }),
     ...(mcpEgressAllowlist() === undefined ? {} : { egressAllowlist: mcpEgressAllowlist() }),
+    // W-2：`spawn_agent` 委派端口（run 侧身份由实参绑定；五道闸全在 delegateSpawn）。
+    delegationPort: makeDelegationPort({
+      db: args.database,
+      dialect,
+      tenantId,
+      coordinator,
+      ...(args.gateway === undefined ? {} : { gateway: args.gateway }),
+      sandbox,
+    }),
+    // W-1：用户入口并发闸单入口（D8②）—— `origin=USER` 只在此烤入（D10）。
+    // 钩子签名为 `Promise<void>`（spec 钉死）：判定结果由 `open_run` 自己抛 409，
+    // 装配侧不读返回值（读它只会诱出"第二个消费判定结果的地方"）。
+    openRun: async ({ conversationId }) => {
+      await runs.open_run({ conversationId, origin: RUN_ORIGIN_USER });
+    },
   });
   return {
     db: args.database,

@@ -98,6 +98,7 @@ import { SAFETY_POLICY_VERSION, type SafetyGate, type SafetyVerdict } from "../s
 import { SafetyHooks, applyVerdict, isBlocked, type SampledContent } from "../safety/hooks.js";
 import type { SandboxProvider } from "../sandbox/types.js";
 import { ToolExecutor } from "../tool/executor.js";
+import type { SpawnAgentDelegation } from "../tool/builtin/spawn-agent.js";
 import { RunCoordinator } from "./coordinator.js";
 import { RunEventWriter, RunTerminalError } from "./event-writer.js";
 import { buildToolSurface, toolTypeOf, type ToolSurface } from "./tool-surface.js";
@@ -183,6 +184,10 @@ export interface RunDriverDeps {
   readonly approvalTimeoutMs?: number;
   /** S6 采样窗口（字符）。 */
   readonly resultSampleWindow?: number;
+  /** `spawn_agent` 委派端口工厂（run 侧身份由实参绑定；实现见 `app.ts::makeDelegationPort`）。 */
+  readonly delegationPort?: (runId: string, conversationId: string) => SpawnAgentDelegation;
+  /** 用户入口并发闸（D8②；仅 `app.ts` 装配的实例持有，子 run driver 不判 —— 见 `open_run`）。 */
+  readonly openRun?: (args: { readonly conversationId: string }) => Promise<void>;
 }
 
 /** 一次 run 的启动入参（由 `AgentService.runEntry` 装配）。 */
@@ -479,6 +484,9 @@ export class RunDriver {
         })
       ).id;
 
+    // D8② 用户入口并发闸（仅 app.ts 装配的实例持有；子 run driver 不持有 ⇒ 不判）。
+    await this.#deps.openRun?.({ conversationId });
+
     // 用户消息先落（`run_id` 留 null：这条是"用户说的话"，不是"run 产出的东西"）。
     const messages = new MessageRepo(
       this.#deps.db,
@@ -624,6 +632,7 @@ export class RunDriver {
         : { egressAllowlist: this.#deps.egressAllowlist }),
     });
     const workspaceRoot = this.#workspaceRootOf(runId);
+    const delegation = this.#deps.delegationPort?.(runId, conversationId);
     const executor = new ToolExecutor({
       workspaceRoot,
       tools: surface.tools,
@@ -632,6 +641,7 @@ export class RunDriver {
         ? {}
         : { egressAllowlist: this.#deps.egressAllowlist }),
       ...(this.#deps.toolTimeoutMs === undefined ? {} : { timeoutMs: this.#deps.toolTimeoutMs }),
+      ...(delegation === undefined ? {} : { delegation }),
     });
     const hooks =
       this.#deps.safety === undefined
