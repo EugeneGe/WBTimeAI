@@ -138,7 +138,8 @@ parameter of type 'Schema<any, any, $ZodTypeInternals<any, any>>'
 
 - 这是**构建配置修正，不是业务代码改动**：`apps/web/src/**` **零改动**，红线判据 `git diff --exit-code ts/v0.3.0...HEAD -- apps/web/src` **仍 exit 0**。
 - **未动依赖图、未动 `pnpm-lock.yaml`**。
-- **关于"V0.3.0 是否也会失败"——本包不作断言**。可确证的只有：`node_modules/.modules.yaml` 与 `apps/web/node_modules/zod` 的 mtime 均为 **2026-10-23 12:40**（本次收口期间 `pnpm install` 重写），而 V0.3.0 的 `web-dist` 构建于 **2026-10-22 23:12**；**V0.3.0 出包时的链接布局已不可回放，故无法确定当时是否同样失败**。本版按上述方式修复并如实登记，**不把本机状态推广成普遍事实**。
+- **本版 `web-dist` 由当前源码重新构建，未复用 10-22 的旧产物。** 构建命令 = `pnpm -r --filter '!@wbtime/e2e' build`（11 单元 Done）→ `tar czf … -C apps/web/dist --exclude='*.map' .`；归档内非目录条目 **44 个**（与 V0.3.0 一致）。
+- **关于"V0.3.0 是否也会失败"——本包不作断言，并把先前一条不成立的推论收回**：`pnpm install --frozen-lockfile` 输出 `Already up to date` **只说明 lockfile 与 `package.json` 一致，不说明 node_modules 布局没被重排** —— 实测 `node_modules/.modules.yaml` 的 mtime = **2026-10-23 12:40**（正是收口期跑 install 的时刻），而 `apps/web/dist/index.html` = **2026-10-22 23:12**。**更可能的解释是：本次 install 重排了链接布局**，把 `zod@4.6.7` 挪进了 `@hookform/resolvers` 向上可解析的范围 —— 即 **本机安装面漂移**，而不是「V0.3.0 也构建不了」。该判断的依据只有 mtime 与解析链实测，**不推广为「任何机器都会失败」**。
 
 ## 7. 校验前置（出包前已确认）
 
