@@ -126,7 +126,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -197,7 +197,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: S-1 · per-root three-state scan + MIN_FILES floor
@@ -225,7 +225,7 @@ jobs:
       E2E_LEGACY_ROOT: ${{ vars.E2E_LEGACY_ROOT }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Injection engine · every named tamper must turn its gate red
@@ -241,7 +241,7 @@ jobs:
       E2E_LEGACY_ROOT: ${{ vars.E2E_LEGACY_ROOT }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: External oracle · artifacts must match the read-only legacy tree
@@ -255,7 +255,7 @@ jobs:
       E2E_LEGACY_ROOT: ${{ vars.E2E_LEGACY_ROOT }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Meta gate · every gate must notice it was mutated into green
@@ -286,7 +286,7 @@ jobs:
         with:
           node-version: "22.19.0"
           cache: pnpm
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install workspace
@@ -362,7 +362,7 @@ jobs:
       #
       # 版本对齐本机基准环境（py 3.12.10 / argon2-cffi 25.1.0）：argon2 的 PHC 参数
       # （m=65536,t=3,p=4）跨版本稳定，但把解释器小版本钉住能让失败可复现。
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install py oracle deps (argon2-cffi) and expose WBTIME_PY_ORACLE_PYTHON
@@ -399,7 +399,7 @@ jobs:
       E2E_LEGACY_ROOT: ${{ vars.E2E_LEGACY_ROOT }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: ⑤-a · apps/web/src/** must be byte-identical to the archive
