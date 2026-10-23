@@ -14,6 +14,8 @@
 import { ConfigError, loadConfig, requireSecretKey } from "@wbtime/config";
 import type { Config } from "@wbtime/config";
 import type { DrizzleDatabase, SqlDialect } from "@wbtime/db";
+import { AgentRepo, AgentRunRepo, Scope } from "@wbtime/db";
+import { MAX_SUBAGENT_DEPTH, RUN_TRIGGER_SUBAGENT } from "@wbtime/domain";
 import { createLogger } from "@wbtime/logging";
 import Fastify from "fastify";
 import type { FastifyInstance, FastifyServerOptions } from "fastify";
@@ -22,6 +24,7 @@ import { registerEnvelope } from "./http/envelope.js";
 import { registerErrorHandler } from "./http/error-handler.js";
 import { attachRequestContext, genReqId } from "./http/request-context.js";
 import { AgentService } from "./modules/agent/service.js";
+import { AgentVersioningService } from "./modules/agent/versioning.js";
 import { ApprovalService } from "./modules/approval/service.js";
 import { AuthService } from "./modules/auth/service.js";
 import { createRegisterLimiter } from "./modules/auth/register-limiter.js";
@@ -29,14 +32,23 @@ import { CredentialService } from "./modules/credential/service.js";
 import { ConversationService } from "./modules/conversation/service.js";
 import { McpService } from "./modules/mcp/service.js";
 import { ModelProviderService } from "./modules/model/provider-service.js";
-import { RunCoordinator } from "./modules/run/coordinator.js";
-import { RunDriver } from "./modules/run/driver.js";
+import { RUN_ORIGIN_USER, RunCoordinator } from "./modules/run/coordinator.js";
+import {
+  delegateSpawn,
+  resolveChildBudget,
+  type ChildBudget,
+  type DelegateSpawnOutcome,
+} from "./modules/run/delegation.js";
+import { limitsOf, RunDriver } from "./modules/run/driver.js";
 import { RunService } from "./modules/run/run-service.js";
 import { OrganizationService } from "./modules/organization/service.js";
-import { SafetyGate } from "./modules/safety/gate.js";
+import { toBudgetLimits } from "./modules/runtime/stop-conditions.js";
+import { SAFETY_POLICY_VERSION, SafetyGate } from "./modules/safety/gate.js";
 import { LocalProcessSandbox } from "./modules/sandbox/local-process.js";
+import type { SandboxProvider } from "./modules/sandbox/types.js";
 import { SkillService } from "./modules/skill/service.js";
 import { ToolService } from "./modules/tool/service.js";
+import type { SpawnAgentDelegation, SpawnAgentPortInput } from "./modules/tool/builtin/spawn-agent.js";
 import { createFakeProvider } from "./modules/model/fake-provider.js";
 import { ModelGateway } from "./modules/model/gateway.js";
 import {
@@ -245,6 +257,10 @@ export function buildIdentityStack(args: {
   const sandbox = new LocalProcessSandbox({});
   // 安全闸（T3-13）：六挂点在 `RunDriver` 里逐个接线（见 `modules/safety/hooks.ts`）。
   const safety = new SafetyGate({ db: args.database, dialect, tenantId });
+  // T031-04：`runs` **提前构造** —— driver 的 `openRun` 判闸钩子（D8②）要闭包
+  // 引用它（用户入口 run 创建单入口；返回项里的 `runs` 随之改为引用本常量，
+  // 与 `RunDriver` 共用同一个协调器实例）。
+  const runs = new RunService({ db: args.database, dialect, tenantId, coordinator });
   const driver = new RunDriver({
     db: args.database,
     dialect,
@@ -274,8 +290,9 @@ export function buildIdentityStack(args: {
     providers: new ModelProviderService({ db: args.database, dialect }),
     // T3-12：工具目录 1 op（`GET /tools` 先幂等物化内置注册表再读回，R3-23 口径）。
     tools: new ToolService({ db: args.database, dialect }),
-    // T3-08：runs 3 op（与 `RunDriver` 共用同一个协调器实例）。
-    runs: new RunService({ db: args.database, dialect, tenantId, coordinator }),
+    // T3-08：runs 3 op（与 `RunDriver` 共用同一个协调器实例；T031-04 起**提前
+    // 构造** —— driver 的 `openRun` 判闸钩子要闭包引用它）。
+    runs,
     // T3-11：MCP 8 op（只做 client）。出网白名单从 env 读（逗号分隔；缺省空 = 拒绝全部，
     // 与 `guards/ssrf` 的默认口径一致 —— stdio transport 不受影响）。
     mcp: new McpService({
@@ -290,6 +307,109 @@ export function buildIdentityStack(args: {
       limitPerMinute: args.config.registerRateLimitPerMinute,
     }),
   };
+}
+
+// ---------------------------------------------------------------------------
+// W-2 · `spawn_agent` 委派端口工厂（T031-04）
+//
+// 端口只做三件事：**读 run 侧身份**（父 run 行 ⇒ depth；目标 agent ⇒ 当前版本）、
+// **解析父预算**（父 run 版本的 limits，与父 driver 同口径 `limitsOf` →
+// `toBudgetLimits`，经 `resolveChildBudget` 逐维 ≤ 父）、**调 delegateSpawn**。
+// 五道闸（S3 安全挂点 / D1 深度 / D4 预算下拨 / D8 并发前置恒 1 / 双源写行）全在
+// `delegation.ts` 里，端口**不自建任何闸** —— 那是 `SubAgentSpawner.spawn()`
+// 旁路（裁定 x 明确否定：只有深度 + 并发两道闸 ⇒ 绕过 S3/D4）。
+// ---------------------------------------------------------------------------
+
+/**
+ * 造 `spawn_agent` 的委派端口（适配 `delegation.ts::delegateSpawn`，裁定 x）。
+ *
+ * 为什么放在 `app.ts`（装配热点）：`run-service.ts` 头注「不依赖任何执行器」，
+ * 而 `delegation.ts` import `driver.ts`（执行器）⇒ 放服务层即破坏既有文件级
+ * 边界；工厂逻辑属装配面，本文件无行数上限。
+ *
+ * 两处 fail-soft / fail-loud 口径（显式登记，不猜）：
+ *   - 目标 agent 解析不到当前版本 ⇒ **拒绝型返回**（`AGENT_VERSION_UNRESOLVED`，
+ *     不猜版本 id —— 猜错等于把派生发给另一个版本）；
+ *   - 父版本解析失败 / limits 缺维 ⇒ **不下拨预算**（`budget` 缺省 ⇒ 子 run 走
+ *     自身版本限额），**不因此拒绝派生** —— 下拨快照缺键比整个派生失败更接近
+ *     M1 语义（子 run 仍受其自身 `BudgetLedger` 管，U-8 同型登记）。
+ *
+ * @param deps 静态依赖（db / dialect / tenantId / coordinator / gateway? / sandbox?）。
+ * @returns 端口工厂：`RunDriver.#drive` 每次调它时传 `(runId, conversationId)`
+ *          绑定 run 侧身份（工具层只认识模型给的东西，见 `SpawnAgentPortInput`）。
+ */
+export function makeDelegationPort(deps: {
+  readonly db: DrizzleDatabase;
+  readonly dialect: SqlDialect;
+  readonly tenantId: string;
+  readonly coordinator: RunCoordinator;
+  readonly gateway?: ModelGateway;
+  readonly sandbox?: SandboxProvider;
+}): (runId: string, conversationId: string) => SpawnAgentDelegation {
+  return (runId, conversationId) => ({
+    spawn: async (input: SpawnAgentPortInput): Promise<DelegateSpawnOutcome> => {
+      const scope = new Scope(deps.tenantId);
+      // depth：新读父 run 行（M1 精确 —— `max_subagent_depth=1` 下只有 0/1 两档；
+      // 跨版义务：max_depth ≥ 2 须换 lineage 走查，登记于台账 U-7）。
+      const parent = await new AgentRunRepo(deps.db, scope, deps.dialect).findById(
+        scope.ref(runId)
+      );
+      const depth = parent?.trigger === RUN_TRIGGER_SUBAGENT ? 1 : 0;
+      // 目标版本：缺省解析 ⇒ 目标 agent 的 `current_version_id`；解析不到 ⇒ 拒绝型
+      // 返回（不猜版本 id）。
+      const agent = await new AgentRepo(deps.db, scope, deps.dialect).findById(
+        scope.ref(input.targetAgentId)
+      );
+      const targetVersionId = agent?.current_version_id ?? null;
+      if (targetVersionId === null || targetVersionId === "") {
+        return { accepted: false, reason: "AGENT_VERSION_UNRESOLVED" };
+      }
+      // 父预算：父 run 版本的 limits（与父 driver 同一解析口径）经 resolveChildBudget
+      // 逐维 ≤ 父；版本解析失败 ⇒ 不下拨（snapshot 缺键），不因此拒绝派生（fail-soft）。
+      let budget: ChildBudget | undefined;
+      if (parent !== null) {
+        try {
+          const version = await new AgentVersioningService({
+            db: deps.db,
+            dialect: deps.dialect,
+          }).findVersion(deps.tenantId, parent.agent_id, parent.agent_version_id);
+          const limits = toBudgetLimits(limitsOf(version.runtime_config));
+          budget = resolveChildBudget(
+            {
+              maxTokens: limits.maxTokens,
+              maxCost: limits.maxCost,
+              maxTurns: limits.maxTurns,
+              // 显式映射（`maxToolCalls` → `maxTools`），不用 `as` 硬抹。
+              maxTools: limits.maxToolCalls,
+            },
+            input.budgetHint === undefined ? undefined : { maxTokens: input.budgetHint }
+          );
+        } catch {
+          budget = undefined;
+        }
+      }
+      return delegateSpawn({
+        db: deps.db,
+        dialect: deps.dialect,
+        tenantId: deps.tenantId,
+        parentRunId: runId,
+        targetAgentId: input.targetAgentId,
+        targetVersionId,
+        conversationId,
+        task: input.task,
+        depth,
+        maxDepth: MAX_SUBAGENT_DEPTH,
+        ...(budget === undefined ? {} : { budget }),
+        // S3：子 run 继承父策略快照（与父 driver 的 `RunCallContext.policyVersion` 同源）。
+        parentPolicyVersion: SAFETY_POLICY_VERSION,
+        // 生产单实例（设计 §附D-1 论证）：`startChildRun` 的
+        // `?? new RunCoordinator()` 回落不触发 ⇒ 父子 abort 同源。
+        coordinator: deps.coordinator,
+        ...(deps.gateway === undefined ? {} : { gateway: deps.gateway }),
+        ...(deps.sandbox === undefined ? {} : { sandbox: deps.sandbox }),
+      });
+    },
+  });
 }
 
 /**

@@ -22,15 +22,23 @@
  *
  * 进程内取消信号（abort）
  * ----------------------
- *   `#aborts` 是**进程内**的 `Map<runId, AbortController>` —— 取消时要立刻打断正在写的
- *   SSE 流（验收 ⑥）。它不跨进程：别的 worker 取消本进程的流，只能靠"下一轮轮询发现
- *   run 已终态"来收尾。**单进程部署下这条是精确的**；多 worker 时它是"最多晚一个轮询
- *   间隔"，已在施工记录登记（不在本卡解决 —— 那需要分布式取消总线）。
+ *   {@link ABORT_CONTROLLERS} 是**模块级共享**的 `Map<runId, AbortController>`
+ *   （T031-04：由每实例一份改为进程内一张表）—— `delegation.ts::startChildRun` 的
+ *   `input.coordinator ?? new RunCoordinator(...)` 回落会造出**第二个实例**，两个
+ *   实例各持一份 Map 时父 cancel 有一半收不到；共享表结构性消除该不同源问题
+ *   （同款先例：`driver.ts:125` 的 `ACTIVE_DRIVERS` 模块级登记表）。
+ *   取消时要立刻打断正在写的 SSE 流（验收 ⑥）。它不跨进程：别的 worker 取消本进程
+ *   的流，只能靠"下一轮轮询发现 run 已终态"来收尾。**单进程部署下这条是精确的**；
+ *   多 worker 时它是"最多晚一个轮询间隔"，已在施工记录登记（不在本卡解决 ——
+ *   那需要分布式取消总线）。
  *
- *   ⚠️ **controller 生命周期 = run 生命周期**（AUD-02）：一个 run 从创建到终态**只有
- *   一个** controller。任何"订阅结束就清掉"的写法都会让后续 `cancel()` 作用在新
- *   controller 上，而 `RunDriver` 持有的旧 signal 永不置位 ⇒ 取消失效。故订阅侧只能调
- *   {@link RunCoordinator.forgetIfTerminal}（非终态不丢弃）。
+ *   ⚠️ **controller 生命周期 = run 生命周期**（AUD-02，T031-04 加强为**进程内
+ *   唯一**）：一个 run 从创建到终态**只有**一个 controller。任何"订阅结束就清掉"
+ *   的写法都会让后续 `cancel()` 作用在新 controller 上，而 `RunDriver` 持有的旧
+ *   signal 永不置位 ⇒ 取消失效。故订阅侧只能调 {@link RunCoordinator.forgetIfTerminal}
+ *   （非终态不丢弃）。共享表只存**在飞** run 的 controller：`RunDriver.#settle` 的
+ *   两条出口都调 `forgetIfTerminal`，不泄漏（测试夹具直插的 run 无 driver，其
+ *   controller 常驻至进程结束 —— 单条目级、UUID 无碰撞，登记于 U-9）。
  */
 
 import { ERROR_CODES } from "@wbtime/core";
@@ -45,6 +53,8 @@ import {
 import { RUN_ORIGIN_SUBAGENT, TERMINAL_RUN_STATUSES, isTerminalRunStatus } from "@wbtime/domain";
 
 import { authError } from "../auth/errors.js";
+
+import { discoverChildRunIds, finalizeChildCancelled } from "./subagent-cancel.js";
 
 /** run 处于非终态（可被取消 / 可被抢占）的四个状态。 */
 export const ACTIVE_RUN_STATUSES = [
@@ -67,6 +77,16 @@ export const CANCELLED_ERROR_TYPE = "CANCELLED";
  * 不接进任何既有链路 ⇒ V0.3.0 行为零变化。
  */
 export const DEFAULT_MAX_RUNS_PER_CONVERSATION = 1;
+
+/**
+ * 应用层"入口来源"词表：**用户主动发起**（T031-04 新增）。
+ *
+ * 与 {@link RUN_ORIGIN_SUBAGENT}（`@wbtime/domain`）同款"应用层词表"性质，但**不
+ * 进** `packages/domain` —— 那是 T031-01 的 closed 文件域。唯一生产传真点是
+ * `app.ts::buildIdentityStack` 的 `openRun` 装配闭包；driver 内零 origin 逻辑
+ * （D10：豁免判据不落在可能被客户端影响的面上）。
+ */
+export const RUN_ORIGIN_USER = "USER";
 
 /** {@link guardRunCreation} 的入参（**单对象**；`fn.length === 1`，判据按此形态调用）。 */
 export interface GuardRunCreationArgs {
@@ -172,14 +192,25 @@ export interface RunCoordinatorDeps {
   readonly now?: () => Date;
 }
 
+/**
+ * 进程内取消信号表（**模块级共享**，T031-04 · 方案 B）。
+ *
+ * 为什么从实例字段改为模块级：`delegation.ts::startChildRun` 的
+ * `input.coordinator ?? new RunCoordinator(...)` 回落（:397-398）会造出**第二个
+ * 协调器实例**，子 driver 的 controller 落在它的表里 ⇒ 在 app 实例上 `cancel`
+ * 有一半收不到（D3-2b 判据的 `probeSpawn` 实测就不传 coordinator）。一张进程级
+ * 表让**任实例可 abort 任 run 的 controller**，结构性解决不同源（方案对比见
+ * T031-04 设计 §附C-2）。代价可控：UUID 键无碰撞、`#settle` 双出口
+ * `forgetIfTerminal` ⇒ 只存在飞 controller。
+ */
+const ABORT_CONTROLLERS = new Map<string, AbortController>();
+
 /** run 生命周期协调器。 */
 export class RunCoordinator {
   readonly #db: DrizzleDatabase;
   readonly #dialect: SqlDialect;
   readonly #tenantId: string;
   readonly #now: () => Date;
-  /** 进程内取消信号（见文件头注）。 */
-  readonly #aborts = new Map<string, AbortController>();
 
   constructor(deps: RunCoordinatorDeps) {
     this.#db = deps.db;
@@ -269,11 +300,48 @@ export class RunCoordinator {
       completedAt: now,
     });
     if (outcome.row !== null) {
+      // D3/E-3（T031-04）：取消向下传播 —— 双源发现子 run 并逐子「先 abort 后
+      // CAS」（与父同序；幂等）。放在"确知它停了"的分支内：CAS 未命中且行存在
+      // ⇒ 已被别的路径推向终态，两种都是"它停了"；行不存在 ⇒ 下方 404。
+      await this.#propagateToChildren(runId);
       // 命中 ⇒ 本次落库；未命中 ⇒ 已被别的路径推向终态 —— 两种都是"它停了"，
       // 取消的语义是"确保它停下来"，故一致返回现状行（**不是** 409 / 404）。
       return outcome.row;
     }
     throw authError(ERROR_CODES.NOT_FOUND, "Run 不存在", { run_id: runId });
+  }
+
+  /**
+   * D3/E-3 · 取消向下传播（T031-04 接线）：双源发现子 run，逐子「先 abort 后 CAS」。
+   *
+   * 顺序与父同序（`cancel` 先信号后落库）：子 run 的驱动循环在下一个检查点
+   * （模型调用前 / 工具执行前）命中 abort 提前收口，CAS 即时收敛（已终态 ⇒
+   * 幂等返回现状）。
+   *
+   * 为什么不直接调 `delegation.ts::propagateCancel`：`coordinator.ts →
+   * delegation.ts` 会成环（delegation 已 import 本文件）—— `subagent-cancel.ts`
+   * 这个零依赖叶模块的存在意义就是破这个环。用同批叶函数在 `cancel` 内重排等价
+   * 链路，`propagateCancel` 保持零生产调用（机制面出口，D3-2a 判据直调它，
+   * 不受影响）。**E-3 的实质要求（CAS 之外送 abort）由本接线满足。**
+   */
+  async #propagateToChildren(parentRunId: string): Promise<void> {
+    const childRunIds = await discoverChildRunIds(
+      this.#db,
+      this.#dialect,
+      this.#tenantId,
+      parentRunId
+    );
+    for (const childRunId of childRunIds) {
+      // 先信号：共享表 ⇒ 子 driver 自建协调器实例登记的 controller 也收得到。
+      this.#signal(childRunId).abort();
+      await finalizeChildCancelled(
+        this.#db,
+        this.#dialect,
+        this.#tenantId,
+        childRunId,
+        this.#now()
+      );
+    }
   }
 
   /** run 是否已终态（`MISSING` ⇒ 视作终态：没有可写的事件目标）。 */
@@ -309,7 +377,7 @@ export class RunCoordinator {
    *   让"同一 run 只有一份 controller"这条不变式在订阅反复收尾时依然成立。
    */
   forget(runId: string): void {
-    this.#aborts.delete(runId);
+    ABORT_CONTROLLERS.delete(runId);
   }
 
   /**
@@ -325,10 +393,10 @@ export class RunCoordinator {
   }
 
   #signal(runId: string): AbortController {
-    let controller = this.#aborts.get(runId);
+    let controller = ABORT_CONTROLLERS.get(runId);
     if (controller === undefined) {
       controller = new AbortController();
-      this.#aborts.set(runId, controller);
+      ABORT_CONTROLLERS.set(runId, controller);
     }
     return controller;
   }

@@ -22,6 +22,12 @@
  *
  * 本文件**不**依赖任何执行器：`cancel` 只置信号与终态，`start` 不在本卡
  * （run 的创建由 `POST /agents/{id}/run` 的入口回执负责，见 T3-05 的偏差登记）。
+ *
+ * T031-04 新增 {@link RunService.open_run}（**不是第 4 个 op**，无路由）：D8② 的
+ * 用户入口并发闸单入口 —— `RunDriverDeps.openRun` 钩子经 `app.ts` 装配闭包传真
+ * `origin=USER` 调它，`!allowed ⇒ 409 CONFLICT`。判定（{@link guardRunCreation}）
+ * 与抛错都在本文件，driver 只发一次可选调用；`origin` 真值只在应用层出现（D10：
+ * 豁免判据不落在可能被客户端影响的面上）。
  */
 
 import { ERROR_CODES } from "@wbtime/core";
@@ -37,7 +43,11 @@ import {
 
 import { toIsoOrNull } from "../agent/versioning.js";
 import { authError } from "../auth/errors.js";
-import { RunCoordinator } from "./coordinator.js";
+import {
+  RunCoordinator,
+  guardRunCreation,
+  type GuardRunCreationOutcome,
+} from "./coordinator.js";
 
 /** 事件区间读取的上限（单批；`streamRunFrames` 会反复读到终态）。 */
 export const RUN_EVENTS_BATCH_LIMIT = 500;
@@ -110,6 +120,47 @@ export class RunService {
    */
   async cancel(runId: string): Promise<RunView> {
     return toRunView(await this.#coordinator.cancel(runId));
+  }
+
+  /**
+   * **用户入口并发闸单入口**（T031-04 · D8②/D10；由 `RunDriverDeps.openRun` 钩子调用）。
+   *
+   * 为什么落在本文件而不是 driver：判定与 409 抛错都属**应用层策略**，driver 只发
+   * 一次可选调用；`origin` 由 `app.ts` 装配闭包显式传真（客户端可达面到不了这里
+   * ⇒ 无法伪造豁免 —— D10）。
+   *
+   * 拒绝路径的**零落库**保证：调用点在 `RunDriver.start` 的 conversationId 解析
+   * 之后、用户消息 append 之前 ⇒ 抛错即中止，消息不落、run 行不建、新会话不留孤儿。
+   *
+   * @param args `conversationId` + `origin`（**必显式传真值**，D10 核心；
+   *   唯一豁免值 `"SUBAGENT"`，由 `delegateSpawn` 3a 传真 —— 不走本入口）。
+   * @returns 判定结果（放行时才返回；调用方一般不需要读它）。
+   * @throws {HttpException} `CONFLICT`(409)（会话内活跃 run 数已达上限）。
+   */
+  async open_run(args: {
+    readonly conversationId: string;
+    readonly origin: string;
+  }): Promise<GuardRunCreationOutcome> {
+    const outcome = await guardRunCreation({
+      db: this.#db,
+      dialect: this.#dialect,
+      tenantId: this.#tenantId,
+      conversationId: args.conversationId,
+      origin: args.origin,
+    });
+    if (!outcome.allowed) {
+      throw authError(
+        ERROR_CODES.CONFLICT,
+        `会话内已有 ${outcome.activeRuns} 个活跃 run：同一会话同时最多 ${outcome.maxRuns} 个`,
+        {
+          reason_code: "concurrency_limit",
+          conversation_id: args.conversationId,
+          active_runs: outcome.activeRuns,
+          max_runs_per_conversation: outcome.maxRuns,
+        }
+      );
+    }
+    return outcome;
   }
 
   /**
