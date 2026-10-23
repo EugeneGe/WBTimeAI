@@ -7,7 +7,7 @@
  *   |---|---|---|
  *   | P-1 | 回放**幂等**：同一 run 连收两次，帧序列逐帧相同 | 回放是"把已发生的事再发一遍" |
  *   | P-2 | `Last-Event-ID` ⇒ **不重放**已收帧 | 游标语义 |
- *   | P-3 | **断流重连**：第一轮结束时 run **还没终态**（真的断了），带游标续读补齐；并集 == 全量且无重复 | 有限订阅 + 重连 = 本版的续传形态 |
+ *   | P-3 | **断流重连**：第一轮**客户端主动断开**时 run **还没终态**（真的断了），带游标续读补齐；并集 == 全量且无重复 | 长连接 + 客户端断开 + 重连 = 本版的续传形态（见下「P-3 前提变更」） |
  *   | P-4 | 取消 ⇒ `CANCELLED` ∧ 续读仍 `CANCELLED`（不复活）∧ 无 `agent.completed` | 与不变量 ⑤ 同一口径的 e2e 复核 |
  *
  * 为什么每个用例**各起一个服务**
@@ -17,7 +17,9 @@
  *   —— 于是 P-3 的 run 会瞬间结束，续传路径**一次都没被走到**（假绿）。
  *   每个用例一份服务 ⇒ 脚本对齐，且"断流"真的可复现。
  *
- * 复跑：`node packages/e2e/tests/runtime/resume.mjs`
+ * 复跑：`NODE_ENV=test node --experimental-sqlite --test packages/e2e/tests/runtime/resume.mjs`
+ *   （`NODE_ENV=test` 或 `WBTIME_AI_ALLOW_FAKE_PROVIDER=1` 是假 Provider 的装配闸；
+ *    `pnpm test:e2e:runtime` 由 runner 统一注入，单个文件手跑必须自己给。）
  */
 
 import assert from "node:assert/strict";
@@ -91,10 +93,72 @@ async function boot(label, turns) {
   return server;
 }
 
+/**
+ * 收**一段**帧后**由客户端主动断开**（真断流）。
+ *
+ * P-3 前提变更（2026-10-23 · T031-06 判据过时修正）
+ * ----------------------------------------------
+ *   本用例原先依赖「**服务端**有限订阅会先收尾」制造断流：V0.3.0 的
+ *   `RUN_EVENTS_MAX_POLLS = 40`（≈2s）到点即 `exhausted`，于是第一轮能在
+ *   run 仍 `RUNNING` 时结束。
+ *   **T031-05 / R-4 把有限订阅改成长连接**（`maxPolls` 缺省无限，只由
+ *   「终态 / 取消 / 客户端断开」三个出口收尾）⇒ 旧的 `streamOnce()`
+ *   （一次 GET + `await response.text()`）**必然读到终态**，实测
+ *   `第一轮帧数=36 run.status=SUCCEEDED` ⇒ 「第一轮结束时 run 还在跑」这个前提
+ *   被**结构性抽掉**（不是偶发、也不是实现回归）。
+ *   ⇒ 断流改由**客户端**制造：逐块读，收满 `framesToAbort` 帧即
+ *   `controller.abort()`。**判据本体（带 `Last-Event-ID` 续读 ⇒ 并集 == 全量
+ *   且无重复）一字未改**，只换了"怎么断"。
+ *
+ * @param {object} server 服务句柄（`{baseUrl, headers}`）。
+ * @param {string} runId run 标识。
+ * @param {{framesToAbort?: number, timeoutMs?: number}} [options] 收满多少帧就断（缺省 3）。
+ * @returns {Promise<string[]>} 断开前收到的帧（`id:` 开头的帧原文）。
+ */
+async function streamUntilAbort(server, runId, options = {}) {
+  const framesToAbort = options.framesToAbort ?? 3;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
+  const frames = [];
+  let buffer = "";
+  try {
+    const response = await fetch(`${server.baseUrl}/api/v1/runs/${runId}/events`, {
+      headers: { ...server.headers },
+      signal: controller.signal,
+    });
+    if (response.status !== 200) {
+      throw new Error(`events 失败：${response.status} ${await response.text()}`);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() ?? "";
+      for (const block of blocks) {
+        const frame = block.trim();
+        if (frame.length > 0 && frame.startsWith("id:")) frames.push(frame);
+      }
+      if (frames.length >= framesToAbort) {
+        // 主动断开：这就是"断流"本身（服务端会收到客户端断开并按 `aborted` 收尾）。
+        controller.abort();
+        break;
+      }
+    }
+  } catch (error) {
+    // 主动 abort ⇒ 挂起的 `read()` 抛 AbortError，属**预期**（断流即成功条件）。
+    if (error?.name !== "AbortError") throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+  return frames;
+}
+
 // ---------------------------------------------------------------------------
 // P-1 / P-2 · 回放幂等 + 游标
 // ---------------------------------------------------------------------------
-
 test("P-1/P-2 · 回放两次逐帧一致 ∧ Last-Event-ID 不重放已收帧", async (t) => {
   const server = await boot("resume-replay", [finalTurn("回放我。")]);
   try {
@@ -141,8 +205,9 @@ test("P-3 · 断流重连：第一轮结束时 run 未终态 ⇒ 带游标补齐
     const agent = await createAgent(server, { name: "e2e 续传 Agent" });
     const run = await startRun(server, agent.agentId, { message: "慢一点" });
 
-    // 第一轮：服务端有限订阅会先收尾（run 还没跑完）—— 这就是"断流"
-    const firstRound = await streamOnce(server, run.id);
+    // 第一轮：**客户端收满 3 帧主动断开** ⇒ 真实断流，此时 run 必然还在跑。
+    // （旧形态靠服务端有限订阅收尾，R-4 改长连接后该形态失效 —— 见 `streamUntilAbort` 头注。）
+    const firstRound = await streamUntilAbort(server, run.id, { framesToAbort: 3 });
     const midRun = await getRun(server, run.id);
     t.diagnostic(`第一轮帧数=${firstRound.length} run.status=${midRun.status}`);
     assert.ok(firstRound.length > 0, "第一轮应至少收到 agent.started");
