@@ -2,8 +2,8 @@
  * T3-03 · B1 · 内置工具物化的行为证明（**R3-23**）。
  *
  * 判据（任务卡验收 ④ + R3-23 影响判据 ①②③④）：
- *   ① `ensureBuiltinTools` 两次 ⇒ `tool` 行数 **== 5**（不是 10），且第二次**写次数为 0**；
- *   ② 5 行的 `input_schema` 与注册表**逐字节一致**（SQLite 档比原始字符串）；
+ *   ① `ensureBuiltinTools` 两次 ⇒ `tool` 行数 **== 6**（不是 12），且第二次**写次数为 0**；
+ *   ② 6 行的 `input_schema` 与注册表**逐字节一致**（SQLite 档比原始字符串）；
  *   ③ `source='builtin'` / `status='active'` / `tenant_id=<scope>`（按租户物化）；
  *   ④ 手工造重复行 ⇒ {@link ToolRepo.findDuplicates} 必非空（常驻反例，**不**真并发去撞）。
  *
@@ -131,6 +131,17 @@ const EXPECTED_INPUT_SCHEMAS = {
     required: ["code"],
     additionalProperties: false,
   },
+  // V0.3.1 新增的第 6 个内置工具；键序 == 注册表 `tool-repo.ts` 的字面量书写序。
+  spawn_agent: {
+    type: "object",
+    properties: {
+      target_agent_id: { type: "string", minLength: 1 },
+      task: { type: "string", minLength: 1 },
+      budget_hint: { type: "integer", minimum: 1 },
+    },
+    required: ["target_agent_id", "task"],
+    additionalProperties: false,
+  },
 };
 
 /** 每个工具的 `required` 集合（手写，独立于注册表）。 */
@@ -140,21 +151,22 @@ const EXPECTED_REQUIRED = {
   http: ["url"],
   shell: ["command"],
   code_exec: ["code"],
+  spawn_agent: ["target_agent_id", "task"],
 };
 
 // ---------------------------------------------------------------------------
 // A · 注册表本身（`input_schema` 的唯一真源）
 // ---------------------------------------------------------------------------
 
-test("A · 注册表：5 个工具，名字与顺序按 R3-23", () => {
+test("A · 注册表：6 个工具，名字与顺序按 R3-23", () => {
   assert.deepEqual(
     BUILTIN_TOOLS.map((spec) => spec.name),
-    ["filesystem", "git", "http", "shell", "code_exec"],
+    ["filesystem", "git", "http", "shell", "code_exec", "spawn_agent"],
   );
-  assert.equal(BUILTIN_TOOLS.length, 5, "判据 ④ 的 5 就是这里的 5");
+  assert.equal(BUILTIN_TOOLS.length, 6, "判据 ④ 的 6 就是这里的 6");
 });
 
-test("A · 注册表：5 条 schema 都是 object + additionalProperties:false（与 py SPEC 同形）", () => {
+test("A · 注册表：6 条 schema 都是 object + additionalProperties:false（与 py SPEC 同形）", () => {
   for (const spec of BUILTIN_TOOLS) {
     assert.equal(spec.inputSchema.type, "object", `${spec.name}.type`);
     assert.equal(
@@ -206,7 +218,7 @@ test("A · code_exec 的前两个键与 py 线 python 工具逐字相同（只�
 // B · 物化：幂等 + 逐字节一致 + 按租户
 // ---------------------------------------------------------------------------
 
-test("B · ensureBuiltinTools 首次：5 行 + 5 条 v1 版本行，写次数恰 10", async () => {
+test("B · ensureBuiltinTools 首次：6 行 + 6 条 v1 版本行，写次数恰 12", async () => {
   const { connection, db, scopeA } = seed();
   const tools = new ToolRepo(db, scopeA, DIALECT);
 
@@ -216,14 +228,14 @@ test("B · ensureBuiltinTools 首次：5 行 + 5 条 v1 版本行，写次数恰
 
   assert.deepEqual([...summary.inserted], BUILTIN_TOOLS.map((spec) => spec.name));
   assert.deepEqual([...summary.existing], []);
-  assert.equal(summary.registered, 5);
+  assert.equal(summary.registered, 6);
 
-  assert.equal(rawTools(connection, T_A).length, 5, "tool 行数 == 5");
-  assert.equal(rawVersionCount(connection, T_A), 5, "tool_version 每工具 1 行（R3-23 ⑤）");
-  assert.equal(writes, 10, "5 条 tool + 5 条 tool_version，不多不少（多一条说明有隐藏写）");
+  assert.equal(rawTools(connection, T_A).length, 6, "tool 行数 == 6");
+  assert.equal(rawVersionCount(connection, T_A), 6, "tool_version 每工具 1 行（R3-23 ⑤）");
+  assert.equal(writes, 12, "6 条 tool + 6 条 tool_version，不多不少（多一条说明有隐藏写）");
 });
 
-test("B · ensureBuiltinTools 第二次：仍 5 行，且**写次数为 0**（幂等的实证）", async () => {
+test("B · ensureBuiltinTools 第二次：仍 6 行，且**写次数为 0**（幂等的实证）", async () => {
   const { connection, db, scopeA } = seed();
   const tools = new ToolRepo(db, scopeA, DIALECT);
   await tools.ensureBuiltinTools();
@@ -233,9 +245,9 @@ test("B · ensureBuiltinTools 第二次：仍 5 行，且**写次数为 0**（�
   const writes = totalChanges(connection) - before;
 
   assert.deepEqual([...second.inserted], [], "第二次不应插入任何行");
-  assert.equal(second.existing.length, 5);
-  assert.equal(rawTools(connection, T_A).length, 5, "行数仍 5（不是 10）");
-  assert.equal(rawVersionCount(connection, T_A), 5, "版本行也没被重复插入");
+  assert.equal(second.existing.length, 6);
+  assert.equal(rawTools(connection, T_A).length, 6, "行数仍 6（不是 12）");
+  assert.equal(rawVersionCount(connection, T_A), 6, "版本行也没被重复插入");
   assert.equal(writes, 0, "这条锁的是**写次数**：任何 INSERT/UPDATE 都会让它红");
 });
 
@@ -247,9 +259,9 @@ test("B · **跨实例**幂等：a 建、b 再建 ⇒ 0 写、行数不变、id 
   // 跨实例重复插入就没人发现。
   const a = new ToolRepo(db, scopeA, DIALECT);
   const first = await a.ensureBuiltinTools();
-  assert.equal(first.inserted.length, 5, "对照路径：a 首次必须真插入 5 行");
+  assert.equal(first.inserted.length, 6, "对照路径：a 首次必须真插入 6 行");
   const idsFromA = new Map((await a.list()).map((row) => [row.name, row.id]));
-  assert.equal(idsFromA.size, 5);
+  assert.equal(idsFromA.size, 6);
 
   const b = new ToolRepo(db, scopeA, DIALECT);
   const before = totalChanges(connection);
@@ -257,14 +269,14 @@ test("B · **跨实例**幂等：a 建、b 再建 ⇒ 0 写、行数不变、id 
   const writes = totalChanges(connection) - before;
 
   assert.deepEqual([...second.inserted], [], "跨实例也不得插入任何行");
-  assert.equal(second.existing.length, 5);
+  assert.equal(second.existing.length, 6);
   assert.equal(writes, 0, "任何 INSERT/UPDATE 都会让这条红（幂等不是实例内自证）");
-  assert.equal(rawTools(connection, T_A).length, 5, "tool 行数仍 5（不是 10）");
-  assert.equal(rawVersionCount(connection, T_A), 5, "tool_version 也没重复插");
+  assert.equal(rawTools(connection, T_A).length, 6, "tool 行数仍 6（不是 12）");
+  assert.equal(rawVersionCount(connection, T_A), 6, "tool_version 也没重复插");
 
   // 身份一致：b 看到的每行 id 必须就是 a 建的那一行（不是"又建了一套"）。
   const rowsFromB = await b.list();
-  assert.equal(rowsFromB.length, 5);
+  assert.equal(rowsFromB.length, 6);
   for (const row of rowsFromB) {
     assert.equal(row.id, idsFromA.get(row.name), `${row.name}：b 拿到的 id 必须与 a 建的一致`);
   }
@@ -276,7 +288,7 @@ test("B · 落库的 input_schema 与**手写字面量**逐字节一致（期望
   await tools.ensureBuiltinTools();
 
   const rows = rawTools(connection, T_A);
-  assert.equal(rows.length, 5);
+  assert.equal(rows.length, 6);
   for (const spec of BUILTIN_TOOLS) {
     const row = rows.find((candidate) => candidate.name === spec.name);
     assert.ok(row, `库里缺 ${spec.name}`);
@@ -342,7 +354,7 @@ test("B · 手写判据：每个工具的 required 集合 + 关键 enum 完整�
     "shell.command 必须是 {type:[string,array]}（无 minLength）",
   );
 
-  // ⑥ 五个工具都必须 additionalProperties:false（与 py SPEC 同形）
+  // ⑥ 六个工具都必须 additionalProperties:false（与 py SPEC 同形）
   for (const name of Object.keys(EXPECTED_INPUT_SCHEMAS)) {
     assert.equal(stored(name).additionalProperties, false, `${name}.additionalProperties`);
   }
@@ -373,6 +385,7 @@ test("B · 落库列口径：source/status/tenant_id + requires_sandbox 逐工�
     http: false,
     shell: true,
     code_exec: true,
+    spawn_agent: false,
   };
   for (const row of rawTools(connection, T_A)) {
     assert.equal(row.source, TOOL_SOURCE_BUILTIN, `${row.name}.source`);
@@ -391,9 +404,9 @@ test("B · 权限动作借位 tool_ref：READ/WRITE/EXECUTE 逐工具（读取�
   const tools = new ToolRepo(db, scopeA, DIALECT);
   await tools.ensureBuiltinTools();
 
-  const expected = { filesystem: "READ", git: "WRITE", http: "EXECUTE", shell: "EXECUTE", code_exec: "EXECUTE" };
+  const expected = { filesystem: "READ", git: "WRITE", http: "EXECUTE", shell: "EXECUTE", code_exec: "EXECUTE", spawn_agent: "EXECUTE" };
   const rows = await tools.list();
-  assert.equal(rows.length, 5);
+  assert.equal(rows.length, 6);
   for (const row of rows) {
     assert.equal(readToolPermissionAction(row), expected[row.name], `${row.name}.permission_action`);
   }
@@ -438,18 +451,18 @@ test("B · toToolCatalogEntry：契约 8 字段，且 type ← source（映射�
 // C · 隔离与自检（含常驻反例）
 // ---------------------------------------------------------------------------
 
-test("C · 按租户物化：B 租户各有 5 行，A 看不到 B 的", async () => {
+test("C · 按租户物化：B 租户各有 6 行，A 看不到 B 的", async () => {
   const { connection, db, scopeA, scopeB } = seed();
   const toolsA = new ToolRepo(db, scopeA, DIALECT);
   const toolsB = new ToolRepo(db, scopeB, DIALECT);
 
   await toolsA.ensureBuiltinTools();
   const bSummary = await toolsB.ensureBuiltinTools();
-  assert.equal(bSummary.inserted.length, 5, "B 租户也要插自己那 5 行（不是复用 A 的）");
+  assert.equal(bSummary.inserted.length, 6, "B 租户也要插自己那 6 行（不是复用 A 的）");
 
-  assert.equal(rawTools(connection).length, 10, "两租户各 5 行");
+  assert.equal(rawTools(connection).length, 12, "两租户各 6 行");
   const listedA = await toolsA.list();
-  assert.equal(listedA.length, 5);
+  assert.equal(listedA.length, 6);
   for (const row of listedA) assert.equal(row.tenant_id, T_A, "A 的 list 里不得出现 B 的行");
 });
 
@@ -482,7 +495,7 @@ test("C · tenant_id 为空的行在本 scope 内不可见（「必须有租户�
   );
 
   const listed = await tools.list();
-  assert.equal(listed.length, 5, "NULL tenant_id 的行走不进 scoped 查询");
+  assert.equal(listed.length, 6, "NULL tenant_id 的行走不进 scoped 查询");
   assert.equal(await tools.findByName("platform_only"), null, "按名字也查不到");
-  assert.equal(rawTools(connection).length, 6, "但它在库里（证明上面是过滤掉了，不是没插进去）");
+  assert.equal(rawTools(connection).length, 7, "但它在库里（证明上面是过滤掉了，不是没插进去）");
 });

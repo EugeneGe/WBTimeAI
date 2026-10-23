@@ -2,8 +2,8 @@
  * T3-12 · 工具目录 **1 op**（`GET /api/v1/tools`）的行为证明。
  *
  * 判据（任务卡验收 ③ + 反例「`GET /tools` 回落到 4 个 ⇒ 必红」）：
- *   ① **返回 5 个内置**，名字集合与注册表逐字相同，且**顺序 = 注册表顺序**
- *      （`filesystem / git / http / shell / code_exec`）—— py 返回的就是注册表顺序，
+ *   ① **返回 6 个内置**，名字集合与注册表逐字相同，且**顺序 = 注册表顺序**
+ *      （`filesystem / git / http / shell / code_exec / spawn_agent`）—— py 返回的就是注册表顺序，
  *      差异会让"按下标取第 N 个工具"的调用方静默错位；
  *   ② **`code_exec` 在其中且 `requires_sandbox === true`**（含 `git` / `shell` 两条同理）；
  *   ③ **物化是幂等的**（R3-23）：连续两次 `GET` 后 `tool` 表行数不变，
@@ -11,7 +11,7 @@
  *   ④ **8 键逐字**（契约 `ToolResponse`）；`input_schema` 是对象、`type === "builtin"`。
  *
  * 反例（注入即红）：
- *   - 把 `BUILTIN_TOOLS` 摘掉一项 ⇒ A-1 的 `length === 5` 与 C-1 的名字集合双红；
+ *   - 把 `BUILTIN_TOOLS` 摘掉一项 ⇒ A-1 的 `length === 6` 与 A-2 的名字集合双红；
  *   - 把 `ensureBuiltinTools()` 从 `ToolService.list` 里删掉 ⇒ 空库下 A-1 变 `[]`（0 条），
  *     这正是"只读内存注册表"与"读物化表"两条实现的差别所在。
  *
@@ -37,7 +37,7 @@ const TOOL_KEYS = [
 ];
 
 /** 注册表顺序（`packages/db/src/repositories/tool-repo.ts::BUILTIN_TOOLS`）。 */
-const BUILTIN_NAMES = ["filesystem", "git", "http", "shell", "code_exec"];
+const BUILTIN_NAMES = ["filesystem", "git", "http", "shell", "code_exec", "spawn_agent"];
 
 /** 工具表行数（独立读数，绕开被测代码）。 */
 function toolRows(fixture) {
@@ -49,14 +49,14 @@ function totalChanges(fixture) {
   return fixture.raw.prepare("SELECT total_changes() AS n").get().n;
 }
 
-test("A-1 · GET /tools ⇒ 200 且**恰好 5 个**内置（不是 4 个）", async () => {
+test("A-1 · GET /tools ⇒ 200 且**恰好 6 个**内置（不是 5 个）", async () => {
   const fixture = await makeApp({ username: "tool-a1" });
   try {
     const response = await request(fixture, "GET", "/api/v1/tools");
     assert.equal(response.statusCode, 200);
     const data = JSON.parse(response.body).data;
     assert.equal(Array.isArray(data), true);
-    assert.equal(data.length, 5, "必须 5 个内置工具（少一个说明注册表漏项或物化失败）");
+    assert.equal(data.length, 6, "必须 6 个内置工具（少一个说明注册表漏项或物化失败）");
   } finally {
     await fixture.close();
   }
@@ -124,15 +124,15 @@ test("B-1 · 物化幂等：两次 GET 后行数不变，且第二次**零写**�
   try {
     const first = await request(fixture, "GET", "/api/v1/tools");
     assert.equal(first.statusCode, 200);
-    assert.equal(toolRows(fixture), 5, "首次 GET 应把 5 个内置物化进 tool 表");
+    assert.equal(toolRows(fixture), 6, "首次 GET 应把 6 个内置物化进 tool 表");
 
     const changesAfterFirst = totalChanges(fixture);
     const second = await request(fixture, "GET", "/api/v1/tools");
     assert.equal(second.statusCode, 200);
-    assert.equal(toolRows(fixture), 5, "第二次不得再插一遍");
+    assert.equal(toolRows(fixture), 6, "第二次不得再插一遍");
 
     // R3-23 ③ 的硬判据：第二次调用**写次数增量为 0**。
-    // 为什么用 total_changes 而不是"看列表长度"：后者在"重复插入后去重"的实现下也会是 5，
+    // 为什么用 total_changes 而不是"看列表长度"：后者在"重复插入后去重"的实现下也会是 6，
     // 那样就测不出"到底有没有写"。
     assert.equal(
       totalChanges(fixture),
@@ -153,7 +153,7 @@ test("B-2 · 工具目录按租户物化（别租户的行不混进来）", asyn
   const fixture = await makeApp({ username: "tool-b2" });
   try {
     await request(fixture, "GET", "/api/v1/tools");
-    // 直接给别租户插一行同名工具：本租户列表不得因它而变成 6 条
+    // 直接给别租户插一行同名工具：本租户列表不得因它而变成 7 条
     fixture.raw
       .prepare(
         `INSERT INTO tool (id, tenant_id, name, display_name, description, category,
@@ -175,7 +175,7 @@ test("B-2 · 工具目录按租户物化（别租户的行不混进来）", asyn
 
     const response = await request(fixture, "GET", "/api/v1/tools");
     const names = JSON.parse(response.body).data.map((tool) => tool.name);
-    assert.equal(names.length, 5, "别租户的工具行不得出现在本租户目录里");
+    assert.equal(names.length, 6, "别租户的工具行不得出现在本租户目录里");
     assert.equal(names.includes("foreign-tool"), false);
   } finally {
     await fixture.close();

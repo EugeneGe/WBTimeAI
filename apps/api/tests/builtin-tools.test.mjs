@@ -1,5 +1,5 @@
 /**
- * T3-10 · 5 个内置工具的行为证明（DoD#3 + 验收 ⑥「命中本地规则 ⇒ 沙箱 exec 计数 == 0」）。
+ * T3-10 · 6 个内置工具的行为证明（DoD#3 + 验收 ⑥「命中本地规则 ⇒ 沙箱 exec 计数 == 0」）。
  *
  * 判据
  * ----
@@ -65,10 +65,10 @@ function toolContext(root, extra = {}) {
 // A 组 · 注册表与契约表对齐
 // ---------------------------------------------------------------------------
 
-test("A-1 · 注册表 name 集合与 `BUILTIN_TOOLS` 逐字相同（5 个，一个不多一个不少）", () => {
+test("A-1 · 注册表 name 集合与 `BUILTIN_TOOLS` 逐字相同（6 个，一个不多一个不少）", () => {
   const contract = BUILTIN_TOOLS.map((tool) => tool.name).sort();
   assert.deepEqual(registeredToolNames(), contract, "两边的工具名单必须逐字相同");
-  assert.equal(contract.length, 5);
+  assert.equal(contract.length, 6);
 });
 
 test("A-2 · `requiresSandbox` 与契约表一致（git / shell / code_exec 需要）", () => {
