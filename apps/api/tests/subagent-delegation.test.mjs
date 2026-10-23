@@ -67,6 +67,28 @@
  *      ⇒ `{ cancelled: string[], pending: string[] }`。
  *      **D3 的主判据走 HTTP 真链路**（`POST /runs/{parent}/cancel`），不依赖本函数
  *      存在 —— 传播是**行为判据**；本函数是机制面出口，二者都验。
+ *   7. `forgetDelegatedChildren(parentRunId)` —— 清进程内加速 Map（裁定 5：Map
+ *      只是加速、非正确性依赖）。判据用它证明「Map 丢失后双源查询独立成立」。
+ *   8. `delegateSpawn` 的**可选** `gateway?: ModelGatewayPort`（主理人 2026-10-23
+ *      裁定 A-a / 裁定 10）：子 run 执行的模型网关；**用途仅限测试注入**与
+ *      T031-04 生产装配，缺省 ⇒ 子 run 只建行、不启动执行（fail loud，不静默
+ *      降级）。伴随可选字段 `coordinator?` / `userId?` / `settleTimeoutMs?` 已获
+ *      有条件追认（条件 = 既有 19 条逐条通过，见台账）。
+ *   9. 子 run 执行链产物（`tool_call` 行 / `sandbox_session` 行）由 `RunDriver`
+ *      真驱动产生（裁定 1：复用既有 drive 循环，禁内联）；测试**注入既有脚本化
+ *      假 Provider**（`routes-harness.mjs::fakeGateway`，过 fake 闸门，不新造）。
+ *
+ *  A-b 判据改造（QA 2026-10-23，主理人已批）
+ *  --------------------------------------
+ *   ① **D3-2 拆两层**（A-d 裁定）：**D3-2a**（机制面，归本批）= `propagateCancel`
+ *      枚举子 run 并调用取消，子 run 由 `delegateSpawn` 真实建立并驱动（**废裸
+ *      SQL 插行**）；**D3-2b**（端到端 HTTP 取消传播，归 **T031-04**）= 载体已
+ *      建好但**未注册为 test**（显式标注 pending —— 注册会让控制组恒红，反例
+ *      注入器的三条 case 会全部退成 UNEVALUABLE）。
+ *   ② **D5-4 改注入网关**：子 run 必须真跑起来，`DENIED` 才能由真实
+ *      `ToolExecutor` 权限链落（裁定 7）。
+ *   ③ **「是否等收敛」两档相反**（附加 C）：D5-4 取 `settleTimeoutMs` 等收敛；
+ *      D3-2a/D3-2b 取「不等」（cancel 到达时子 run 必须仍未终态）。
  *
  *   观察面口径（DDL 实测）：`destroy()` 的落库口径是 `sandbox_session.ended_at`
  *   （`sandbox/types.ts`："`destroy` 写 `ended_at`，重复调用不改写已有值"）⇒
@@ -87,7 +109,7 @@ import test from "node:test";
 
 import * as domain from "@wbtime/domain";
 
-import { makeApp, request, TENANT_ID } from "./routes-harness.mjs";
+import { makeApp, request, TENANT_ID, fakeGateway } from "./routes-harness.mjs";
 import {
   createAgentWithVersion,
   createConversation,
@@ -116,6 +138,60 @@ const BUDGET_STOP_REASONS = Object.freeze([
   "budget_turns",
   "budget_tools",
 ]);
+
+/**
+ * 子 run 驱动脚本（改造 2：注入**既有**的脚本化假 Provider）。
+ *
+ * `routes-harness.mjs::fakeGateway` = V0.3.0 运行时 e2e 就有的那一个（
+ * `buildModelStack({ kind: "fake", allowFakeProvider: true })`，过
+ * `WBTIME_AI_ALLOW_FAKE_PROVIDER=1` 闸门）—— **复用，不新造**：生产代码里
+ * 自建假 Provider 是红线（裁定 10 / A-b）。`RunDriverDeps.gateway` 缺省 ⇒
+ * run 入口 fail loud（`CONFIGURATION_ERROR`）⇒ 不给网关子 run 跑不起来。
+ *
+ * 脚本里**同时**放越权与授权两个调用，是为了让 D5-4 的主判据与反向断言
+ * 在同一轮执行链上同时成立：
+ *   - `filesystem` 读绝对路径 `/etc/passwd` ⇒ 越出子 run 的 Workspace 边界 ⇒
+ *     真实 `ToolExecutor` 的路径守卫（`ToolContext` 的 scope 收窄原语，裁定 7）
+ *     返回 `PERMISSION_DENIED` ⇒ `tool_call.status = 'DENIED'`（**只能由真实
+ *     权限链落，测试不代插**）；
+ *   - `code_exec` 是 scope 内的内置工具 ⇒ **不得**被 DENY（反向断言，防"一律
+ *     DENY"假实现）；未装配沙箱 ⇒ `FAILED`，不是 `DENIED`，反向断言仍成立。
+ *
+ * 假 Provider 每次 `stream()` 都从同一脚本起播（`createFakeProvider` 的口径）
+ * ⇒ 确定性；驱动轮数由 `DEFAULT_STOP_LIMITS.maxModelTurns = 20` 收敛。
+ */
+const CHILD_DRIVE_SCRIPT = Object.freeze([
+  { type: "text_delta", text: "我先读一个系统文件，再跑一段代码" },
+  {
+    type: "tool_call",
+    id: "call-fs-overscope",
+    name: "filesystem",
+    input: { action: "read", path: "/etc/passwd" },
+  },
+  {
+    type: "tool_call",
+    id: "call-ce-in-scope",
+    name: "code_exec",
+    input: { command: "echo ok" },
+  },
+  { type: "usage", usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 } },
+  { type: "finish", reason: "model_finish" },
+]);
+
+/**
+ * D5-4 等子 run 收敛的上限（`delegateSpawn` 的可选 `settleTimeoutMs`）。
+ *
+ * 取 5s 而不是 30s：实测子 run 约 0.5s 收敛（`budget_turns`），5s 已有 10 倍余量；
+ * 且 `RunDriver.awaitSettled` 是 `Promise.race([pending, sleep(timeoutMs)])` ——
+ * `pending` 先赢时 `sleep` 的定时器**不会**被取消，会原样拖住进程退出 ⇒ 取值越大
+ * 判据文件的收尾越慢（这是复用既有入口的代价，登记在此，不在源码侧顺手修）。
+ *
+ * 附加 C：「是否等收敛」**两档相反**，按用例分别设定，不用同一档 ——
+ *   - D5-4 要断言执行产物（`tool_call` 行）⇒ 取**等收敛**档（`settleTimeoutMs`）；
+ *   - D3-2a 要断言「cancel 到达时子 run 仍未终态」⇒ 取**不等**档（不传该字段，
+ *     与 `RunDriver.start` 的 HTTP 侧口径一致：异步驱动）。
+ */
+const CHILD_SETTLE_TIMEOUT_MS = 5_000;
 
 /** 造一条 run（trigger 可指定 —— 与 `fixtures/run-fixture.mjs` 的 `seedRun` 同列集）。 */
 function seedRunRow(fixture, options) {
@@ -368,6 +444,11 @@ const SCOPE_ALLOWS_FN = pickExport(MODULES.hosts, [
   "scopeAllows",
 ]);
 const CANCEL_FN = pickExport(MODULES.hosts, ["propagateCancel", "cancelDownstream", "cancelChildren"]);
+const FORGET_CHILDREN_FN = pickExport(MODULES.hosts, [
+  "forgetDelegatedChildren",
+  "forgetDelegatedChild",
+  "clearDelegatedChildren",
+]);
 
 // ---------------------------------------------------------------------------
 // §0 · 仪器自证（先证明"尺子"是准的，再拿它去量实现）
@@ -467,16 +548,44 @@ test("D3-1 · 判据载体：trigger 标记值与 cancel 端点就位", async ()
   }
 });
 
-test("D3-2 · 父 cancel ⇒ 所有子 run ≤30s 到 CANCELLED（集合全等）+ 沙箱 destroy 计数 == 子 run 数", async () => {
-  const fixture = await makeApp({ username: "del-d32" });
+/**
+ * **D3-2a · 机制面（归本批 T031-02）** —— 主理人 2026-10-23 A-d 裁定拆层后的
+ * 单元层判据：`propagateCancel` 能**枚举子 run 并调用取消**。
+ *
+ * 为什么子 run 改由 `delegateSpawn` 建（改造 1）：原形态用 {@link seedRunRow}
+ * **裸 SQL** 直接插子 run 行，随后断言 `tool_call` 里已有 `code_exec` +
+ * `sandbox_session_id` —— 裸插行没过任何应用入口、`makeApp()` 未开 `model` 栈、
+ * 无任何后台驱动 ⇒ 不存在任何时刻能让执行链为它们产出执行链产物。那是**判据
+ * 形态问题，不是实现问题**。废裸 SQL 插行，改由 `delegateSpawn` 真实建立并驱动。
+ *
+ * 两条必须显式钉住的机械装置：
+ *   ① **清进程内 Map**（裁定 5）：`DELEGATED_CHILDREN` 只是**加速缓存**，不是
+ *      正确性依赖。不清 Map ⇒ 枚举走 Map ⇒「双源发现链路断了」这个反例被 Map
+ *      掩盖 ⇒ 红证恒绿（假绿）。清掉后，`propagateCancel` 只能凭 tool_call 行查
+ *      + `agent_event` 交叉验证独立发现子 run。
+ *   ② **未终态前置**（附加 C）：cancel 到达时子 run 必须仍未终态，否则
+ *      「CAS 收敛到 CANCELLED」与「本来就已跑完」不可区分 = 判据真假绿。
+ *      ⇒ 本用例取「不等收敛」档（不传 `settleTimeoutMs`），与 D5-4 的
+ *      「等收敛」档**相反**，两档不混用。
+ */
+test("D3-2a · 机制面：propagateCancel 枚举子 run 并调用取消（Map 已清 ⇒ 双源发现独立成立）", async () => {
+  assert.equal(SPAWN_FN.found, true, `前置：delegateSpawn 未就位（${SPAWN_FN.tried.join(" | ")}）`);
+  assert.equal(CANCEL_FN.found, true, `前置：propagateCancel 未就位（${CANCEL_FN.tried.join(" | ")}）`);
+  assert.equal(
+    FORGET_CHILDREN_FN.found,
+    true,
+    `前置：必须导出 forgetDelegatedChildren —— 进程内 Map 只是加速（裁定 5），判据必须能清掉它，` +
+      `否则「发现链路」被 Map 掩盖、反例红证恒绿；实测：${FORGET_CHILDREN_FN.tried.join(" | ")}`
+  );
+
+  const fixture = await makeApp({ username: "del-d32a" });
   try {
     const chain = await seedChain(fixture, "d3-parent-agent");
     const parentRunId = seedRunRow(fixture, { ...chain, status: "RUNNING" });
-    const childRunIds = [
-      seedRunRow(fixture, { ...chain, status: "RUNNING", trigger: "subagent" }),
-      seedRunRow(fixture, { ...chain, status: "RUNNING", trigger: "subagent" }),
-    ];
+
     // 无关对照 run：另一条会话的 RUNNING 用户 run —— 传播范围必须**恰好**是子集合。
+    // **先建无关 run，再派生子 run**：让「派生 → 立即验未终态前置」之间的异步间隙
+    // 尽量短（驱动循环约 0.5s 收敛到终态，间隙越长竞态窗口越大）。
     const otherConversationId = await createConversation(fixture, chain.agentId);
     const unrelatedRunId = seedRunRow(fixture, {
       ...chain,
@@ -484,20 +593,158 @@ test("D3-2 · 父 cancel ⇒ 所有子 run ≤30s 到 CANCELLED（集合全等�
       status: "RUNNING",
     });
 
-    // **前置断言**（防假绿）：至少 1 个子 run 走 code_exec 真实占用沙箱。
-    // 这些行必须由执行链产生 —— 测试不代插（代插 = 前置恒真 = 自导自演）。
-    // 实现未落地 ⇒ 这里红，红因 =「委派执行链未落地」，不是判据写错。
+    // 子 run 由 delegateSpawn **真实建立并驱动**（废裸 SQL 插行）。
+    const childRunIds = [];
+    for (const index of [0, 1]) {
+      const outcome = await probeSpawn(SPAWN_FN.value, {
+        db: fixture.connection.db,
+        dialect: "sqlite",
+        tenantId: TENANT_ID,
+        parentRunId,
+        targetAgentId: chain.agentId,
+        targetVersionId: chain.versionId,
+        conversationId: chain.conversationId,
+        task: `D3-2a 子任务 ${index}`,
+        depth: 0,
+        maxDepth: 1,
+        gateway: fakeGateway(CHILD_DRIVE_SCRIPT),
+      });
+      assert.equal(
+        outcome.normalized.recognized,
+        true,
+        `派生必须返回已声明形态（实测 ${outcome.normalized.shape}）`
+      );
+      assert.equal(
+        outcome.normalized.accepted,
+        true,
+        `子 run 必须由 delegateSpawn 建（实测 ${outcome.normalized.shape}）`
+      );
+      childRunIds.push(String(outcome.raw.childRunId ?? ""));
+    }
+    assert.deepEqual(
+      childRunIds.map((id) => runRow(fixture, id).trigger),
+      ["subagent", "subagent"],
+      "子 run 必须落 trigger='subagent'（D1③ / D3 发现的语义前提；裸插行不会有这个标记）"
+    );
+
+    // 前置 ②（附加 C）：cancel 到达时子 run 仍未终态。
+    const beforeCancel = childRunIds.map((id) => runRow(fixture, id).status);
+    assert.deepEqual(
+      beforeCancel.map((status) => TERMINAL_STATUSES.includes(status)),
+      [false, false],
+      `前置：cancel 到达时子 run 必须仍未终态（否则「收敛到 CANCELLED」不可判、判据真假绿）；` +
+        `实测 [${beforeCancel.join(", ")}]`
+    );
+
+    // 前置 ①（裁定 5）：清掉进程内加速 Map ⇒ 双源发现必须独立成立。
+    FORGET_CHILDREN_FN.value(parentRunId);
+
+    const result = await CANCEL_FN.value({
+      parentRunId,
+      db: fixture.connection.db,
+      dialect: "sqlite",
+      tenantId: TENANT_ID,
+      timeoutS: 30,
+    });
+    assert.deepEqual(
+      [...new Set(result.cancelled)].sort(),
+      [...childRunIds].sort(),
+      `propagateCancel 必须枚举到**全部**子 run 并调用取消（Map 已清 ⇒ 只能靠双源发现），` +
+        `否则子 run 恒不收敛到 CANCELLED；实测 cancelled=${JSON.stringify(result.cancelled)}`
+    );
+    assert.deepEqual(
+      [...result.pending].sort(),
+      [],
+      "不得有子 run 停在 pending（≤30s 内必须全部收敛到终态）"
+    );
+    const statuses = childRunIds.map((id) => runRow(fixture, id).status);
+    assert.deepEqual(
+      [...statusSet(statuses.map((status) => ({ status })))],
+      ["CANCELLED"],
+      "子 run status 集合 == {CANCELLED}（集合全等，不是行数相等）；" +
+        `实测 [${statuses.join(", ")}]`
+    );
+
+    // **反向断言**：传播范围恰好是子集合 —— 无关 run 不得被连带取消。
+    assert.equal(
+      runRow(fixture, unrelatedRunId).status,
+      "RUNNING",
+      "取消向下传播只作用于子 run；无关 RUNNING run 被连带取消 = 传播越界 ⇒ 红"
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+/**
+ * **D3-2b · 端到端 HTTP 取消传播 —— 移交 T031-04 · 当前 pending（未注册为 test）**
+ *
+ * 主理人 2026-10-23 A-d 裁定：D3 拆两层 —— D3-2a（机制面）归本批 T031-02；
+ * D3-2b（行为面，`POST /runs/{parent}/cancel` ⇒ 子 run ≤30s 到 CANCELLED +
+ * 沙箱 destroy 计数 == 子 run 数）归 **T031-04**。
+ *
+ * **为什么 pending**：该链路的接线必经 `routes/runs.ts`（T031-05）→
+ * `coordinator.ts::RunCoordinator.cancel`（T031-04）—— 二者都不在 T031-02
+ * 文件域，`coordinator.ts` 至今**未调** `propagateCancel`。此处**把载体先建好**
+ * 并登记移交单四项，**不注册为 `test()`**：注册会让控制组恒红（⇒ 反例注入器
+ * 三条 case 全部退成 UNEVALUABLE），那是拿门禁换形式。
+ *
+ * 收口执行人（T031-04）只需两步：把本函数体 `test(...)` 注册 + 注入沙箱端口
+ * （`delegateSpawn` 的 `sandbox?` 已备好注入位；判据**不**代插 `sandbox_session`
+ * 行 —— 文件头口径）。
+ *
+ * 判红手法（写进移交单）：`coordinator.ts::RunCoordinator.cancel` 不调
+ * `propagateCancel`（或子探针不组合父探针）⇒ 子 run 恒 `RUNNING` /
+ * destroy 计数 0 ⇒ 本函数**必红**。
+ *
+ * @returns 观察面快照（供 T031-04 收口时贴台账）。
+ */
+export async function d3_2b_httpCancelPropagation() {
+  const fixture = await makeApp({ username: "del-d32b" });
+  try {
+    const chain = await seedChain(fixture, "d3b-parent-agent");
+    const parentRunId = seedRunRow(fixture, { ...chain, status: "RUNNING" });
+    const childRunIds = [];
+    for (const index of [0, 1]) {
+      const outcome = await probeSpawn(SPAWN_FN.value, {
+        db: fixture.connection.db,
+        dialect: "sqlite",
+        tenantId: TENANT_ID,
+        parentRunId,
+        targetAgentId: chain.agentId,
+        targetVersionId: chain.versionId,
+        conversationId: chain.conversationId,
+        task: `D3-2b 子任务 ${index}`,
+        depth: 0,
+        maxDepth: 1,
+        gateway: fakeGateway(CHILD_DRIVE_SCRIPT),
+      });
+      if (outcome.normalized.accepted !== true) {
+        throw new Error(`派生必须成功（D3-2b 前提）；实测 ${outcome.normalized.shape}`);
+      }
+      childRunIds.push(String(outcome.raw.childRunId ?? ""));
+    }
+    const otherConversationId = await createConversation(fixture, chain.agentId);
+    const unrelatedRunId = seedRunRow(fixture, {
+      ...chain,
+      conversationId: otherConversationId,
+      status: "RUNNING",
+    });
+
+    // 前置：至少 1 个子 run 走 code_exec **真实**占用沙箱。这些行必须由执行链
+    // 产生 —— 测试不代插（代插 = 前置恒真 = 自导自演）。
     const sandboxed = fixture.raw
       .prepare(
-        "select count(*) as n from tool_call where run_id in (?, ?) and tool_name = 'code_exec' and sandbox_session_id is not null"
+        "select count(*) as n from tool_call where run_id in (?, ?) and tool_name = 'code_exec' " +
+          "and sandbox_session_id is not null"
       )
       .get(...childRunIds).n;
-    assert.equal(
-      sandboxed >= 1,
-      true,
-      "前置：必须至少 1 个子 run 经 code_exec 真实占用沙箱（否则 destroy 计数恒 0、判据真假绿）；" +
-        `实测 code_exec+sandbox 行数 = ${sandboxed} —— 执行链未产生 ⇒ 判据不可判，按「实现未落地」红`
-    );
+    if (sandboxed < 1) {
+      throw new Error(
+        "前置：必须至少 1 个子 run 经 code_exec 真实占用沙箱（否则 destroy 计数恒 0、判据真假绿）；" +
+          `实测 code_exec+sandbox 行数 = ${sandboxed} —— 执行链未产生 ⇒ 判据不可判`
+      );
+    }
 
     const cancelled = await request(fixture, "POST", `/api/v1/runs/${parentRunId}/cancel`);
     assert.equal(cancelled.statusCode, 200, "父 cancel 成功");
@@ -534,10 +781,17 @@ test("D3-2 · 父 cancel ⇒ 所有子 run ≤30s 到 CANCELLED（集合全等�
       "取消向下传播只作用于子 run；无关 RUNNING run 被连带取消 = 传播越界 ⇒ 红"
     );
     assert.equal(wait.elapsedMs <= CANCEL_PROPAGATION_DEADLINE_MS, true, "实测耗时不得超 30s 上限");
+    return {
+      childRunIds,
+      childStatuses: statuses.map((row) => row.status),
+      destroyedRunCount: destroyedRunCount(fixture.raw, childRunIds),
+      unrelatedStatus: runRow(fixture, unrelatedRunId).status,
+    };
   } finally {
     await fixture.close();
   }
-});
+}
+
 
 test("D3-3 · 机制面出口：propagateCancel 就位且接受单对象入参（行为判据之外的接口契约）", () => {
   assert.equal(
@@ -750,7 +1004,18 @@ test("D5-3 · 判权：授权工具 ALLOW / 未授权工具 DENY（双向）", (
   assert.equal(SCOPE_ALLOWS_FN.value([], "tool.a"), false, "空 scope 不得放行任何工具");
 });
 
-test("D5-4 · 行为面：子 run 调父未授权工具 ⇒ tool_call.status == DENIED（非 HTTP），授权工具不得 DENIED", async () => {
+/**
+ * **D5-4 · 行为面**（改造 3）：子 run 调父未授权工具 ⇒ 真实 `ToolExecutor` 落
+ * `tool_call.status == 'DENIED'`（在 `tool_call` 行断言，**非 HTTP**）。
+ *
+ * 为什么必须给网关（改造 2）：`DENIED` 行只能由**真实 `ToolExecutor` 权限链**
+ * 在被越权调用时落（裁定 7），而调用只能来自子 run 的**真实执行**。不给网关 ⇒
+ * 子 run 只建行不启动执行（`RunDriver.start` 无网关即 `CONFIGURATION_ERROR`
+ * fail loud）⇒ 无 `DENIED` 行可断言 ⇒ 判据不可判。故注入**既有**的脚本化假
+ * Provider（`routes-harness.mjs::fakeGateway`，过 fake 闸门，不新造），并取
+ * 「等收敛」档（`settleTimeoutMs`）—— 与 D3-2a 的「不等」档相反（附加 C）。
+ */
+test("D5-4 · 行为面：子 run 调父未授权工具 ⇒ 真实 ToolExecutor 落 tool_call.status == DENIED（非 HTTP），授权工具不得 DENIED", async () => {
   assert.equal(SPAWN_FN.found, true, `前置：delegateSpawn 未就位（${SPAWN_FN.tried.join(" | ")}）`);
   const fixture = await makeApp({ username: "del-d54" });
   try {
@@ -767,19 +1032,37 @@ test("D5-4 · 行为面：子 run 调父未授权工具 ⇒ tool_call.status == 
       task: "越权探测子任务",
       depth: 0,
       maxDepth: 1,
+      gateway: fakeGateway(CHILD_DRIVE_SCRIPT),
+      settleTimeoutMs: CHILD_SETTLE_TIMEOUT_MS,
     });
-    assert.equal(outcome.normalized.recognized, true, `派生必须返回已声明形态（实测 ${outcome.normalized.shape}）`);
-    assert.equal(outcome.normalized.accepted, true, "派生必须成功（本用例判的是子 run 的工具权限，不是派生权限）");
-    const childRunId = String(outcome.raw.childRunId ?? "");
-
-    // 这些行必须由执行链产生（测试不代插）——执行链未落地 ⇒ 前置红 =「实现未落地」。
-    const denied = fixture.raw
-      .prepare("select count(*) as n from tool_call where run_id = ? and status = 'DENIED'")
-      .get(childRunId).n;
     assert.equal(
-      denied >= 1,
+      outcome.normalized.recognized,
       true,
-      "子 run 调父未授权工具必须落一条 tool_call.status = 'DENIED'（D5：在 tool_call 行断言，非 HTTP）"
+      `派生必须返回已声明形态（实测 ${outcome.normalized.shape}）`
+    );
+    assert.equal(
+      outcome.normalized.accepted,
+      true,
+      "派生必须成功（本用例判的是子 run 的工具权限，不是派生权限）"
+    );
+    const childRunId = String(outcome.raw.childRunId ?? "");
+    assert.equal(
+      runRow(fixture, childRunId).trigger,
+      "subagent",
+      "前置：派生必须真的建出 trigger='subagent' 的子 run"
+    );
+
+    // 这些行必须由执行链产生（测试不代插）—— 执行链未跑起来 ⇒ 前置红 =
+    // 「实现未落地」，不是判据写错。
+    const rows = fixture.raw
+      .prepare("select tool_name, status from tool_call where run_id = ? order by rowid")
+      .all(childRunId);
+    const denied = rows.filter((row) => row.status === "DENIED");
+    assert.equal(
+      denied.length >= 1,
+      true,
+      "子 run 调父未授权工具必须落一条 tool_call.status = 'DENIED'（D5：在 tool_call 行断言，非 HTTP；" +
+        `DENIED 只能由真实 ToolExecutor 权限链落，测试不代插）；实测 tool_call 行 ${JSON.stringify(rows)}`
     );
     // 反向：授权工具的行不得被 DENY（防"一律 DENY"假实现）。
     const allowedDenied = fixture.raw
@@ -787,7 +1070,12 @@ test("D5-4 · 行为面：子 run 调父未授权工具 ⇒ tool_call.status == 
         "select count(*) as n from tool_call where run_id = ? and tool_name = 'code_exec' and status = 'DENIED'"
       )
       .get(childRunId).n;
-    assert.equal(allowedDenied, 0, "scope 内的 code_exec 不得被 DENY（防一律拒绝的假实现）");
+    assert.equal(
+      allowedDenied,
+      0,
+      "scope 内的 code_exec 不得被 DENY（防一律拒绝的假实现）；" +
+        `实测 DENIED 行 ${JSON.stringify(denied.map((row) => row.tool_name))}`
+    );
   } finally {
     await fixture.close();
   }
