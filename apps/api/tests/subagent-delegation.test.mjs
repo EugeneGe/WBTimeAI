@@ -24,6 +24,14 @@
  *     预算过 `SafetyStage=delegation`；**子 run `policy_version` == 父快照**（不等即红）；
  *     **拒绝走拒绝型 tool result**（不抛异常、不产生 4xx）且 `agent_run` 中
  *     `trigger == "subagent"` 行数 == 0（拒绝场景）。
+ *   - **D8 并发闸单入口**（T031-04 接线后新增 §5）：用户入口经 `open_run` 判闸
+ *     （`origin=USER` 显式传真）；「父 + 1 子」不 409（`origin=SUBAGENT` 豁免）；
+ *     第二个用户主动 run **仍 409 且拒绝路径零落库**（消息不落、run 行数不增）；
+ *     子 run 场景判闸**恒 1 次**（3a 前置一次，两条建行路径都不再判）。
+ *   - **D10 origin / trigger 分离**（§6）：豁免判据**只认**应用层 `origin`
+ *     （唯一豁免值 `"SUBAGENT"`）；`trigger` 仅作标记/审计、**永不参与放行**；
+ *     客户端可达面（`RunRequest` 4 键）两者都到不了；`trigger=='subagent'` 的
+ *     行必有 `spawn_agent` 父记录（SQL 审计，防"标记了却没有委派来源"的孤儿）。
  *
  * 载体的两条硬形态（与 spike / watermark 载体同款）
  * ----------------------------------------------
@@ -44,7 +52,8 @@
  *     `apps/api/src/modules/run/subagent-delegation.ts` ·
  *     `apps/api/src/modules/run/subagent-budget.ts` / `subagent-scope.ts` /
  *     `subagent-cancel.ts`；既有 `subagent-guard.ts` / `subagent-spawner.ts`
- *     也可作导出宿主（D1 已占用的导出名不冲突即可）。
+ *     也可作导出宿主（D1 已占用的导出名不冲突即可）。`guardRunCreation` 的宿主是
+ *     `coordinator.ts`（spike 期已落地，D8/D10 用；探测列表末尾追加）。
  *
  *   1. `delegateSpawn(input)` —— 单对象入参
  *        `{ db, dialect, tenantId, parentRunId, targetAgentId, targetVersionId,
@@ -107,9 +116,10 @@ import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
+import { AgentRunRepo } from "@wbtime/db";
 import * as domain from "@wbtime/domain";
 
-import { makeApp, request, TENANT_ID, fakeGateway } from "./routes-harness.mjs";
+import { errorOf, makeApp, request, TENANT_ID, fakeGateway } from "./routes-harness.mjs";
 import {
   createAgentWithVersion,
   createConversation,
@@ -264,6 +274,9 @@ const DELEGATION_HOSTS = Object.freeze([
   "../dist/modules/run/subagent-cancel.js",
   "../dist/modules/run/subagent-guard.js",
   "../dist/modules/run/subagent-spawner.js",
+  // D8/D10 的 `guardRunCreation` 宿主（spike 期已落地在 coordinator.ts；探测列表
+  // 末尾追加 —— 它不导出上面任何候选名，不影响其余 pickExport 的首中次序）。
+  "../dist/modules/run/coordinator.js",
 ]);
 
 /** @returns {{found: boolean, module: object|null, spec: string, reason: string}} */
@@ -444,11 +457,20 @@ const SCOPE_ALLOWS_FN = pickExport(MODULES.hosts, [
   "scopeAllows",
 ]);
 const CANCEL_FN = pickExport(MODULES.hosts, ["propagateCancel", "cancelDownstream", "cancelChildren"]);
+// D8/D10：并发闸判定函数（`coordinator.ts` 导出；调用方 = `delegateSpawn` 3a 与
+// T031-04 接线的 `run-service.ts::open_run`）。
+const GUARD_FN = pickExport(MODULES.hosts, ["guardRunCreation", "guard_run_creation"]);
 const FORGET_CHILDREN_FN = pickExport(MODULES.hosts, [
   "forgetDelegatedChildren",
   "forgetDelegatedChild",
   "clearDelegatedChildren",
 ]);
+
+/**
+ * D10① 结构面：`RunRequestSchema` 的键集合（**静态读 schema 模块**，不手抄名单
+ * —— 手抄就等于把"契约面"复制成第二份会漂移的真相源）。
+ */
+const RUN_REQUEST_SCHEMA = await loadModule("../dist/routes/schemas-run.js");
 
 // ---------------------------------------------------------------------------
 // §0 · 仪器自证（先证明"尺子"是准的，再拿它去量实现）
@@ -1198,3 +1220,354 @@ test("S3-3 · 拒绝事件的 S3 挂点标记：subagent.rejected.payload.stage 
 function countSubagentRuns(fixture) {
   return fixture.raw.prepare("select count(*) as n from agent_run where trigger = 'subagent'").get().n;
 }
+
+// ---------------------------------------------------------------------------
+// §5 · D8 · 并发闸单入口（T031-04 接线后新增）
+//
+// 判据原文（计划 §3 D8）：用户入口创建 run 前判闸（单入口）；「父 + 1 子」不
+// 409；第二个用户主动 run 仍 409；子 run 场景判闸恒 1 次。
+//
+// 接线形态（T031-04）：`RunDriverDeps.openRun` 钩子 → `run-service.ts::open_run`
+// → `guardRunCreation`；`origin=USER` 由 `app.ts` 装配闭包烤入（driver 内零
+// origin 逻辑）。子 run driver 不持有该钩子 ⇒ 建行点不判（其闸在 `delegateSpawn`
+// 3a 前置判过一次，裁定 v）。
+// ---------------------------------------------------------------------------
+
+/**
+ * 把 fixture 的 agent 指针指到已插的版本（HTTP 入口判据专用）。
+ *
+ * `createAgentWithVersion` 走裸 SQL 插 `agent_version`、**不动指针**（run 直调
+ * 判据不需要它）；而 `runEntry` 的前置校验要求 `current_version_id` 非空 ⇒
+ * HTTP 面判据必须先补这一下（与 `routes-agents.test.mjs` 的 `publish` 等价，
+ * 此处不新造发布路径，直接按指针落库）。
+ */
+function pointAgentAtVersion(fixture, agentId, versionId) {
+  fixture.raw
+    .prepare("update agent set current_version_id = ? where id = ?")
+    .run(versionId, agentId);
+}
+
+test("D8-1 · 正向面：父 run 活跃时派生成功（origin=SUBAGENT 豁免 ⇒「父 + 1 子」不 409）", async () => {
+  assert.equal(SPAWN_FN.found, true, `前置：delegateSpawn 未就位（${SPAWN_FN.tried.join(" | ")}）`);
+  const fixture = await makeApp({ username: "del-d81" });
+  try {
+    const chain = await seedChain(fixture, "d8-exempt-parent");
+    // 占住会话活跃位（父活跃 ⇒ 计数 1 ≥ 上限 1）。豁免必须**取自 origin**，
+    // 不是把上限调大 —— 后者会让 D8-2 的 409 面破裂（B-1 纪律）。
+    const parentRunId = seedRunRow(fixture, { ...chain, status: "RUNNING" });
+
+    const outcome = await probeSpawn(SPAWN_FN.value, {
+      db: fixture.connection.db,
+      dialect: "sqlite",
+      tenantId: TENANT_ID,
+      parentRunId,
+      targetAgentId: chain.agentId,
+      targetVersionId: chain.versionId,
+      conversationId: chain.conversationId,
+      task: "D8-1 并发闸豁免派生",
+      depth: 0,
+      maxDepth: 1,
+    });
+    assert.equal(
+      outcome.normalized.recognized,
+      true,
+      `派生必须返回已声明形态（实测 ${outcome.normalized.shape}）`
+    );
+    assert.equal(
+      outcome.normalized.accepted,
+      true,
+      `父活跃时 origin=SUBAGENT 必须豁免（「父 + 1 子」不 409）；实测 ${outcome.normalized.shape}` +
+        ` ${JSON.stringify(outcome.raw ?? null)}`
+    );
+    const childRunId = String(outcome.raw.childRunId ?? "");
+    assert.equal(
+      runRow(fixture, childRunId).trigger,
+      "subagent",
+      "豁免后必须真的建出 trigger='subagent' 的子 run（不是「拒了却返回 accepted」的假绿）"
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("D8-2 · 反向面：第二个用户主动 run 仍 409 且拒绝路径零落库（HTTP 行为面；D10① 的 body trigger 合入本链路）", async () => {
+  const fixture = await makeApp({ username: "del-d82", model: true });
+  try {
+    const chain = await seedChain(fixture, "d8-second-user");
+    pointAgentAtVersion(fixture, chain.agentId, chain.versionId);
+    seedRunRow(fixture, { ...chain, status: "RUNNING" });
+
+    const runsBefore = fixture.raw
+      .prepare("select count(*) as n from agent_run where conversation_id = ?")
+      .get(chain.conversationId).n;
+    const messagesBefore = fixture.raw
+      .prepare("select count(*) as n from message where conversation_id = ?")
+      .get(chain.conversationId).n;
+
+    // ① 干净 body：第二个用户主动 run ⇒ 409。
+    const second = await request(fixture, "POST", `/api/v1/agents/${chain.agentId}/run`, {
+      payload: { message: "第二个用户主动 run", conversation_id: chain.conversationId },
+    });
+    assert.equal(
+      second.statusCode,
+      409,
+      `第二个用户主动 run 必须 409（并发闸单入口已接线）；实测 ${second.statusCode} ${second.body}`
+    );
+    assert.equal(errorOf(second).code, "CONFLICT", "409 必须走契约 CONFLICT 码（复用既有映射，不新造）");
+
+    // ② D10① 合入断言：body 显式带 `trigger:"subagent"` ⇒ 仍 409、行数仍不增
+    //    （客户端可达面伪造不了豁免 —— 判据只认应用层 origin）。
+    const forged = await request(fixture, "POST", `/api/v1/agents/${chain.agentId}/run`, {
+      payload: {
+        message: "带 trigger 的第二个用户主动 run",
+        conversation_id: chain.conversationId,
+        trigger: "subagent",
+      },
+    });
+    assert.equal(
+      forged.statusCode,
+      409,
+      `body 带 trigger:"subagent" 不得获豁免（D10①：trigger 永不参与放行）；实测 ${forged.statusCode} ${forged.body}`
+    );
+
+    // ③ 拒绝路径零落库：run 行数恒不增（消息也不落 —— 判闸点在消息 append 之前）。
+    const runsAfter = fixture.raw
+      .prepare("select count(*) as n from agent_run where conversation_id = ?")
+      .get(chain.conversationId).n;
+    const messagesAfter = fixture.raw
+      .prepare("select count(*) as n from message where conversation_id = ?")
+      .get(chain.conversationId).n;
+    assert.equal(runsAfter, runsBefore, `拒绝路径 run 行数不得增；实测 ${runsBefore} → ${runsAfter}`);
+    assert.equal(
+      messagesAfter,
+      messagesBefore,
+      `拒绝路径消息不得落（判闸点在用户消息 append 之前）；实测 ${messagesBefore} → ${messagesAfter}`
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("D8-3 · 子 run 场景判闸恒 1 次（计数补丁观测：3a 前置一次；3b 的 driver.start 无 openRun 钩子）", async () => {
+  assert.equal(SPAWN_FN.found, true, `前置：delegateSpawn 未就位（${SPAWN_FN.tried.join(" | ")}）`);
+  assert.equal(
+    GUARD_FN.found,
+    true,
+    `前置：guardRunCreation 未就位（${GUARD_FN.tried.join(" | ")}）—— 计数补丁的观测对象`
+  );
+  const fixture = await makeApp({ username: "del-d83" });
+  try {
+    const chain = await seedChain(fixture, "d8-count");
+    const parentRunId = seedRunRow(fixture, { ...chain, status: "RUNNING" });
+
+    // 观测点 = `guardRunCreation` 的数据面**唯一**调用点（grep 实证仅 coordinator
+    // 内）。测试侧包裹计数（try/finally 还原）⇒ 生产零改动、同 dist 模块实例生效。
+    const original = AgentRunRepo.prototype.countActiveByConversation;
+    let guardCount = 0;
+    AgentRunRepo.prototype.countActiveByConversation = async function patchedCount(...args) {
+      guardCount += 1;
+      return original.apply(this, args);
+    };
+    let outcome;
+    try {
+      // 有网关 ⇒ 3b 路径（`startChildRun` 自建 driver 走 `RunDriver.start`）——
+      // 该 driver **不持有** openRun 钩子是"恒 1"的结构保证。
+      outcome = await probeSpawn(SPAWN_FN.value, {
+        db: fixture.connection.db,
+        dialect: "sqlite",
+        tenantId: TENANT_ID,
+        parentRunId,
+        targetAgentId: chain.agentId,
+        targetVersionId: chain.versionId,
+        conversationId: chain.conversationId,
+        task: "D8-3 恒 1 次判闸",
+        depth: 0,
+        maxDepth: 1,
+        gateway: fakeGateway(CHILD_DRIVE_SCRIPT),
+        settleTimeoutMs: CHILD_SETTLE_TIMEOUT_MS,
+      });
+    } finally {
+      AgentRunRepo.prototype.countActiveByConversation = original;
+    }
+    assert.equal(outcome.normalized.recognized, true, `派生必须返回已声明形态（实测 ${outcome.normalized.shape}）`);
+    assert.equal(outcome.normalized.accepted, true, `派生必须成功（否则计数观测失去前提）；实测 ${outcome.normalized.shape}`);
+    assert.equal(
+      guardCount,
+      1,
+      `一次派生必须恰好判闸 1 次（3a 前置判一次；3b 的 driver.start 无 openRun 钩子 ⇒ 不判；` +
+        `3c 的 concurrencyGuard:"skip" ⇒ 不判）；实测 ${guardCount}`
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// §6 · D10 · origin / trigger 分离（豁免判据只认应用层 origin）
+// ---------------------------------------------------------------------------
+
+/** 守卫结果归一（`{allowed}` / `{ok}` / `{conflict}` / 409 抛错都收；防假绿）。 */
+function normalizeGuardOutcome(value) {
+  if (value === null || value === undefined) {
+    return { recognized: false, allowed: false, shape: "undefined" };
+  }
+  if (typeof value === "object") {
+    if (typeof value.allowed === "boolean") {
+      return { recognized: true, allowed: value.allowed, shape: `allowed=${value.allowed}` };
+    }
+    for (const key of ["ok", "conflict"]) {
+      if (typeof value[key] === "boolean") {
+        return {
+          recognized: true,
+          allowed: key === "ok" ? value[key] : !value[key],
+          shape: `${key}=${value[key]}`,
+        };
+      }
+    }
+    const status = value.status ?? value.statusCode;
+    if (status === 409 || value.code === "CONFLICT") {
+      return { recognized: true, allowed: false, shape: "409" };
+    }
+  }
+  return { recognized: false, allowed: false, shape: typeof value };
+}
+
+/** 调一次 guardRunCreation 并归一（不抛错；异常按已声明形态归一）。 */
+async function probeGuard(fn, args) {
+  try {
+    const raw = await fn(args);
+    return { ...normalizeGuardOutcome(raw), threw: false, raw };
+  } catch (error) {
+    return { ...normalizeGuardOutcome(error), threw: true, raw: null, error };
+  }
+}
+
+test("D10-1 · 结构面：RunRequest 契约面仍 4 键 —— 不含 trigger（客户端可达面到不了豁免判据）", () => {
+  assert.equal(
+    RUN_REQUEST_SCHEMA.found,
+    true,
+    `前置：schemas-run 模块未就位（${RUN_REQUEST_SCHEMA.reason}）`
+  );
+  const schema = RUN_REQUEST_SCHEMA.module?.RunRequestSchema;
+  assert.ok(
+    schema !== undefined && schema !== null && typeof schema === "object",
+    "schemas-run 必须导出 RunRequestSchema（静态读 schema 模块，不手抄名单）"
+  );
+  const keys = Object.keys(schema.properties ?? {}).sort();
+  // 仪器自证：4 键必须**在**（防"properties 读成空对象 ⇒ 不含 trigger 恒真"的假绿）。
+  assert.deepEqual(
+    keys,
+    ["conversation_id", "message", "run_mode", "workspace_id"],
+    `RunRequest 必须恰为契约 4 键（多一个 trigger 就等于把豁免判据建到客户端可达面上）；实测 ${JSON.stringify(keys)}`
+  );
+  // HTTP 面（body 带 trigger 仍 409、行数不增）按 B-4 口径**合入 D8-2** 同链路断言。
+});
+
+test("D10-2 · 单元面：豁免只认 origin —— {USER, trigger=subagent} 拒 / {SUBAGENT, trigger=user} 放（双向）", async () => {
+  assert.equal(GUARD_FN.found, true, `前置：guardRunCreation 未就位（${GUARD_FN.tried.join(" | ")}）`);
+  const fixture = await makeApp({ username: "del-d102" });
+  try {
+    const chain = await seedChain(fixture, "d10-origin");
+    seedRunRow(fixture, { ...chain, status: "RUNNING" }); // 占住活跃位（计数 1 ≥ 上限 1）
+    const base = {
+      db: fixture.connection.db,
+      dialect: "sqlite",
+      tenantId: TENANT_ID,
+      conversationId: chain.conversationId,
+    };
+
+    // 第一组（反向）：origin=USER + trigger=subagent ⇒ 必须拒。只测放行会被
+    // "一律放行"蒙混；这一组正是"裸 trigger 判据"的旁路。
+    const forgedTrigger = await probeGuard(GUARD_FN.value, {
+      ...base,
+      origin: "USER",
+      trigger: "subagent",
+    });
+    assert.equal(forgedTrigger.recognized, true, `守卫必须返回已声明形态（实测 ${forgedTrigger.shape}）`);
+    assert.equal(
+      forgedTrigger.allowed,
+      false,
+      `origin=USER 不得因 trigger='subagent' 获豁免（D10 核心：trigger 永不参与放行）；实测 ${forgedTrigger.shape}`
+    );
+
+    // 第二组（正向）：origin=SUBAGENT + trigger=user ⇒ 必须放。只测拒会被
+    // "一律拒"蒙混。
+    const realSubagent = await probeGuard(GUARD_FN.value, {
+      ...base,
+      origin: "SUBAGENT",
+      trigger: "user",
+    });
+    assert.equal(realSubagent.recognized, true, `守卫必须返回已声明形态（实测 ${realSubagent.shape}）`);
+    assert.equal(
+      realSubagent.allowed,
+      true,
+      `origin=SUBAGENT 必须豁免计数（trigger 传 user 不影响放行）；实测 ${realSubagent.shape}`
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+/**
+ * D10③ 审计 SQL：`trigger='subagent'` 但没有对应 `spawn_agent` 成功父记录的行。
+ *
+ * `json_extract` 仅用于**测试侧审计探针**（判据跑 SQLite）；生产的子 run 发现链
+ * 走应用层 JSON 解析（`subagent-cancel.ts`，零方言分叉）—— 一个是审计探针、
+ * 一个是取消传播取数面，不是同一真相源。
+ */
+const ORPHAN_SUBAGENT_AUDIT_SQL = `select r.id from agent_run r
+  where r.trigger = 'subagent'
+    and not exists (
+      select 1 from tool_call t
+      where t.tool_name = 'spawn_agent'
+        and t.status = 'SUCCESS'
+        and json_extract(t.output, '$.child_run_id') = r.id
+    )`;
+
+test("D10-3 · 审计面：trigger='subagent' 的行必有 spawn_agent 父记录（伪造行必命中 + 真实派生不进孤儿集）", async () => {
+  assert.equal(SPAWN_FN.found, true, `前置：delegateSpawn 未就位（${SPAWN_FN.tried.join(" | ")}）`);
+  const fixture = await makeApp({ username: "del-d103" });
+  try {
+    const chain = await seedChain(fixture, "d10-audit");
+    const parentRunId = seedRunRow(fixture, { ...chain, status: "RUNNING" });
+
+    // 反向（仪器自证）：直插一条伪造子 run（trigger='subagent'、无父 tool_call）
+    //   ⇒ 审计必须命中它。抓不出孤儿的审计 SQL 是恒空假绿。
+    //   `success` 传 1 不传 true：node:sqlite 不绑布尔值（DDL 侧是 0/1 整数）。
+    const forgedRunId = seedRunRow(fixture, {
+      ...chain,
+      trigger: "subagent",
+      status: "SUCCEEDED",
+      success: 1,
+    });
+
+    // 正向：真实派生（3b 有网关；`spawner.delegate` 落父侧 spawn_agent SUCCESS 行，
+    //   `output.child_run_id` 指向子 run）⇒ 该子 run 不得进孤儿集。
+    const outcome = await probeSpawn(SPAWN_FN.value, {
+      db: fixture.connection.db,
+      dialect: "sqlite",
+      tenantId: TENANT_ID,
+      parentRunId,
+      targetAgentId: chain.agentId,
+      targetVersionId: chain.versionId,
+      conversationId: chain.conversationId,
+      task: "D10-3 审计派生",
+      depth: 0,
+      maxDepth: 1,
+      gateway: fakeGateway(CHILD_DRIVE_SCRIPT),
+      settleTimeoutMs: CHILD_SETTLE_TIMEOUT_MS,
+    });
+    assert.equal(outcome.normalized.recognized, true, `派生必须返回已声明形态（实测 ${outcome.normalized.shape}）`);
+    assert.equal(outcome.normalized.accepted, true, `派生必须成功（正向面的前提）；实测 ${outcome.normalized.shape}`);
+    const childRunId = String(outcome.raw.childRunId ?? "");
+
+    const orphans = fixture.raw.prepare(ORPHAN_SUBAGENT_AUDIT_SQL).all().map((row) => row.id);
+    assert.deepEqual(
+      orphans,
+      [forgedRunId],
+      `审计必须恰好命中伪造行、且真实派生的子 run（${childRunId}）不得进孤儿集；实测 ${JSON.stringify(orphans)}`
+    );
+  } finally {
+    await fixture.close();
+  }
+});
