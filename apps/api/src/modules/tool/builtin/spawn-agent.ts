@@ -4,8 +4,9 @@
  * 职责边界（与 py 线 `spawn_agent` 对齐的"形"，不是 T031-03 的完整"实"）：
  *   - 入参校验（与 `packages/db::BUILTIN_TOOLS` 的 `inputSchema.required` 同源：
  *     `target_agent_id` / `task` 必填非空）；
- *   - 把执行**委托**给 {@link SpawnAgentDelegation}（run 装配侧用 `SubAgentSpawner`
- *     适配的端口）—— 工具本身**不自建执行通道**（计划 §1① 的硬规则）；
+ *   - 把执行**委托**给 {@link SpawnAgentDelegation}（run 装配侧适配到
+ *     `delegation.ts::delegateSpawn` 的端口）—— 工具本身**不自建执行通道**
+ *     （计划 §1① 的硬规则）；
  *   - 端口未装配 ⇒ `INTERNAL_ERROR` 拒绝，**不静默降级**（假装成功比失败更糟）。
  *
  * 为什么端口是注入的：`ToolContext` 里没有 run 身份（parentRunId / conversationId /
@@ -16,7 +17,7 @@
 import { SPAWN_AGENT_TOOL_NAME } from "@wbtime/domain";
 
 import type { BuiltinTool, ToolContext, ToolOutcome } from "../registry.js";
-import type { SpawnChildOutcome } from "../../run/subagent-spawner.js";
+import type { DelegateSpawnOutcome } from "../../run/delegation.js";
 
 /** 工具层交给委派端口的入参（工具只认识模型给的东西，run 侧身份由端口绑定补齐）。 */
 export interface SpawnAgentPortInput {
@@ -29,12 +30,37 @@ export interface SpawnAgentPortInput {
 /**
  * 委派端口（`ToolContext.delegation`）。
  *
+ * **适配对象 = `delegation.ts::delegateSpawn`（裁定 x）** —— 完整委派链：
+ * S3 安全挂点（子任务文本过闸）+ D1 深度闸 + D4 预算下拨 + D5 权限收窄 +
+ * D8 并发闸（前置，恒 1 次）+ 双源写行，**不是** `SubAgentSpawner.spawn()`
+ * （后者只有深度 + 并发两道闸 ⇒ 适配它等于给模型开一条绕过 S3/D4 的旁路）。
+ *
  * 装配侧的适配形态（T031-03/T031-04 落地）：
- *   `spawn: (input) => spawner.spawn({ parentRunId, conversationId, targetVersionId,
- *   targetAgentId: input.targetAgentId, task: input.task, depth: ctxDepth, ... })`
+ *   `spawn: (input) => delegateSpawn({ db, dialect, tenantId, parentRunId,
+ *     targetAgentId: input.targetAgentId, targetVersionId, conversationId,
+ *     task: input.task, depth: ctxDepth, maxDepth, budget, parentPolicyVersion,
+ *     sandbox, gateway, coordinator, ... })`
+ *   —— run 侧身份（parentRunId / conversationId / depth）由装配侧闭包绑定，
+ *   工具只认识模型给的东西（{@link SpawnAgentPortInput}）。
  */
 export interface SpawnAgentDelegation {
-  readonly spawn: (input: SpawnAgentPortInput) => Promise<SpawnChildOutcome>;
+  readonly spawn: (input: SpawnAgentPortInput) => Promise<DelegateSpawnOutcome>;
+}
+
+/**
+ * 策略类拒绝原因（深度 / 并发 / 安全闸）—— 这些是**策略拒绝**，映射
+ * `PERMISSION_DENIED`；其余（父不可见 / 驱动失败 / 无网关 / 版本或用户解析
+ * 失败）是装配或生命周期异常，映射 `INTERNAL_ERROR`。
+ *
+ * 前缀匹配：`SAFETY_DENIED:<detail>` 一类的原因带冒号详情（见 `delegateSpawn`
+ * 各拒绝点）。**未知原因一律按后者 fail loud** —— 不把系统故障扮成策略拒绝。
+ */
+function isPolicyDenialReason(reason: string): boolean {
+  return (
+    reason === "DEPTH_EXCEEDED" ||
+    reason === "CONCURRENCY_LIMIT" ||
+    reason.startsWith("SAFETY_DENIED")
+  );
 }
 
 /** 第 6 个内置工具（注册进 `BUILTIN_REGISTRY`；schema 真源在 `packages/db::BUILTIN_TOOLS`）。 */
@@ -89,7 +115,7 @@ export const spawnAgentTool: BuiltinTool = {
       };
     }
 
-    // 唯一执行出口 = 委派端口（工具不自建通道；深度/并发/预算闸都在 spawner 里）。
+    // 唯一执行出口 = 委派端口（工具不自建通道；五道闸都在 delegateSpawn 里）。
     const outcome = await delegation.spawn({
       targetAgentId,
       task,
@@ -105,9 +131,10 @@ export const spawnAgentTool: BuiltinTool = {
     }
     return {
       ok: false,
-      // 上限类拒绝（深度/并发）走 PERMISSION_DENIED（策略拒绝，非系统故障）；
-      // 父不可见是装配/生命周期异常 ⇒ INTERNAL_ERROR。
-      errorCode: outcome.reason === "PARENT_NOT_VISIBLE" ? "INTERNAL_ERROR" : "PERMISSION_DENIED",
+      // 策略类拒绝（深度/并发/安全闸）走 PERMISSION_DENIED；装配/生命周期异常
+      // （父不可见/驱动失败/无网关/解析失败）走 INTERNAL_ERROR；未知原因按后者
+      // fail loud（口径见 isPolicyDenialReason）。
+      errorCode: isPolicyDenialReason(outcome.reason) ? "PERMISSION_DENIED" : "INTERNAL_ERROR",
       error: `spawn_agent 被拒：${outcome.reason}`,
       durationMs: Date.now() - startedAt,
     };

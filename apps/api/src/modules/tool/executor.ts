@@ -34,6 +34,7 @@ import type {
 } from "@wbtime/domain";
 
 import type { SandboxProvider, SandboxSession } from "../sandbox/types.js";
+import type { SpawnAgentDelegation } from "./builtin/spawn-agent.js";
 import { resolveTool, type BuiltinTool, type ToolContext } from "./registry.js";
 
 /** 执行器依赖。 */
@@ -52,6 +53,13 @@ export interface ToolExecutorDeps {
   readonly tools?: ReadonlyMap<string, BuiltinTool>;
   /** 时钟（测试注入）。 */
   readonly now?: () => number;
+  /**
+   * `spawn_agent` 的**委派端口**（T031-03 第二阶透传进 `ToolContext.delegation`）。
+   *
+   * **缺省 = 不装配** ⇒ 该工具一调即拒 `INTERNAL_ERROR`（刻意设计保留：接线归
+   * T031-04 的 `driver.ts` 生产唯一构造点；「未装配」必须可见，不得静默降级）。
+   */
+  readonly delegation?: SpawnAgentDelegation;
 }
 
 /** 缺省超时。 */
@@ -137,7 +145,7 @@ export class ToolExecutor implements ToolExecutorPort {
     );
 
     // 段 3 的前置条件：需沙箱的工具必须先有沙箱。
-    // 为什么在**执行器**判而不是让每个工具自判：5 个工具里 3 个需要沙箱，
+    // 为什么在**执行器**判而不是让每个工具自判：6 个工具里 3 个需要沙箱，
     // 各自判会让"忘了判"成为一次真实的宿主直执行；集中一处则不可能漏。
     // （工具内部仍保留自检 —— 那是纵深防御，不是主判据。）
     if (tool.requiresSandbox && this.#deps.sandbox === undefined) {
@@ -237,6 +245,10 @@ export class ToolExecutor implements ToolExecutorPort {
         : { egressAllowlist: this.#deps.egressAllowlist }),
       // 恒下发：没有它，工具只能信任模型给的 `timeout_ms`（AUD-04 的缺陷形态）。
       timeoutMs,
+      // 委派端口透传（T031-03 第二阶）：**条件展开放在 `base` 里**，这样下面无沙箱 /
+      // 有沙箱**两条返回路径都带上**（只改一条 ⇒ 无沙箱 run 下端口丢失）。缺省 ⇒
+      // 该键不出现，`spawn_agent` 据此判「未装配」并拒绝，不静默降级。
+      ...(this.#deps.delegation === undefined ? {} : { delegation: this.#deps.delegation }),
     };
 
     if (this.#deps.sandbox === undefined) {
