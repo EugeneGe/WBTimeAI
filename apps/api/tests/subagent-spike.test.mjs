@@ -49,7 +49,7 @@
  */
 
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
@@ -57,7 +57,7 @@ import test from "node:test";
 import { BUILTIN_TOOLS } from "@wbtime/db";
 
 import { BUILTIN_REGISTRY, registeredToolNames } from "../dist/modules/tool/registry.js";
-import { makeApp, ROOT, TENANT_ID } from "./routes-harness.mjs";
+import { fakeGateway, makeApp, ROOT, TENANT_ID } from "./routes-harness.mjs";
 import {
   createAgentWithVersion,
   createConversation,
@@ -75,6 +75,7 @@ const DOMAIN = Object.freeze({
   coordinator: "../dist/modules/run/coordinator.js",
   sseStream: "../dist/modules/run/sse-stream.js",
   spawner: "../dist/modules/run/subagent-spawner.js",
+  delegation: "../dist/modules/run/delegation.js",
   guard: "../dist/modules/run/subagent-guard.js",
   spawnAgentTool: "../dist/modules/tool/builtin/spawn-agent.js",
   // `apps/api/tests/` → `../../../` 才是仓库根（`ROOT` 用的是同一个三跳）。
@@ -306,6 +307,7 @@ const MODULES = {
   sseStream: await loadModule(DOMAIN.sseStream),
   guardHosts: [await loadModule(DOMAIN.runService), await loadModule(DOMAIN.coordinator)],
   spawner: await loadModule(DOMAIN.spawner),
+  delegation: await loadModule(DOMAIN.delegation),
   guard: await loadModule(DOMAIN.guard),
   spawnAgentTool: await loadModule(DOMAIN.spawnAgentTool),
   domainRuntime: await loadModule(DOMAIN.domainRuntime),
@@ -339,6 +341,21 @@ const DEPTH_FN = pickExport([MODULES.guard, MODULES.spawner], [
   "guardDepth",
   "isDepthAllowed",
 ]);
+
+/**
+ * D7 的派生单入口（`delegation.ts::delegateSpawn`）。
+ *
+ * 为什么 D7 必须走这条链而不是 `SubAgentSpawner.spawn()` / `makeDelegationPort()`：
+ * 后两者只**建行 + 写双源**，不启动子 run 的 driver ⇒ 子 run 事件流里没有
+ * `agent.started`。而 **D7④ 要求「子 run 首帧 `type == "agent.started"`」**，
+ * 只有带 `gateway` 的 `delegateSpawn` 才会经 `RunDriver.start` 真驱动子 run
+ * （`delegation.ts` 3b 路径），首帧才是 `agent.started`。用只建行的路径去验 ④
+ * 会把判据写成恒假 —— 那是判据缺陷，不是实现缺陷。
+ */
+const DELEGATE_SPAWN_FN = pickExport([MODULES.delegation], ["delegateSpawn", "delegate_spawn"]);
+
+/** D7 子 run 的驱动脚本：一句话说完即终态（不需要工具调用，D7 只看流形状与双源）。 */
+const D7_CHILD_SCRIPT = Object.freeze([{ type: "text_delta", text: "D7：子 run 收到任务并完成" }]);
 
 // ---------------------------------------------------------------------------
 // §0 · 仪器自证（先证明"尺子"是准的，再拿它去量实现）
@@ -843,6 +860,289 @@ test("S-3-3 · 拒绝的观察面：tool_call=failed + agent_event(subagent.reje
       true,
       "父 run 内这次 spawn_agent 的 tool_call.status 必须是 FAILED（D1 ①：内置工具不产生 4xx；"
         + "取值须用冻结词表 TOOL_CALL_STATUSES 的大写 FAILED，小写 'failed' 不是合法值）"
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// §S-3-4…S-3-7 · D7 委派可回放（**双源一致**）
+//
+// 判据原文（计划 §3-D7 逐字）：
+//   ① 父侧：父 run 的 `tool_call` 行中存在 `tool_name == "spawn_agent"` 且
+//      `output.child_run_id` 非空；
+//   ② 子侧：子 run 事件流存在 `subagent.started` 且 `payload.parent_run_id == 父 run_id`；
+//   ③ **一致性**：①与②读出的 id **互为对方**（**双向集合相等**）；
+//   ④ 子 run 事件序列 `seq` **严格单调**、**首帧 `type == "agent.started"`**。
+//
+// 为什么必须走 `delegateSpawn({gateway})` 而不是 `spawn()` / `makeDelegationPort()`：
+//   后两者只建行 + 写双源，**不启动子 run 的 driver** ⇒ 子流首帧是 `subagent.started`，
+//   永远拿不到 `agent.started` ⇒ D7④ 会被写成恒假（判据缺陷，不是实现缺陷）。
+//   带 `gateway` 的 `delegateSpawn` 走 `RunDriver.start` 真驱动子 run，首帧才是
+//   `agent.started`（`delegation.ts` 3b 路径）。故本段统一用真链。
+//
+// 反例形态（`S-3-R`）：**改的是观察面行、不是源码**。理由两条 ——
+//   ⓐ 改源码取红证需要 clone + 重新 build（重工具链），且注入用例集
+//     （`scripts/inject_cases.py`）属门禁脚本，按 §9 纪律「scripts/ 改动先报后改」本任务不得擅改；
+//   ⓑ D7 的被测对象**本来就是库里的两行**（`tool_call.output.child_run_id` 与
+//     `agent_event(subagent.started).payload.parent_run_id`），删/改这两行正是
+//     「只写父侧」「只写子侧」「删 subagent.started」「首帧不是 agent.started」的**等价形态**。
+//   故用 SQL 制造等价残缺面，断言必须抛错 —— 证明判据非恒真。该局限已如实登记。
+// ---------------------------------------------------------------------------
+
+/** 某 run 的 `spawn_agent` 工具调用行（按插入序）。 */
+function d7SpawnToolCalls(fixture, runId) {
+  return fixture.raw
+    .prepare("select * from tool_call where run_id = ? and tool_name = 'spawn_agent' order by rowid asc")
+    .all(runId);
+}
+
+/** 某 run 的事件流（`seq` 升序；`payload` 已解析）。 */
+function d7EventsOf(fixture, runId) {
+  return fixture.raw
+    .prepare("select type, payload, seq from agent_event where run_id = ? order by seq asc")
+    .all(runId)
+    .map((row) => ({ type: row.type, payload: JSON.parse(row.payload ?? "{}"), seq: row.seq }));
+}
+
+/**
+ * 把 D7 的四个观察面一次性读成纯数据（供断言函数与反例共用）。
+ *
+ * @param {object} fixture `makeApp` 夹具。
+ * @param {string} parentRunId 父 run。
+ * @param {string} childRunId 子 run。
+ * @returns {object} 四类事实。
+ */
+function d7Facts(fixture, parentRunId, childRunId) {
+  const parentChildIds = d7SpawnToolCalls(fixture, parentRunId)
+    .map((row) => {
+      try {
+        const parsed = JSON.parse(row.output ?? "null");
+        return parsed !== null && typeof parsed === "object" ? parsed.child_run_id : undefined;
+      } catch {
+        return undefined;
+      }
+    })
+    .filter((value) => typeof value === "string" && value.length > 0);
+
+  const childEvents = childRunId === "" ? [] : d7EventsOf(fixture, childRunId);
+  const started = childEvents.filter((event) => event.type === "subagent.started");
+  const childParentIds = started
+    .map((event) => event.payload.parent_run_id)
+    .filter((value) => typeof value === "string" && value.length > 0);
+
+  return {
+    parentRunId,
+    childRunId,
+    parentChildIds,
+    childParentIds,
+    childEvents,
+    firstEventType: childEvents.length === 0 ? null : childEvents[0].type,
+    seqs: childEvents.map((event) => event.seq),
+  };
+}
+
+/** D7① 父侧：`spawn_agent` 行的 `output.child_run_id` 非空且指向本子 run。 */
+function assertD7ParentSide(facts) {
+  assert.equal(
+    facts.parentChildIds.length >= 1,
+    true,
+    `D7① 父侧：父 run 的 spawn_agent 行必须带非空 output.child_run_id；实测 ${JSON.stringify(facts.parentChildIds)}`
+  );
+  assert.equal(
+    facts.parentChildIds.includes(facts.childRunId),
+    true,
+    `D7① 父侧：output.child_run_id 必须指向本次子 run（${facts.childRunId}）；实测 ${JSON.stringify(facts.parentChildIds)}`
+  );
+}
+
+/** D7② 子侧：子流 `subagent.started.payload.parent_run_id == 父 run_id`。 */
+function assertD7ChildSide(facts) {
+  assert.equal(
+    facts.childParentIds.length >= 1,
+    true,
+    `D7② 子侧：子 run 事件流必须含 subagent.started 且带非空 payload.parent_run_id；实测 ${JSON.stringify(facts.childParentIds)}`
+  );
+  assert.equal(
+    facts.childParentIds.includes(facts.parentRunId),
+    true,
+    `D7② 子侧：payload.parent_run_id 必须 == 父 run（${facts.parentRunId}）；实测 ${JSON.stringify(facts.childParentIds)}`
+  );
+}
+
+/**
+ * D7③ **互为对方**（双向集合相等）。
+ *
+ * 恒真防护：写成「子指向父的唯一值 == 父」「父指向子的唯一值 == 子」，而不是两条
+ * 各自独立的"存在性"断言 —— 只写父侧或只写子侧，本条必红。
+ */
+function assertD7Mutual(facts) {
+  assert.deepEqual(
+    [...new Set(facts.childParentIds)].sort(),
+    [facts.parentRunId].sort(),
+    `D7③ 子→父必须唯一且等于父 run（实测 ${JSON.stringify(facts.childParentIds)}）`
+  );
+  assert.deepEqual(
+    [...new Set(facts.parentChildIds)].sort(),
+    [facts.childRunId].sort(),
+    `D7③ 父→子必须唯一且等于本子 run（实测 ${JSON.stringify(facts.parentChildIds)}）`
+  );
+}
+
+/** D7④ 子 run 流形状：`seq` 从 1 起步长 1 严格单调；首帧 `agent.started`（**主语 = CHILD**）。 */
+function assertD7ChildStream(facts) {
+  assert.ok(facts.seqs.length >= 1, "D7④ 子 run 事件流不得为空（主语 = 子 run，不是父 run）");
+  assert.deepEqual(
+    facts.seqs,
+    facts.seqs.map((_, index) => index + 1),
+    `D7④ 子 run 的 seq 必须从 1 起、步长 1、严格单调；实测 ${JSON.stringify(facts.seqs)}`
+  );
+  assert.equal(
+    facts.firstEventType,
+    "agent.started",
+    `D7④ 子 run **首帧必须 agent.started**（实测首帧 ${facts.firstEventType}）—— 首帧是 subagent.started ` +
+      "说明子 run 只建行未启动驱动（那是夹具缺陷，不是实现缺陷）"
+  );
+}
+
+/**
+ * 造一套 D7 世界：真 sqlite + 真 `delegateSpawn`（带 fake 网关，子 run 真驱动）。
+ *
+ * @param {string} username 夹具用户名（隔离用）。
+ * @returns {Promise<{fixture: object, parentRunId: string, childRunId: string, outcome: object, facts: object}>}
+ */
+async function makeD7World(username) {
+  const fixture = await makeApp({ username });
+  const chain = await seedRunningChain(fixture, "d7-parent");
+  const outcome = await DELEGATE_SPAWN_FN.value({
+    db: fixture.connection.db,
+    dialect: "sqlite",
+    tenantId: TENANT_ID,
+    parentRunId: chain.runId,
+    targetAgentId: chain.agentId,
+    targetVersionId: chain.versionId,
+    conversationId: chain.conversationId,
+    task: "D7：统计昨天的日志条数（只读）",
+    depth: 0,
+    maxDepth: 1,
+    gateway: fakeGateway(D7_CHILD_SCRIPT),
+    settleTimeoutMs: 5000,
+  });
+  const childRunId = typeof outcome?.childRunId === "string" ? outcome.childRunId : "";
+  return {
+    fixture,
+    parentRunId: chain.runId,
+    childRunId,
+    outcome,
+    facts: d7Facts(fixture, chain.runId, childRunId),
+  };
+}
+
+test("S-3-4 · D7① 父侧还原源：`spawn_agent` 行 output.child_run_id 非空且指向本子 run", async () => {
+  assert.equal(
+    DELEGATE_SPAWN_FN.found,
+    true,
+    `前置：delegation.ts 必须导出 delegateSpawn；实测 ${DELEGATE_SPAWN_FN.tried.join(" | ")}`
+  );
+  const world = await makeD7World("spike-d7-1");
+  try {
+    assert.equal(
+      world.outcome?.accepted,
+      true,
+      `D7 前提：depth=0 且预算充足 ⇒ 派生必须 accepted；实测 ${JSON.stringify(world.outcome)}`
+    );
+    assertD7ParentSide(world.facts);
+    process.stdout.write(`  [D7①] child_run_id=${world.childRunId} · 父侧取值 ${JSON.stringify(world.facts.parentChildIds)}\n`);
+  } finally {
+    await world.fixture.close();
+  }
+});
+
+test("S-3-5 · D7② 子侧还原源：子流 `subagent.started.payload.parent_run_id` == 父 run", async () => {
+  assert.equal(DELEGATE_SPAWN_FN.found, true, `前置：delegateSpawn 未就位（${DELEGATE_SPAWN_FN.tried.join(" | ")}）`);
+  const world = await makeD7World("spike-d7-2");
+  try {
+    assert.equal(world.outcome?.accepted, true, `D7 前提：派生必须 accepted；实测 ${JSON.stringify(world.outcome)}`);
+    assertD7ChildSide(world.facts);
+    process.stdout.write(`  [D7②] 子侧取值 ${JSON.stringify(world.facts.childParentIds)}（父 ${world.parentRunId}）\n`);
+  } finally {
+    await world.fixture.close();
+  }
+});
+
+test("S-3-6 · D7③ 双源**互为对方**（双向集合相等；只写单侧必红）", async () => {
+  assert.equal(DELEGATE_SPAWN_FN.found, true, `前置：delegateSpawn 未就位（${DELEGATE_SPAWN_FN.tried.join(" | ")}）`);
+  const world = await makeD7World("spike-d7-3");
+  try {
+    assert.equal(world.outcome?.accepted, true, `D7 前提：派生必须 accepted；实测 ${JSON.stringify(world.outcome)}`);
+    assertD7Mutual(world.facts);
+    process.stdout.write(
+      `  [D7③] 父→子 ${JSON.stringify([...new Set(world.facts.parentChildIds)])} ⇄ 子→父 ` +
+        `${JSON.stringify([...new Set(world.facts.childParentIds)])}\n`
+    );
+  } finally {
+    await world.fixture.close();
+  }
+});
+
+test("S-3-7 · D7④ 子 run 流形状（**主语锁 CHILD**）：seq 严格单调 + 首帧 agent.started", async () => {
+  assert.equal(DELEGATE_SPAWN_FN.found, true, `前置：delegateSpawn 未就位（${DELEGATE_SPAWN_FN.tried.join(" | ")}）`);
+  const world = await makeD7World("spike-d7-4");
+  try {
+    assert.equal(world.outcome?.accepted, true, `D7 前提：派生必须 accepted；实测 ${JSON.stringify(world.outcome)}`);
+    assertD7ChildStream(world.facts);
+    process.stdout.write(
+      `  [D7④] 子 run seq=${JSON.stringify(world.facts.seqs)} · 首帧=${world.facts.firstEventType}（主语 = 子 run）\n`
+    );
+  } finally {
+    await world.fixture.close();
+  }
+});
+
+test("S-3-R · D7 反例红证：三种「观察面残缺」等价形态 ⇒ 四条断言必须各自抛错", async () => {
+  assert.equal(DELEGATE_SPAWN_FN.found, true, `前置：delegateSpawn 未就位（${DELEGATE_SPAWN_FN.tried.join(" | ")}）`);
+  const world = await makeD7World("spike-d7-r");
+  const { fixture } = world;
+  try {
+    assert.equal(world.outcome?.accepted, true, `反例前提：派生必须 accepted；实测 ${JSON.stringify(world.outcome)}`);
+    const { parentRunId, childRunId } = world;
+
+    // 基线：四条全绿（先证明这一套事实是"好实现"）。
+    assertD7ParentSide(world.facts);
+    assertD7ChildSide(world.facts);
+    assertD7Mutual(world.facts);
+    assertD7ChildStream(world.facts);
+
+    // 反例 a · 删掉子侧 `subagent.started`（等价于「只写父侧」）⇒ ②③ 必红。
+    fixture.raw
+      .prepare("delete from agent_event where run_id = ? and type = 'subagent.started'")
+      .run(childRunId);
+    const noChildSide = d7Facts(fixture, parentRunId, childRunId);
+    assert.throws(() => assertD7ChildSide(noChildSide), /D7②/, "反例 a：删掉子侧 subagent.started 后 D7② 竟然仍绿（判据恒真）");
+    assert.throws(() => assertD7Mutual(noChildSide), /D7③/, "反例 a：删掉子侧后 D7③ 竟然仍绿（判据恒真）");
+
+    // 反例 b · 抹掉父侧 `output.child_run_id`（等价于「只写子侧」）⇒ ①③ 必红。
+    fixture.raw
+      .prepare("update tool_call set output = null where run_id = ? and tool_name = 'spawn_agent'")
+      .run(parentRunId);
+    const noParentSide = d7Facts(fixture, parentRunId, childRunId);
+    assert.throws(() => assertD7ParentSide(noParentSide), /D7①/, "反例 b：抹掉父侧 child_run_id 后 D7① 竟然仍绿（判据恒真）");
+    assert.throws(() => assertD7Mutual(noParentSide), /D7③/, "反例 b：抹掉父侧后 D7③ 竟然仍绿（判据恒真）");
+
+    // 反例 c · 把子流首帧改成非 `agent.started` ⇒ ④ 必红。
+    fixture.raw
+      .prepare("update agent_event set type = 'agent.thinking' where run_id = ? and seq = (select min(seq) from agent_event where run_id = ?)")
+      .run(childRunId, childRunId);
+    const badFirstFrame = d7Facts(fixture, parentRunId, childRunId);
+    assert.throws(
+      () => assertD7ChildStream(badFirstFrame),
+      /D7④/,
+      "反例 c：子流首帧被改成 agent.thinking 后 D7④ 竟然仍绿（判据恒真）"
+    );
+    process.stdout.write(
+      "  [D7·反例] a 删子侧 subagent.started ⇒ D7②/D7③ 红 · b 抹父侧 child_run_id ⇒ D7①/D7③ 红 · " +
+        "c 子流首帧改型 ⇒ D7④ 红（三条均为等价观察面残缺，未改源码）\n"
     );
   } finally {
     await fixture.close();

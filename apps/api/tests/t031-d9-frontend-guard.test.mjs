@@ -44,10 +44,23 @@
  * ----------------------------------------
  *   一律把被测源码**复制到临时目录**再改坏，**绝不改工作树里的 `apps/web/src`**；
  *   临时产物落 `D:/Temp/WBTimeAI/`（`施工纪律.md` §4.10.6 临时产物唯一落点），用例结束即删。
+ *     **复制面 = 判据真正读的 3 个文件**（{@link GUARDED_WEB_FILES}），**不整棵复制**
+ *     `apps/web/src` —— 见下「踩坑：整棵复制会撞宿主的批量删除守卫」。
  *     反例 A：白名单里加 `subagent.started` / 删掉 `!isSseChannel(channel)` ⇒ G-3 必红
  *     反例 B：给 `agent.started` 分支插 run 匹配守卫                     ⇒ G-2a 必红
  *     反例 C：`continualFrom(rows, …)`（先裁剪后过滤）/ `payload.run_id === runId` ⇒ G-2b 必红
  *     对照 D：同样复制但**不改坏** ⇒ 全部守卫必绿（证明仪器不是恒红）
+ *
+ * 踩坑：整棵复制会撞宿主的**批量删除守卫**（2026-10-23 实测，QA 定位）
+ * ------------------------------------------------------------------
+ *   初版 `cpSync(WEB_SRC_DIR, copy, { recursive: true })` 会把 `apps/web/src`
+ *   **243 个文件**整体复制，收尾 `rmSync(scratch, { recursive: true })` 一次删 243 个
+ *   ⇒ 宿主安全删除垫片抛
+ *   `[safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] {"count":243,"threshold":50,…}`
+ *   ⇒ 反例 A/B/对照 D 三条**红在收尾**而非断言（红因与判据无关）。
+ *   修法 = **减量**：只复制判据真正读的 3 个文件（243 → 3，永远够不到阈值），
+ *   `rmSync` 保留（临时产物仍按要求即删）。**不用**关守卫的开关"修"——
+ *   那是把环境的安全控制当测试便利，且会让真实破坏也静默。
  *
  * 行为面旁证（**本文件不跑，收口时单独跑**）
  * ----------------------------------------
@@ -81,6 +94,18 @@ const SSE_STREAM_TS = path.join(REPO_ROOT, "apps/api/src/modules/run/sse-stream.
 
 /** 本版新增、前端一个都不认识的 2 帧（D9③ 的被测对象）。 */
 const DELTA_CHANNELS = ["subagent.started", "subagent.finished"];
+
+/**
+ * 判据**真正读**的前端文件（相对 `apps/web/src`，POSIX 分隔符）。
+ *
+ * 复制面就是这几个 —— 不整棵复制（见文件头「踩坑」：整棵复制 243 文件，
+ * 收尾一次删 243 个会撞宿主的 `SAFE_DELETE_BULK_CONFIRM_REQUIRED`（阈值 50））。
+ */
+const GUARDED_WEB_FILES = Object.freeze([
+  "lib/chat.ts",
+  "types/phase1.ts",
+  "hooks/useChatStream.ts",
+]);
 
 /** 临时产物根（`施工纪律.md` §4.10.6）；不可用时回落系统临时目录。 */
 const SCRATCH_BASES = ["D:/Temp/WBTimeAI", tmpdir()];
@@ -168,6 +193,27 @@ function makeScratchDir(tag) {
     }
   }
   throw new Error(`无法创建临时目录：${failures.join(" | ")}`);
+}
+
+/**
+ * 建一个**只含指定文件**的源码副本（保持相对路径结构）。
+ *
+ * 为什么按文件复制而不整棵复制：整棵 `apps/web/src` 有 243 个文件，收尾一次删掉会
+ * 触发宿主的批量删除守卫（阈值 50）⇒ 用例红在收尾、与断言无关。按文件复制后
+ * 删除数 ≤ 3，永远碰不到阈值；同时保持「改坏的是副本、工作树零改动」这条红线。
+ *
+ * @param {string} tag 临时目录名前缀。
+ * @param {readonly string[]} relativePaths 相对 `apps/web/src` 的 POSIX 路径。
+ * @returns {{dir: string, file: (relative: string) => string}} 临时根与路径解析器。
+ */
+function makeSourceCopy(tag, relativePaths) {
+  const dir = makeScratchDir(tag);
+  for (const relative of relativePaths) {
+    const target = path.join(dir, relative);
+    mkdirSync(path.dirname(target), { recursive: true });
+    cpSync(path.join(WEB_SRC_DIR, relative), target);
+  }
+  return { dir, file: (relative) => path.join(dir, relative) };
 }
 
 // ---------------------------------------------------------------------------
@@ -430,20 +476,18 @@ test("G-2b② 归属载体：`owned` 按 `agent_event.run_id` 列过滤，不按
 // ---------------------------------------------------------------------------
 
 test("反例 A · D9③ 改坏必红：白名单加 subagent.* / 删掉 `!isSseChannel` 守卫 ⇒ G-3 两侧齐红", () => {
-  const scratch = makeScratchDir("t031-d9-a");
+  // 只复制本反例要改坏的两个文件（减量 ⇒ 收尾删除不会触发宿主批量删除守卫）
+  const copy = makeSourceCopy("t031-d9-a", ["types/phase1.ts", "lib/chat.ts"]);
   try {
-    const copy = path.join(scratch, "src");
-    cpSync(WEB_SRC_DIR, copy, { recursive: true });
-
     // 改坏①：把新增帧混进白名单（等于前端"认识"了 subagent.*）
-    const phase1Path = path.join(copy, "types/phase1.ts");
+    const phase1Path = copy.file("types/phase1.ts");
     const phase1 = readSource(phase1Path);
     const mutatedPhase1 = phase1.replace('  "agent.started",', '  "agent.started",\n  "subagent.started",');
     assert.notEqual(mutatedPhase1, phase1, "反例 A 预备失败：白名单字面量未命中，改坏未生效");
     writeFileSync(phase1Path, mutatedPhase1, "utf8");
 
     // 改坏②：删掉通道守卫（`!isSseChannel(channel)` ⇒ `false`）
-    const chatPath = path.join(copy, "lib/chat.ts");
+    const chatPath = copy.file("lib/chat.ts");
     const chat = readSource(chatPath);
     const mutatedChat = chat.replace("!isSseChannel(channel)", "false");
     assert.notEqual(mutatedChat, chat, "反例 A 预备失败：`!isSseChannel(channel)` 未命中，改坏未生效");
@@ -457,17 +501,14 @@ test("反例 A · D9③ 改坏必红：白名单加 subagent.* / 删掉 `!isSseC
     process.stdout.write(`  [反例A·红] 白名单：${whitelist.detail}\n`);
     process.stdout.write(`  [反例A·红] 守卫：${drop.detail}\n`);
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    rmSync(copy.dir, { recursive: true, force: true });
   }
 });
 
 test("反例 B · D9② 改坏必红：给 `agent.started` 插 run 匹配守卫 ⇒ G-2a 必红（事实变了要能被发现）", () => {
-  const scratch = makeScratchDir("t031-d9-b");
+  const copy = makeSourceCopy("t031-d9-b", ["hooks/useChatStream.ts"]);
   try {
-    const copy = path.join(scratch, "src");
-    cpSync(WEB_SRC_DIR, copy, { recursive: true });
-
-    const hookPath = path.join(copy, "hooks/useChatStream.ts");
+    const hookPath = copy.file("hooks/useChatStream.ts");
     const hook = readSource(hookPath);
     const mutated = hook.replace(
       "      const runId = asString(payload.run_id);\n      if (runId) {",
@@ -480,56 +521,51 @@ test("反例 B · D9② 改坏必红：给 `agent.started` 插 run 匹配守卫 
     assert.equal(guard.ok, false, "反例 B 失败：加了前端守卫后 G-2a 竟然仍绿（判据恒真）");
     process.stdout.write(`  [反例B·红] ${guard.detail}\n`);
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    rmSync(copy.dir, { recursive: true, force: true });
   }
 });
 
 test("反例 C · G-2b 改坏必红：先裁剪后过滤 / 按 payload 判归属 ⇒ 两条关系式各自转红", () => {
-  const scratch = makeScratchDir("t031-d9-c");
-  try {
-    const original = readSource(SSE_STREAM_TS);
+  // 本反例**不落盘**（纯内存字符串变异 ⇒ 无临时目录、无删除、零守卫风险）
+  const original = readSource(SSE_STREAM_TS);
 
-    // 改坏①：先裁剪后过滤（父行 1、3、5 会被判成"洞"）
-    const orderBroken = original.replace(
-      "continualFrom(selectStreamableRows(rows, options.runId), lastSeq)",
-      "continualFrom(rows, lastSeq)",
-    );
-    assert.notEqual(orderBroken, original, "反例 C① 预备失败：调用点片段未命中，改坏未生效");
+  // 改坏①：先裁剪后过滤（父行 1、3、5 会被判成"洞"）
+  const orderBroken = original.replace(
+    "continualFrom(selectStreamableRows(rows, options.runId), lastSeq)",
+    "continualFrom(rows, lastSeq)",
+  );
+  assert.notEqual(orderBroken, original, "反例 C① 预备失败：调用点片段未命中，改坏未生效");
 
-    // 改坏②：按帧 payload 判归属（§8.5 明令禁止的载体）
-    const columnBroken = original.replace(
-      "rows.filter((row) => row.run_id === runId)",
-      "rows.filter((row) => (row.payload as { run_id?: string }).run_id === runId)",
-    );
-    assert.notEqual(columnBroken, original, "反例 C② 预备失败：过滤谓词未命中，改坏未生效");
+  // 改坏②：按帧 payload 判归属（§8.5 明令禁止的载体）
+  const columnBroken = original.replace(
+    "rows.filter((row) => row.run_id === runId)",
+    "rows.filter((row) => (row.payload as { run_id?: string }).run_id === runId)",
+  );
+  assert.notEqual(columnBroken, original, "反例 C② 预备失败：过滤谓词未命中，改坏未生效");
 
-    const orderGuard = guardFilterBeforeConflation(orderBroken);
-    const columnGuard = guardOwnedFilteredByRunIdColumn(columnBroken);
+  const orderGuard = guardFilterBeforeConflation(orderBroken);
+  const columnGuard = guardOwnedFilteredByRunIdColumn(columnBroken);
 
-    assert.equal(orderGuard.ok, false, "反例 C① 失败：先裁剪后过滤竟然仍绿（判据恒真）");
-    assert.equal(columnGuard.ok, false, "反例 C② 失败：按 payload 判归属竟然仍绿（判据恒真）");
-    process.stdout.write(`  [反例C①·红] ${orderGuard.detail}\n`);
-    process.stdout.write(`  [反例C②·红] ${columnGuard.detail}\n`);
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
+  assert.equal(orderGuard.ok, false, "反例 C① 失败：先裁剪后过滤竟然仍绿（判据恒真）");
+  assert.equal(columnGuard.ok, false, "反例 C② 失败：按 payload 判归属竟然仍绿（判据恒真）");
+  process.stdout.write(`  [反例C①·红] ${orderGuard.detail}\n`);
+  process.stdout.write(`  [反例C②·红] ${columnGuard.detail}\n`);
 });
 
 test("对照 D · 同样复制但不改坏 ⇒ 全部守卫必绿（仪器双向验证的另一半）", () => {
-  const scratch = makeScratchDir("t031-d9-d");
+  const copy = makeSourceCopy("t031-d9-d", GUARDED_WEB_FILES);
   try {
-    const copy = path.join(scratch, "src");
-    cpSync(WEB_SRC_DIR, copy, { recursive: true });
-
-    const drop = guardParseSseFrameDropsUnknown(readSource(path.join(copy, "lib/chat.ts")));
-    const whitelist = guardWhitelistExcludesDeltaChannels(readSource(path.join(copy, "types/phase1.ts")));
-    const activeRunId = guardActiveRunIdWrittenWithoutMatch(readSource(path.join(copy, "hooks/useChatStream.ts")));
+    const drop = guardParseSseFrameDropsUnknown(readSource(copy.file("lib/chat.ts")));
+    const whitelist = guardWhitelistExcludesDeltaChannels(readSource(copy.file("types/phase1.ts")));
+    const activeRunId = guardActiveRunIdWrittenWithoutMatch(readSource(copy.file("hooks/useChatStream.ts")));
 
     assert.equal(drop.ok, true, `对照 D 失败（好实现被误判红）：${drop.detail}`);
     assert.equal(whitelist.ok, true, `对照 D 失败（好实现被误判红）：${whitelist.detail}`);
     assert.equal(activeRunId.ok, true, `对照 D 失败（好实现被误判红）：${activeRunId.detail}`);
-    process.stdout.write(`  [对照D·绿] 复制整棵 apps/web/src 后三守卫全绿（仪器不是恒红）\n`);
+    process.stdout.write(
+      `  [对照D·绿] 复制判据读的 ${GUARDED_WEB_FILES.length} 个前端文件（不整棵复制，避批量删除守卫）后三守卫全绿（仪器不是恒红）\n`,
+    );
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    rmSync(copy.dir, { recursive: true, force: true });
   }
 });
